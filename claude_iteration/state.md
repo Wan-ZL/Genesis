@@ -151,7 +151,10 @@
   - 286 tests total (+30 new for tool suggestions)
 
 ## Next Step (single step)
-Check for new GitHub Issues or pick next item from backlog.
+**AWAITING USER INPUT**: All development items complete. Waiting for:
+- New GitHub Issues, OR
+- User to add ANTHROPIC_API_KEY to activate Claude API, OR
+- User to prioritize items from Ideas section
 
 ## Risks / Notes
 - Issue #2 COMPLETE - all 6 acceptance criteria met
