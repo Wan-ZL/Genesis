@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #5 CLOSED.** Runtime config reload implemented - settings now persist and load automatically on startup.
+**Issue #4 in progress.** Message search functionality implemented as first increment.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -113,14 +113,19 @@
   - **Runtime config reload**: Settings loaded from SQLite on startup
   - 19 tests (17 original + 2 new for startup loading)
 - **Issue #1 Fixed**: Import path bug in status.py resolved
+- **Issue #4 Progress - Search functionality added**:
+  - `search_messages()` method in MemoryService with keyword search, pagination, snippet extraction
+  - `GET /api/messages/search` endpoint with query, limit, offset, conversation_id params
+  - `get_message_count()` method for total message count
+  - 17 new tests (10 memory service, 7 API endpoint)
 
 ## Next Step (single step)
-Pick the next open GitHub issue (Issue #4 or #2) and implement one increment.
+Continue Issue #4: Implement single conversation storage (remove conversation_id concept).
 
 ## Risks / Notes
-- Issue #4 (Single infinite conversation) may require significant chat API changes
+- Issue #4 remaining items: single conversation storage, automatic summarization, UI changes
 - Issue #2 (Permission escalation) involves security-sensitive code
-- 141 tests passing, CI workflow active
+- 158 tests passing, CI workflow active
 
 ## How to test quickly
 ```bash

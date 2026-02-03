@@ -411,3 +411,44 @@ async def get_conversation(conversation_id: str):
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conversation
+
+
+@router.get("/messages/search")
+async def search_messages(
+    q: str,
+    conversation_id: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0
+):
+    """Search messages by keyword.
+
+    Args:
+        q: Search query (required)
+        conversation_id: Optional filter for specific conversation
+        limit: Maximum results (default 50, max 100)
+        offset: Pagination offset
+
+    Returns:
+        List of matching messages with snippets and context
+    """
+    if not q or len(q.strip()) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Search query must be at least 2 characters"
+        )
+
+    # Cap limit to prevent abuse
+    limit = min(limit, 100)
+
+    results = await memory.search_messages(
+        query=q.strip(),
+        conversation_id=conversation_id,
+        limit=limit,
+        offset=offset
+    )
+
+    return {
+        "query": q.strip(),
+        "count": len(results),
+        "results": results
+    }

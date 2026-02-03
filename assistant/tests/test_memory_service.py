@@ -234,5 +234,127 @@ class TestDatabaseInitialization:
         assert memory_service._initialized is True
 
 
+class TestMessageSearch:
+    """Tests for message search functionality."""
+
+    @pytest.mark.asyncio
+    async def test_search_finds_matching_messages(self, memory_service):
+        """Test that search finds messages containing the query."""
+        conv_id = await memory_service.create_conversation(title="Test Chat")
+        await memory_service.add_message(conv_id, "user", "Hello world")
+        await memory_service.add_message(conv_id, "assistant", "Hi there!")
+        await memory_service.add_message(conv_id, "user", "Tell me about Python programming")
+        await memory_service.add_message(conv_id, "assistant", "Python is a great language!")
+
+        results = await memory_service.search_messages("Python")
+        assert len(results) == 2
+        assert all("python" in r["content"].lower() for r in results)
+
+    @pytest.mark.asyncio
+    async def test_search_case_insensitive(self, memory_service):
+        """Test that search is case-insensitive."""
+        conv_id = await memory_service.create_conversation()
+        await memory_service.add_message(conv_id, "user", "HELLO WORLD")
+        await memory_service.add_message(conv_id, "user", "hello world")
+        await memory_service.add_message(conv_id, "user", "Hello World")
+
+        results = await memory_service.search_messages("hello")
+        assert len(results) == 3
+
+    @pytest.mark.asyncio
+    async def test_search_with_conversation_filter(self, memory_service):
+        """Test that search can filter by conversation."""
+        conv_id1 = await memory_service.create_conversation(title="Chat 1")
+        conv_id2 = await memory_service.create_conversation(title="Chat 2")
+
+        await memory_service.add_message(conv_id1, "user", "Test message in chat 1")
+        await memory_service.add_message(conv_id2, "user", "Test message in chat 2")
+
+        # Search all
+        all_results = await memory_service.search_messages("Test message")
+        assert len(all_results) == 2
+
+        # Search specific conversation
+        filtered_results = await memory_service.search_messages("Test message", conversation_id=conv_id1)
+        assert len(filtered_results) == 1
+        assert filtered_results[0]["conversation_id"] == conv_id1
+
+    @pytest.mark.asyncio
+    async def test_search_returns_empty_for_no_matches(self, memory_service):
+        """Test that search returns empty list when no matches."""
+        conv_id = await memory_service.create_conversation()
+        await memory_service.add_message(conv_id, "user", "Hello world")
+
+        results = await memory_service.search_messages("xyznonexistent")
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_search_respects_limit(self, memory_service):
+        """Test that search respects the limit parameter."""
+        conv_id = await memory_service.create_conversation()
+        for i in range(10):
+            await memory_service.add_message(conv_id, "user", f"Test message {i}")
+
+        results = await memory_service.search_messages("Test message", limit=3)
+        assert len(results) == 3
+
+    @pytest.mark.asyncio
+    async def test_search_respects_offset(self, memory_service):
+        """Test that search respects the offset parameter for pagination."""
+        conv_id = await memory_service.create_conversation()
+        for i in range(10):
+            await memory_service.add_message(conv_id, "user", f"Unique keyword msg{i}")
+
+        all_results = await memory_service.search_messages("Unique keyword")
+        offset_results = await memory_service.search_messages("Unique keyword", offset=5)
+
+        assert len(all_results) == 10
+        assert len(offset_results) == 5
+
+    @pytest.mark.asyncio
+    async def test_search_includes_snippet(self, memory_service):
+        """Test that search results include a snippet."""
+        conv_id = await memory_service.create_conversation()
+        await memory_service.add_message(conv_id, "user", "This is a long message about Python programming and how it helps with data science")
+
+        results = await memory_service.search_messages("Python")
+        assert len(results) == 1
+        assert "snippet" in results[0]
+        assert "Python" in results[0]["snippet"]
+
+    @pytest.mark.asyncio
+    async def test_search_includes_conversation_title(self, memory_service):
+        """Test that search results include conversation title."""
+        conv_id = await memory_service.create_conversation(title="My Special Chat")
+        await memory_service.add_message(conv_id, "user", "Important message")
+
+        results = await memory_service.search_messages("Important")
+        assert len(results) == 1
+        assert results[0]["conversation_title"] == "My Special Chat"
+
+
+class TestMessageCount:
+    """Tests for message count functionality."""
+
+    @pytest.mark.asyncio
+    async def test_get_message_count(self, memory_service):
+        """Test getting total message count."""
+        conv_id1 = await memory_service.create_conversation()
+        conv_id2 = await memory_service.create_conversation()
+
+        await memory_service.add_message(conv_id1, "user", "Msg 1")
+        await memory_service.add_message(conv_id1, "user", "Msg 2")
+        await memory_service.add_message(conv_id2, "user", "Msg 3")
+
+        count = await memory_service.get_message_count()
+        assert count == 3
+
+    @pytest.mark.asyncio
+    async def test_get_message_count_empty(self, memory_service):
+        """Test message count is zero for empty database."""
+        count = await memory_service.get_message_count()
+        assert count == 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -260,3 +260,110 @@ class MemoryService:
                 "conversation_id": row[5],
                 "uploaded_at": row[6]
             }
+
+    async def search_messages(
+        self,
+        query: str,
+        conversation_id: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> list[dict]:
+        """Search messages by keyword across all conversations or a specific one.
+
+        Args:
+            query: Search keyword (case-insensitive)
+            conversation_id: Optional filter to search within a specific conversation
+            limit: Maximum results to return (default 50)
+            offset: Pagination offset (default 0)
+
+        Returns:
+            List of matching messages with conversation context
+        """
+        await self._ensure_initialized()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            # Use LIKE for simple keyword search (case-insensitive in SQLite by default for ASCII)
+            search_pattern = f"%{query}%"
+
+            if conversation_id:
+                cursor = await db.execute(
+                    """SELECT m.id, m.conversation_id, m.role, m.content, m.created_at,
+                              c.title as conversation_title
+                       FROM messages m
+                       JOIN conversations c ON m.conversation_id = c.id
+                       WHERE m.conversation_id = ? AND m.content LIKE ?
+                       ORDER BY m.created_at DESC
+                       LIMIT ? OFFSET ?""",
+                    (conversation_id, search_pattern, limit, offset)
+                )
+            else:
+                cursor = await db.execute(
+                    """SELECT m.id, m.conversation_id, m.role, m.content, m.created_at,
+                              c.title as conversation_title
+                       FROM messages m
+                       JOIN conversations c ON m.conversation_id = c.id
+                       WHERE m.content LIKE ?
+                       ORDER BY m.created_at DESC
+                       LIMIT ? OFFSET ?""",
+                    (search_pattern, limit, offset)
+                )
+
+            rows = await cursor.fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "conversation_id": row[1],
+                    "role": row[2],
+                    "content": row[3],
+                    "created_at": row[4],
+                    "conversation_title": row[5],
+                    # Include a snippet with context around the match
+                    "snippet": _extract_snippet(row[3], query)
+                }
+                for row in rows
+            ]
+
+    async def get_message_count(self) -> int:
+        """Get total message count across all conversations."""
+        await self._ensure_initialized()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("SELECT COUNT(*) FROM messages")
+            row = await cursor.fetchone()
+            return row[0] if row else 0
+
+
+def _extract_snippet(content: str, query: str, context_chars: int = 50) -> str:
+    """Extract a snippet from content with context around the first match.
+
+    Args:
+        content: Full message content
+        query: Search query
+        context_chars: Characters of context on each side
+
+    Returns:
+        Snippet with "..." for truncation
+    """
+    content_lower = content.lower()
+    query_lower = query.lower()
+    pos = content_lower.find(query_lower)
+
+    if pos == -1:
+        # No match found, return beginning of content
+        if len(content) <= context_chars * 2:
+            return content
+        return content[:context_chars * 2] + "..."
+
+    # Calculate start and end positions with context
+    start = max(0, pos - context_chars)
+    end = min(len(content), pos + len(query) + context_chars)
+
+    snippet = content[start:end]
+
+    # Add ellipsis if truncated
+    if start > 0:
+        snippet = "..." + snippet
+    if end < len(content):
+        snippet = snippet + "..."
+
+    return snippet

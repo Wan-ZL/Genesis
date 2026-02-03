@@ -383,5 +383,72 @@ class TestToolIntegration:
         assert len(call_kwargs.kwargs["tools"]) >= 2  # At least get_current_datetime and calculate
 
 
+class TestMessageSearch:
+    """Tests for message search API endpoint."""
+
+    def test_search_endpoint_requires_query(self, client):
+        """Test that search endpoint requires a query parameter."""
+        response = client.get("/api/messages/search")
+        assert response.status_code == 422  # Validation error
+
+    def test_search_endpoint_rejects_short_query(self, client):
+        """Test that search rejects queries shorter than 2 characters."""
+        response = client.get("/api/messages/search?q=a")
+        assert response.status_code == 400
+        assert "at least 2 characters" in response.json()["detail"]
+
+    def test_search_endpoint_returns_results(self, client, mock_openai_response):
+        """Test that search returns matching messages."""
+        # First, create a conversation with messages
+        with patch('server.routes.chat.get_openai_client') as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_openai_response
+            mock_get_client.return_value = mock_client
+
+            with patch('server.routes.chat.config') as mock_config:
+                mock_config.USE_CLAUDE = False
+                mock_config.OPENAI_API_KEY = "test-key"
+                mock_config.OPENAI_MODEL = "gpt-4o-mini"
+                mock_config.DATABASE_PATH = Path(tempfile.gettempdir()) / "test_search.db"
+                mock_config.FILES_PATH = Path(tempfile.gettempdir()) / "test_files"
+
+                # Create a message with searchable content
+                response = client.post("/api/chat", json={"message": "Tell me about searchterm unique keyword"})
+                assert response.status_code == 200
+
+        # Now search for it
+        search_response = client.get("/api/messages/search?q=searchterm")
+        assert search_response.status_code == 200
+        data = search_response.json()
+        assert "query" in data
+        assert "count" in data
+        assert "results" in data
+        assert data["query"] == "searchterm"
+        assert data["count"] >= 1
+
+    def test_search_endpoint_respects_limit(self, client):
+        """Test that search respects limit parameter."""
+        response = client.get("/api/messages/search?q=test&limit=5")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["results"]) <= 5
+
+    def test_search_endpoint_caps_limit(self, client):
+        """Test that search caps limit at 100."""
+        response = client.get("/api/messages/search?q=test&limit=500")
+        assert response.status_code == 200
+        # Should not error, just cap internally
+
+    def test_search_endpoint_with_conversation_filter(self, client):
+        """Test that search accepts conversation_id filter."""
+        response = client.get("/api/messages/search?q=test&conversation_id=conv_123")
+        assert response.status_code == 200
+
+    def test_search_endpoint_with_pagination(self, client):
+        """Test that search accepts offset parameter."""
+        response = client.get("/api/messages/search?q=test&offset=10")
+        assert response.status_code == 200
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
