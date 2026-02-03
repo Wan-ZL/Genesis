@@ -73,6 +73,12 @@ GitHub Issue #1: Implement AI Assistant v1
   - Verbose output: `--verbose`
   - Save results: `--save`
   - 8 new tests (34 total in test_evals.py)
+- **CI integration** (`.github/workflows/ci.yml`):
+  - GitHub Actions workflow for automated testing
+  - Triggers on push to main and pull requests
+  - Tests on Python 3.9, 3.10, 3.11 matrix
+  - Includes lint job for syntax checking
+  - Uses pip caching for faster builds
 
 ## Acceptance Criteria Status
 - [x] Simple Web UI (input box + message history + status panel)
@@ -82,7 +88,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Issue #1 complete (pending ANTHROPIC_API_KEY). Retry logic for transient API failures added. Consider CI integration, metrics dashboard, or mobile-friendly UI from backlog.
+Issue #1 complete (pending ANTHROPIC_API_KEY). CI workflow added. Consider metrics dashboard or mobile-friendly UI from backlog.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)
