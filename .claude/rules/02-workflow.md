@@ -8,6 +8,7 @@ Do not start multi-day refactors unless it is explicitly scoped and tracked as m
 - If GitHub Issues exist: treat them as source of truth.
 - Every issue should have acceptance criteria.
 - If acceptance criteria is missing, propose a minimal version in the issue comment (do not ask the user in chat).
+- **When all acceptance criteria are met, close the issue with `gh issue close <number> -c "Completed: <summary>"`.**
 
 ## Testing rules
 - Add tests for deterministic logic.

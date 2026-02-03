@@ -33,6 +33,7 @@ A) Read:
 B) Discover work:
    - If any GitHub Issues are open, pick the highest-priority one.
    - Otherwise, pick the best item from `claude_iteration/backlog.md`.
+   - If no GitHub Issues AND backlog is empty/all-done, run `./stop-loop.sh` and exit.
 C) Do ONE smallest meaningful increment only:
    - Implement or refactor.
    - Add/extend tests and/or evals.

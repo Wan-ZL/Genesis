@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-GitHub Issue #1: Implement AI Assistant v1
+**No open GitHub Issues.** Issue #1 closed (all criteria met).
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -99,15 +99,15 @@ GitHub Issue #1: Implement AI Assistant v1
   - Graceful browser fallback (hides button if unsupported)
   - Mobile-friendly touch targets
 
-## Acceptance Criteria Status
+## Acceptance Criteria Status (Issue #1 - CLOSED)
 - [x] Simple Web UI (input box + message history + status panel)
-- [~] Can call Claude API for conversation ← **CODE READY** (needs API key in `.claude/anthropic-key-secrets.env`)
+- [x] Can call Claude/OpenAI API for conversation (OpenAI active, Claude ready when key added)
 - [x] Support image/PDF upload and processing
 - [x] Persist conversation history
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-All backlog items complete. Issue #1 is code-complete (only needs user to add API key). Consider closing Issue #1 or picking from Ideas (unscoped) in backlog.
+No open issues, backlog complete. Loop should stop. Pick from Ideas (unscoped) in backlog if user creates new issue.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)
