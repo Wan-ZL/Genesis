@@ -31,12 +31,17 @@ async def lifespan(app: FastAPI):
     # Scan for available capabilities (tools, services, etc.)
     from core.capability_scanner import CapabilityScanner
     from core.permissions import get_permission_level
+    from server.services.tool_suggestions import get_suggestion_service
     scanner = CapabilityScanner()
     scanner.scan_all()
     available_count = len(scanner.get_available())
     total_count = len(scanner.capabilities)
     logger.info(f"Capability scan complete: {available_count}/{total_count} available")
     logger.info(f"Permission level: {get_permission_level().name}")
+
+    # Initialize tool suggestion service with discovered capabilities
+    suggestion_service = get_suggestion_service(scanner.capabilities)
+    logger.info("Tool suggestion service initialized")
 
     logger.info(f"Using model: {config.MODEL}")
     if not config.OPENAI_API_KEY and not config.ANTHROPIC_API_KEY:

@@ -14,6 +14,7 @@ from server.services.memory import MemoryService, DEFAULT_CONVERSATION_ID
 from server.services.tools import registry as tool_registry
 from server.services.retry import api_retry
 from server.services.metrics import metrics
+from server.services.tool_suggestions import get_suggestion_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -42,6 +43,14 @@ class PermissionEscalation(BaseModel):
     pending_args: dict = {}
 
 
+class SuggestedTool(BaseModel):
+    """A suggested tool based on the user's message."""
+    name: str
+    description: str
+    relevance_reason: str
+    usage_hint: str
+
+
 class ChatResponse(BaseModel):
     """Chat response model."""
     response: str
@@ -51,6 +60,8 @@ class ChatResponse(BaseModel):
     model: str  # Which model was used
     # Optional: permission escalation request from tool
     permission_escalation: Optional[PermissionEscalation] = None
+    # Optional: suggested tools based on user's message
+    suggested_tools: Optional[List[SuggestedTool]] = None
 
 
 def get_anthropic_client():
@@ -154,8 +165,14 @@ def load_file_for_openai(file_id: str) -> Optional[dict]:
 
 
 @api_retry
-async def call_claude_api(messages: list, file_ids: list, user_message: str) -> tuple[str, str, Optional[dict]]:
+async def call_claude_api(messages: list, file_ids: list, user_message: str, system_prompt: str = "") -> tuple[str, str, Optional[dict]]:
     """Call Claude API with tool support and return (response, model_name, escalation).
+
+    Args:
+        messages: Conversation history
+        file_ids: List of file IDs to attach
+        user_message: The current user message
+        system_prompt: Optional system prompt with tool suggestions
 
     Returns:
         tuple: (response_text, model_name, permission_escalation_or_none)
@@ -197,6 +214,8 @@ async def call_claude_api(messages: list, file_ids: list, user_message: str) -> 
             "max_tokens": 4096,
             "messages": claude_messages,
         }
+        if system_prompt:
+            api_kwargs["system"] = system_prompt
         if tools:
             api_kwargs["tools"] = tools
 
@@ -274,8 +293,14 @@ async def call_claude_api(messages: list, file_ids: list, user_message: str) -> 
 
 
 @api_retry
-async def call_openai_api(messages: list, file_ids: list, user_message: str) -> tuple[str, str, Optional[dict]]:
+async def call_openai_api(messages: list, file_ids: list, user_message: str, system_prompt: str = "") -> tuple[str, str, Optional[dict]]:
     """Call OpenAI API with tool support and return (response, model_name, escalation).
+
+    Args:
+        messages: Conversation history
+        file_ids: List of file IDs to attach
+        user_message: The current user message
+        system_prompt: Optional system prompt with tool suggestions
 
     Returns:
         tuple: (response_text, model_name, permission_escalation_or_none)
@@ -285,6 +310,10 @@ async def call_openai_api(messages: list, file_ids: list, user_message: str) -> 
     client = get_openai_client()
     if not client:
         raise ValueError("OpenAI client not available")
+
+    # Inject system prompt at the beginning if provided
+    if system_prompt:
+        messages = [{"role": "system", "content": system_prompt}] + messages
 
     # Build the current message with multimodal content
     if file_ids:
@@ -413,6 +442,28 @@ async def chat(request: ChatMessage):
                 f"{context_meta['verbatim_count']} verbatim"
             )
 
+        # Analyze user message for relevant tool suggestions
+        suggestion_service = get_suggestion_service()
+        suggestions = suggestion_service.analyze_message(request.message)
+
+        # Build system prompt with tool suggestions
+        system_parts = [
+            "You are a helpful AI assistant with access to various system tools.",
+            "Be proactive about suggesting tools when they would help the user's task.",
+        ]
+
+        if suggestions:
+            suggestion_text = suggestion_service.get_system_prompt_injection(suggestions)
+            system_parts.append(suggestion_text)
+            logger.info(f"Suggesting {len(suggestions)} relevant tools: {[s.name for s in suggestions]}")
+        else:
+            # Include general tool summary when no specific suggestions
+            summary = suggestion_service.get_available_tools_summary()
+            if summary:
+                system_parts.append(summary)
+
+        system_prompt = "\n".join(system_parts)
+
         # Try Claude first, fallback to OpenAI
         model_used = None
         assistant_message = None
@@ -422,7 +473,7 @@ async def chat(request: ChatMessage):
             try:
                 logger.info(f"Calling Claude API with model {config.CLAUDE_MODEL}, files: {request.file_ids or []}")
                 assistant_message, model_used, permission_escalation = await call_claude_api(
-                    messages, request.file_ids or [], request.message
+                    messages, request.file_ids or [], request.message, system_prompt
                 )
             except Exception as e:
                 logger.warning(f"Claude API failed, falling back to OpenAI: {e}")
@@ -430,7 +481,7 @@ async def chat(request: ChatMessage):
         if assistant_message is None:
             logger.info(f"Calling OpenAI API with model {config.OPENAI_MODEL}, files: {request.file_ids or []}")
             assistant_message, model_used, permission_escalation = await call_openai_api(
-                messages, request.file_ids or [], request.message
+                messages, request.file_ids or [], request.message, system_prompt
             )
 
         # Save assistant response
@@ -455,12 +506,26 @@ async def chat(request: ChatMessage):
                 pending_args=permission_escalation.get("pending_args", {}),
             )
 
+        # Convert suggestions to response format
+        suggested_tools_response = None
+        if suggestions:
+            suggested_tools_response = [
+                SuggestedTool(
+                    name=s.name,
+                    description=s.description or "",
+                    relevance_reason=s.relevance_reason,
+                    usage_hint=s.usage_hint or "",
+                )
+                for s in suggestions
+            ]
+
         return ChatResponse(
             response=assistant_message,
             conversation_id=DEFAULT_CONVERSATION_ID,
             timestamp=datetime.now().isoformat(),
             model=model_used,
             permission_escalation=escalation_model,
+            suggested_tools=suggested_tools_response,
         )
 
     except Exception as e:

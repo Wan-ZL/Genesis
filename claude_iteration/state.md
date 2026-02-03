@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #2 IN PROGRESS.** Permission escalation and tool discovery. First increment complete.
+**Issue #2 COMPLETE.** All acceptance criteria met. Looking for next issue or backlog item.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -131,49 +131,32 @@
   - Removed `loadConversations()`, `loadConversation()`, `startNewConversation()` functions (app.js)
   - Added `loadSingleConversation()` to auto-load conversation on page load
   - Removed conversation-related CSS styles (style.css)
-- **Issue #4 Progress - Automatic summarization COMPLETE**:
+- **Issue #4 COMPLETE - Automatic summarization**:
   - Added `message_summaries` table for storing summaries
   - Added `get_context_for_api()` method with automatic summarization
   - Config: `RECENT_MESSAGES_VERBATIM=20`, `MESSAGES_PER_SUMMARY_BATCH=10`
   - Original messages preserved in DB (summaries used for LLM context only)
   - 8 new tests for summarization functionality
-- **Issue #2 Progress - Permission system + CapabilityScanner**:
-  - Created `assistant/core/` module
-  - `permissions.py`: PermissionLevel enum, require_permission decorator, can_access helper
-  - `capability_scanner.py`: Scans for CLI tools, services, system capabilities
-  - Discovers 23+ common tools (git, docker, python, node, etc.)
-  - Caches results in `assistant/memory/capabilities.json`
-  - 35 new tests (208 total)
-- **Issue #2 Progress - Capabilities API + Server Integration**:
-  - Capability scanner runs on server startup (integrated with lifespan handler)
-  - `GET /api/capabilities` - list all discovered capabilities (with filters)
-  - `POST /api/capabilities/refresh` - force rescan
-  - `GET /api/permissions` - get current permission level
-  - `GET /api/permissions/levels` - list all permission levels
-  - `POST /api/permissions` - set permission level
-  - 18 new tests (226 total)
-- **Issue #2 Progress - Permission Escalation Prompt System**:
-  - `ToolSpec` now supports `required_permission` field (default: SANDBOX)
-  - `ToolRegistry.execute()` checks permissions before running tools
-  - Returns structured `permission_escalation` response when permission insufficient
-  - Chat API detects escalation, returns formatted message asking user to grant
-  - `run_shell_command` tool added (requires SYSTEM permission)
-  - 14 new tests (240 total)
-- **Issue #2 Progress - Audit Log for Permission Changes**:
-  - `AuditLogService` created (`assistant/server/services/audit_log.py`)
-  - SQLite table `permission_audit_log` with indexed timestamp
-  - Logs: timestamp, old_level, new_level, source, ip_address, user_agent, reason
-  - `POST /api/permissions` now logs all changes to audit log
-  - `GET /api/permissions/audit` endpoint to view audit history (with pagination, filtering)
-  - 16 new tests (256 total)
+- **Issue #2 COMPLETE - Permission system + Tool discovery**:
+  - Permission system: `assistant/core/permissions.py`
+  - Capability scanner: `assistant/core/capability_scanner.py` (23+ tools)
+  - Capabilities cached in `assistant/memory/capabilities.json`
+  - Capabilities API: `GET/POST /api/capabilities`, `GET/POST /api/permissions`
+  - Permission escalation prompts for tools requiring elevated access
+  - `run_shell_command` tool requiring SYSTEM permission
+  - Audit log: `AuditLogService` with `GET /api/permissions/audit`
+  - **Tool suggestions: `ToolSuggestionService` with keyword-to-tool mappings**
+  - **System prompt injection with relevant tool suggestions**
+  - **Chat response includes `suggested_tools` field**
+  - 286 tests total (+30 new for tool suggestions)
 
 ## Next Step (single step)
-Continue Issue #2: Implement proactive tool suggestions (AI suggests useful discovered tools based on user requests).
+Check for new GitHub Issues or pick next item from backlog.
 
 ## Risks / Notes
-- Issue #2 IN PROGRESS - 5/6 acceptance criteria complete
-- Remaining: proactive tool suggestions (last item)
-- 256 tests passing (+16 new), CI workflow active
+- Issue #2 COMPLETE - all 6 acceptance criteria met
+- 286 tests passing, CI workflow active
+- Tool suggestions are proactive (injected into system prompt)
 
 ## How to test quickly
 ```bash
@@ -183,7 +166,6 @@ cd /Users/zelin/Startups/Genesis/assistant
 pip3 install -r requirements.txt
 python3 -m server.main
 # Visit http://127.0.0.1:8080
-# Click gear button to open settings
 
 # Option 2: Install as 24/7 service (macOS)
 ./service/assistant-service.sh install
@@ -194,22 +176,8 @@ python3 -m server.main
 # Run tests
 python3 -m pytest tests/ -v
 
-# Test capability scanner
-python3 -c "from core.capability_scanner import CapabilityScanner; s=CapabilityScanner(); s.scan_all(); print(s.get_summary())"
-
-# Check discovered capabilities
-cat memory/capabilities.json | jq '.[] | select(.available==true) | .name'
-
-# Test capabilities API
-curl http://127.0.0.1:8080/api/capabilities | jq '{total: .total, available: .available}'
-curl http://127.0.0.1:8080/api/capabilities?available_only=true | jq '.capabilities[].name'
-curl http://127.0.0.1:8080/api/permissions | jq .
-
-# Test permission escalation (new)
-# At LOCAL permission (default), run_shell_command will return escalation request
-# Try asking the assistant to run a shell command like "ls"
-# Response will include permission_escalation field with grant request
-# Grant SYSTEM permission:
-curl -X POST http://127.0.0.1:8080/api/permissions -H "Content-Type: application/json" -d '{"level": 2}' | jq .
-# Then retry the request - tool will now execute
+# Test tool suggestions
+# Send a message like "How do I commit with git?"
+# The AI will receive tool suggestions in its system prompt
+# and the response will include a suggested_tools field
 ```
