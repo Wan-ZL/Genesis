@@ -9,7 +9,7 @@
 - [x] Tool registry system ← **COMPLETE** (registry, datetime, calculate, web_fetch tools)
 - [x] Eval framework for LLM outputs ← **COMPLETE** (framework, 6 cases, SQLite storage, 26 tests)
 - [x] Add health check endpoint for monitoring
-- [ ] Error recovery and auto-restart
+- [x] Error recovery and auto-restart ← **COMPLETE** (retry logic + launchd auto-restart)
 - [x] CLI runner for evals (`python -m evals`) ← **COMPLETE**
 
 ## Priority: Low

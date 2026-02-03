@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 import config
 from server.services.memory import MemoryService
 from server.services.tools import registry as tool_registry
+from server.services.retry import api_retry
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -134,8 +135,12 @@ def load_file_for_openai(file_id: str) -> Optional[dict]:
     return None
 
 
+@api_retry
 async def call_claude_api(messages: list, file_ids: list, user_message: str) -> tuple[str, str]:
-    """Call Claude API with tool support and return (response, model_name)."""
+    """Call Claude API with tool support and return (response, model_name).
+
+    Includes automatic retry with exponential backoff for transient failures.
+    """
     client = get_anthropic_client()
     if not client:
         raise ValueError("Anthropic client not available")
@@ -226,8 +231,12 @@ async def call_claude_api(messages: list, file_ids: list, user_message: str) -> 
     return "I apologize, I couldn't complete the task after multiple tool attempts.", config.CLAUDE_MODEL
 
 
+@api_retry
 async def call_openai_api(messages: list, file_ids: list, user_message: str) -> tuple[str, str]:
-    """Call OpenAI API with tool support and return (response, model_name)."""
+    """Call OpenAI API with tool support and return (response, model_name).
+
+    Includes automatic retry with exponential backoff for transient failures.
+    """
     client = get_openai_client()
     if not client:
         raise ValueError("OpenAI client not available")

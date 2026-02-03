@@ -9,6 +9,12 @@ GitHub Issue #1: Implement AI Assistant v1
 - Auto-loop mechanism implemented (start-loop.sh + 8-Stop-trigger-next.sh)
 - AI Assistant architecture designed (assistant/ARCHITECTURE.md)
 - OpenAI API key configured (.claude/openai-key-secrets.env)
+- **Retry logic with exponential backoff** (assistant/server/services/retry.py):
+  - `with_retry` decorator with configurable attempts, delays, jitter
+  - `api_retry` pre-configured for OpenAI/Claude API errors
+  - Handles: ConnectionError, TimeoutError, RateLimitError
+  - 15 tests in tests/test_retry.py
+  - Integrated with chat API (call_claude_api, call_openai_api)
 - Backend implemented:
   - FastAPI server with CORS (assistant/server/main.py)
   - Chat API with Claude/OpenAI dual support (assistant/server/routes/chat.py)
@@ -76,7 +82,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Issue #1 complete (pending ANTHROPIC_API_KEY). Eval framework complete with CLI runner. Consider tackling error recovery/auto-restart or CI integration from backlog.
+Issue #1 complete (pending ANTHROPIC_API_KEY). Retry logic for transient API failures added. Consider CI integration, metrics dashboard, or mobile-friendly UI from backlog.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)
