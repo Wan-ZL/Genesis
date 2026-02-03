@@ -114,3 +114,20 @@ async def get_active_api_key():
 async def get_active_model():
     """Get the currently selected model."""
     return await settings_service.get("model") or config.MODEL
+
+
+async def load_settings_on_startup():
+    """Load settings from SQLite and apply to runtime config.
+
+    Called during server startup to restore user-configured settings
+    (API keys, model selection) that were saved in previous sessions.
+    """
+    try:
+        await _apply_runtime_settings()
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("Settings loaded from database")
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to load settings from database: {e}")

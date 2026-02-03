@@ -22,9 +22,15 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     logger.info(f"Starting AI Assistant on {config.HOST}:{config.PORT}")
+
+    # Load user settings from database (API keys, model selection)
+    # This restores settings saved in previous sessions
+    from server.routes.settings import load_settings_on_startup
+    await load_settings_on_startup()
+
     logger.info(f"Using model: {config.MODEL}")
-    if not config.OPENAI_API_KEY:
-        logger.warning("OPENAI_API_KEY not set - chat will not work")
+    if not config.OPENAI_API_KEY and not config.ANTHROPIC_API_KEY:
+        logger.warning("No API key set - configure via Settings page or .env files")
     yield
     logger.info("Shutting down AI Assistant")
 

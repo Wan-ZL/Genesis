@@ -233,3 +233,75 @@ class TestSettingsAPI:
         assert "model" in data["updated_keys"]
         assert "permission_level" in data["updated_keys"]
         assert "openai_api_key" in data["updated_keys"]
+
+
+class TestSettingsStartup:
+    """Tests for settings loading on startup."""
+
+    @pytest.mark.asyncio
+    async def test_load_settings_on_startup(self):
+        """Test that load_settings_on_startup loads saved settings."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import config
+
+        # Create temp database
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            temp_db_path = Path(f.name)
+
+        # Save original config values
+        original_openai_key = config.OPENAI_API_KEY
+        original_model = config.OPENAI_MODEL
+
+        try:
+            with patch('config.DATABASE_PATH', temp_db_path):
+                # Manually import after patching
+                from server.services.settings import SettingsService
+                from server.routes import settings as settings_routes
+
+                # Patch the settings service in routes
+                settings_routes.settings_service = SettingsService(temp_db_path)
+
+                # Save some settings to database
+                await settings_routes.settings_service.set_multiple({
+                    "openai_api_key": "sk-startup-test-key",
+                    "model": "gpt-4o-mini"
+                })
+
+                # Clear config values to simulate fresh start
+                config.OPENAI_API_KEY = ""
+                config.OPENAI_MODEL = "gpt-4o"
+
+                # Load settings from startup
+                await settings_routes.load_settings_on_startup()
+
+                # Verify config was updated
+                assert config.OPENAI_API_KEY == "sk-startup-test-key"
+                assert config.OPENAI_MODEL == "gpt-4o-mini"
+
+        finally:
+            # Restore original values
+            config.OPENAI_API_KEY = original_openai_key
+            config.OPENAI_MODEL = original_model
+
+    @pytest.mark.asyncio
+    async def test_load_settings_handles_empty_database(self):
+        """Test that load_settings_on_startup handles empty database gracefully."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        # Create temp database
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            temp_db_path = Path(f.name)
+
+        with patch('config.DATABASE_PATH', temp_db_path):
+            from server.services.settings import SettingsService
+            from server.routes import settings as settings_routes
+
+            # Patch with fresh service
+            settings_routes.settings_service = SettingsService(temp_db_path)
+
+            # Should not raise any errors
+            await settings_routes.load_settings_on_startup()

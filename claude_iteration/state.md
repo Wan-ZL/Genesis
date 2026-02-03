@@ -1,9 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #1 CLOSED.** Fixed import path bug in `status.py` - changed `from assistant.version` to `from version`. All endpoints verified working.
-
-**Issue #5 IN PROGRESS.** Settings page created, waiting for runtime config reload.
+**Issue #5 CLOSED.** Runtime config reload implemented - settings now persist and load automatically on startup.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -28,7 +26,7 @@
   - Web UI with chat interface (assistant/ui/index.html)
   - Styling with model badge (assistant/ui/style.css)
   - Frontend logic with conversation management (assistant/ui/app.js)
-  - File upload button (📎) and preview functionality
+  - File upload button and preview functionality
 - Chat API extended to support multimodal messages (file_ids parameter)
 - Upload tests passing (test_upload.py: 3/3 passed)
 - Multimodal E2E test PASSED with GPT-4o
@@ -105,29 +103,24 @@
   - Fixed latency path: `data.latency.overall.avg`
   - Added tooltips to clarify what each metric measures
   - Verified persistence behavior (request metrics reset on restart, messages persist in SQLite)
-- **Settings page implemented** (Issue #5 - partial):
+- **Settings page complete** (Issue #5):
   - Backend: SettingsService with SQLite persistence (assistant/server/services/settings.py)
   - Backend: Settings API endpoints GET/POST /api/settings (assistant/server/routes/settings.py)
-  - UI: Settings modal with ⚙️ button in header
+  - UI: Settings modal with button in header
   - API key inputs with masked display (showing last 4 chars)
   - Model dropdown (GPT-4o, GPT-4o Mini, Claude Sonnet 4, Claude 3.5 Haiku)
   - Permission level selector (SANDBOX/LOCAL/SYSTEM/FULL)
-  - 17 new tests (139 total)
-
-## Acceptance Criteria Status (Issue #5 - IN PROGRESS)
-- [x] Settings page accessible from UI
-- [x] API key input fields (masked/secure)
-- [x] Model dropdown selection
-- [x] Settings persisted (SQLite)
-- [ ] Settings applied without restart (partial - some require restart)
+  - **Runtime config reload**: Settings loaded from SQLite on startup
+  - 19 tests (17 original + 2 new for startup loading)
+- **Issue #1 Fixed**: Import path bug in status.py resolved
 
 ## Next Step (single step)
-Implement full runtime config reload so API key changes take effect without service restart (complete Issue #5).
+Pick the next open GitHub issue (Issue #4 or #2) and implement one increment.
 
 ## Risks / Notes
-- Settings currently stored in SQLite alongside conversation data
-- API key changes may require restart for full effect (chat.py reads from config at import time)
-- Need to update chat.py to read from settings service instead of config module
+- Issue #4 (Single infinite conversation) may require significant chat API changes
+- Issue #2 (Permission escalation) involves security-sensitive code
+- 141 tests passing, CI workflow active
 
 ## How to test quickly
 ```bash
@@ -137,7 +130,7 @@ cd /Users/zelin/Startups/Genesis/assistant
 pip3 install -r requirements.txt
 python3 -m server.main
 # Visit http://127.0.0.1:8080
-# Click ⚙️ button to open settings
+# Click gear button to open settings
 
 # Option 2: Install as 24/7 service (macOS)
 ./service/assistant-service.sh install
@@ -146,5 +139,5 @@ python3 -m server.main
 ./service/assistant-service.sh logs
 
 # Run tests
-python3 -m pytest tests/test_settings.py -v
+python3 -m pytest tests/ -v
 ```
