@@ -195,48 +195,6 @@ main {
     color: #333;
 }
 
-#conversations-list {
-    list-style: none;
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-#conversations-list li {
-    padding: 8px;
-    cursor: pointer;
-    border-radius: 4px;
-    font-size: 0.85rem;
-    margin-bottom: 4px;
-    background: #f5f5f5;
-    transition: background-color 0.2s;
-}
-
-#conversations-list li:hover {
-    background: #e9ecef;
-}
-
-#conversations-list li.active {
-    background: #007bff;
-    color: white;
-}
-
-#new-conversation-btn {
-    width: 100%;
-    padding: 10px;
-    margin-top: 10px;
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-#new-conversation-btn:hover {
-    background-color: #218838;
-}
-
 /* Metrics panel */
 .metrics-grid {
     display: grid;
@@ -788,18 +746,6 @@ header {
         font-size: 0.85rem;
     }
 
-    #conversations-list {
-        max-height: 150px;
-    }
-
-    #conversations-list li {
-        padding: 12px;
-        min-height: 44px;
-        display: flex;
-        align-items: center;
-    }
-
-    #new-conversation-btn,
     #refresh-metrics-btn {
         min-height: 44px;
         font-size: 1rem;

@@ -3,7 +3,6 @@
  */
 
 // State
-let currentConversationId = null;
 let pendingFiles = []; // Files waiting to be sent with next message
 let isRecording = false;
 let speechRecognition = null;
@@ -18,8 +17,6 @@ const fileInput = document.getElementById('file-input');
 const filePreview = document.getElementById('file-preview');
 const currentFocusEl = document.getElementById('current-focus');
 const lastRunEl = document.getElementById('last-run');
-const conversationsList = document.getElementById('conversations-list');
-const newConversationBtn = document.getElementById('new-conversation-btn');
 const refreshMetricsBtn = document.getElementById('refresh-metrics-btn');
 const toggleStatusBtn = document.getElementById('toggle-status-btn');
 const statusPanel = document.querySelector('.status-panel');
@@ -40,7 +37,7 @@ const permissionSelect = document.getElementById('permission-select');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadStatus();
-    loadConversations();
+    loadSingleConversation(); // Load the single infinite conversation
     loadMetrics();
     setupEventListeners();
     initVoiceInput();
@@ -66,9 +63,6 @@ function setupEventListeners() {
         messageInput.style.height = 'auto';
         messageInput.style.height = Math.min(messageInput.scrollHeight, 150) + 'px';
     });
-
-    // New conversation
-    newConversationBtn.addEventListener('click', startNewConversation);
 
     // Refresh metrics
     refreshMetricsBtn.addEventListener('click', loadMetrics);
@@ -329,7 +323,6 @@ async function sendMessage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: message || 'Please analyze the attached file(s).',
-                conversation_id: currentConversationId,
                 file_ids: fileIds.length > 0 ? fileIds : null
             })
         });
@@ -340,12 +333,6 @@ async function sendMessage() {
         loadingEl.remove();
 
         if (response.ok) {
-            // Update conversation ID if new
-            if (!currentConversationId) {
-                currentConversationId = data.conversation_id;
-                loadConversations(); // Refresh list
-            }
-
             // Add assistant response with model info
             addMessageToUI('assistant', data.response, data.model);
         } else {
@@ -378,61 +365,23 @@ function addMessageToUI(role, content, model = null) {
     return messageEl;
 }
 
-async function loadConversations() {
+// Load the single infinite conversation
+async function loadSingleConversation() {
     try {
-        const response = await fetch('/api/conversations');
-        const data = await response.json();
-
-        conversationsList.innerHTML = '';
-        data.conversations.forEach(conv => {
-            const li = document.createElement('li');
-            li.textContent = conv.title || `Conversation (${conv.message_count} msgs)`;
-            li.dataset.id = conv.id;
-            if (conv.id === currentConversationId) {
-                li.classList.add('active');
-            }
-            li.addEventListener('click', () => loadConversation(conv.id));
-            conversationsList.appendChild(li);
-        });
-    } catch (error) {
-        console.error('Failed to load conversations:', error);
-    }
-}
-
-async function loadConversation(conversationId) {
-    try {
-        const response = await fetch(`/api/conversation/${conversationId}`);
+        const response = await fetch('/api/conversation');
         const data = await response.json();
 
         if (response.ok) {
-            currentConversationId = conversationId;
             messagesContainer.innerHTML = '';
 
-            // Display messages
+            // Display messages (most recent at bottom)
             data.messages.forEach(msg => {
                 addMessageToUI(msg.role, msg.content);
-            });
-
-            // Update active state in list
-            document.querySelectorAll('#conversations-list li').forEach(li => {
-                li.classList.toggle('active', li.dataset.id === conversationId);
             });
         }
     } catch (error) {
         console.error('Failed to load conversation:', error);
     }
-}
-
-function startNewConversation() {
-    currentConversationId = null;
-    messagesContainer.innerHTML = '';
-
-    // Clear active state
-    document.querySelectorAll('#conversations-list li').forEach(li => {
-        li.classList.remove('active');
-    });
-
-    messageInput.focus();
 }
 
 async function loadStatus() {

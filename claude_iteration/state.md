@@ -125,12 +125,18 @@
   - `GET /api/conversation` new endpoint for single conversation
   - Chat API always uses "main" conversation, ignores conversation_id parameter
   - 7 new tests for single conversation model
+- **Issue #4 Progress - Removed multi-conversation UI**:
+  - Removed "Conversations" section from status panel (index.html)
+  - Removed "New Conversation" button
+  - Removed `loadConversations()`, `loadConversation()`, `startNewConversation()` functions (app.js)
+  - Added `loadSingleConversation()` to auto-load conversation on page load
+  - Removed conversation-related CSS styles (style.css)
 
 ## Next Step (single step)
-Continue Issue #4: Remove "new chat" / "reset" UI elements from web interface.
+Continue Issue #4: Implement automatic summarization of old messages for context window.
 
 ## Risks / Notes
-- Issue #4 remaining items: automatic summarization, UI changes
+- Issue #4 remaining items: automatic summarization, original messages preserved
 - Issue #2 (Permission escalation) involves security-sensitive code
 - 165 tests passing, CI workflow active
 
