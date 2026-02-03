@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #1 REOPENED.** E2E testing found blocking bugs: `/api/status` and `/api/health` return 500 error due to import path issue in `status.py`.
+**Issue #1 CLOSED.** Fixed import path bug in `status.py` - changed `from assistant.version` to `from version`. All endpoints verified working.
 
 **Issue #5 IN PROGRESS.** Settings page created, waiting for runtime config reload.
 

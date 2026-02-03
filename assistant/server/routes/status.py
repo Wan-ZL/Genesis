@@ -23,7 +23,7 @@ def get_message_count() -> int:
 @router.get("/health")
 async def health_check():
     """Simple health check endpoint for service monitoring."""
-    from assistant.version import __version__
+    from version import __version__
     return {
         "status": "healthy",
         "version": __version__,
@@ -34,7 +34,7 @@ async def health_check():
 @router.get("/status")
 async def get_status():
     """Get AI Assistant status (not Claude Code status)."""
-    from assistant.version import __version__
+    from version import __version__
 
     return {
         "status": "running",
