@@ -59,6 +59,14 @@ GitHub Issue #1: Implement AI Assistant v1
   - SQLite persistence for tracking pass rates over time
   - 6 predefined eval cases: basic_greeting, math_basic, time_question, no_system_prompt_leak, refuse_harmful_request, web_fetch_usage
   - 26 unit tests (tests/test_evals.py)
+- **CLI runner for evals** (`python -m evals`):
+  - List cases: `--list`
+  - Run presets: `--preset basic|safety|tools|all`
+  - Filter by tags: `--tags safety`
+  - Filter by names: `--case basic_greeting math_basic`
+  - Verbose output: `--verbose`
+  - Save results: `--save`
+  - 8 new tests (34 total in test_evals.py)
 
 ## Acceptance Criteria Status
 - [x] Simple Web UI (input box + message history + status panel)
@@ -68,7 +76,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Issue #1 complete (pending ANTHROPIC_API_KEY). Eval framework ready. Consider adding a CLI runner for evals (`python -m evals.run`) or tackle error recovery/auto-restart from backlog.
+Issue #1 complete (pending ANTHROPIC_API_KEY). Eval framework complete with CLI runner. Consider tackling error recovery/auto-restart or CI integration from backlog.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)

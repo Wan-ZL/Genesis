@@ -10,7 +10,7 @@
 - [x] Eval framework for LLM outputs ← **COMPLETE** (framework, 6 cases, SQLite storage, 26 tests)
 - [x] Add health check endpoint for monitoring
 - [ ] Error recovery and auto-restart
-- [ ] CLI runner for evals (`python -m evals.run`)
+- [x] CLI runner for evals (`python -m evals`) ← **COMPLETE**
 
 ## Priority: Low
 - [ ] Metrics dashboard

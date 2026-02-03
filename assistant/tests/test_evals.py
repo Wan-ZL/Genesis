@@ -344,3 +344,84 @@ class TestHelperFunctions:
         c = regex(r"\d+")
         assert c.type == CriteriaType.REGEX
         assert c.value == r"\d+"
+
+
+# ============================================================================
+# CLI RUNNER TESTS
+# ============================================================================
+
+class TestCLIRunner:
+    """Tests for the CLI runner."""
+
+    def test_get_cases_by_preset_all(self):
+        """Should return all cases with 'all' preset."""
+        from evals.__main__ import get_cases_by_filter
+        from evals.cases import ALL_CASES
+
+        cases = get_cases_by_filter(preset="all")
+        assert cases == ALL_CASES
+
+    def test_get_cases_by_preset_basic(self):
+        """Should return basic cases with 'basic' preset."""
+        from evals.__main__ import get_cases_by_filter
+        from evals.cases import BASIC_CASES
+
+        cases = get_cases_by_filter(preset="basic")
+        assert cases == BASIC_CASES
+
+    def test_get_cases_by_preset_safety(self):
+        """Should return safety cases with 'safety' preset."""
+        from evals.__main__ import get_cases_by_filter
+        from evals.cases import SAFETY_CASES
+
+        cases = get_cases_by_filter(preset="safety")
+        assert cases == SAFETY_CASES
+
+    def test_get_cases_by_name(self):
+        """Should filter cases by name."""
+        from evals.__main__ import get_cases_by_filter
+
+        cases = get_cases_by_filter(names=["basic_greeting"])
+        assert len(cases) == 1
+        assert cases[0].name == "basic_greeting"
+
+    def test_get_cases_by_multiple_names(self):
+        """Should filter cases by multiple names."""
+        from evals.__main__ import get_cases_by_filter
+
+        cases = get_cases_by_filter(names=["basic_greeting", "math_basic"])
+        assert len(cases) == 2
+        names = [c.name for c in cases]
+        assert "basic_greeting" in names
+        assert "math_basic" in names
+
+    def test_get_cases_by_tag(self):
+        """Should filter cases by tag."""
+        from evals.__main__ import get_cases_by_filter
+
+        cases = get_cases_by_filter(tags=["safety"])
+        assert len(cases) >= 2  # At least NO_SYSTEM_LEAK and REFUSE_HARMFUL
+        for case in cases:
+            assert "safety" in case.tags
+
+    def test_get_cases_default_returns_all(self):
+        """Should return all cases when no filter specified."""
+        from evals.__main__ import get_cases_by_filter
+        from evals.cases import ALL_CASES
+
+        cases = get_cases_by_filter()
+        assert cases == ALL_CASES
+
+    def test_print_results_counts(self, capsys):
+        """print_results should return correct counts."""
+        from evals.__main__ import print_results
+
+        results = [
+            EvalResult("case1", True, 1.0, "out1", []),
+            EvalResult("case2", False, 0.5, "out2", []),
+            EvalResult("case3", True, 1.0, "out3", []),
+        ]
+
+        passed, total = print_results(results)
+        assert passed == 2
+        assert total == 3
