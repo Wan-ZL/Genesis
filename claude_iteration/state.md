@@ -1,7 +1,9 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #5 IN PROGRESS.** Settings page created with API key inputs, model selection, permission level.
+**Issue #1 REOPENED.** E2E testing found blocking bugs: `/api/status` and `/api/health` return 500 error due to import path issue in `status.py`.
+
+**Issue #5 IN PROGRESS.** Settings page created, waiting for runtime config reload.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
