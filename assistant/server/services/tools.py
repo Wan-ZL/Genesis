@@ -16,6 +16,8 @@ from typing import Callable, Any, Optional
 from datetime import datetime
 import json
 import logging
+import re
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -286,3 +288,77 @@ def calculate(expression: str) -> str:
         return str(result)
     except Exception as e:
         return f"Error: {e}"
+
+
+def _web_fetch_impl(url: str, max_length: int = 4000) -> str:
+    """Implementation for web_fetch tool."""
+    import httpx
+
+    # Validate URL
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return f"Error: Invalid URL scheme. Only http and https are supported."
+    if not parsed.netloc:
+        return f"Error: Invalid URL. Missing domain."
+
+    # Log external call (per network rules in 04-tools-network.md)
+    logger.info(f"web_fetch: Fetching URL={url}, purpose=user_request")
+
+    try:
+        with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+            response = client.get(url, headers={
+                "User-Agent": "GenesisAssistant/1.0 (AI Assistant web_fetch tool)"
+            })
+
+        # Log result summary
+        logger.info(f"web_fetch: status={response.status_code}, content_type={response.headers.get('content-type', 'unknown')}, length={len(response.text)}")
+
+        if response.status_code != 200:
+            return f"Error: HTTP {response.status_code} - {response.reason_phrase}"
+
+        content = response.text
+        content_type = response.headers.get("content-type", "")
+
+        # Truncate if too long
+        if len(content) > max_length:
+            content = content[:max_length] + f"\n\n[Content truncated at {max_length} characters. Total length: {len(response.text)}]"
+
+        # Add metadata
+        result = f"URL: {url}\nStatus: {response.status_code}\nContent-Type: {content_type}\n\n{content}"
+        return result
+
+    except httpx.TimeoutException:
+        logger.warning(f"web_fetch: Timeout fetching {url}")
+        return f"Error: Request timed out after 10 seconds"
+    except httpx.RequestError as e:
+        logger.error(f"web_fetch: Request error for {url}: {e}")
+        return f"Error: Failed to fetch URL - {str(e)}"
+    except Exception as e:
+        logger.error(f"web_fetch: Unexpected error for {url}: {e}")
+        return f"Error: {str(e)}"
+
+
+# Register web_fetch with explicit spec
+registry.register_tool(ToolSpec(
+    name="web_fetch",
+    description="Fetch content from a URL. Returns the text content of the webpage. Useful for reading articles, documentation, or any web page. Note: Only fetches text content, does not execute JavaScript.",
+    parameters=[
+        ToolParameter(
+            name="url",
+            type="string",
+            description="The URL to fetch. Must be a valid http or https URL.",
+            required=True,
+        ),
+        ToolParameter(
+            name="max_length",
+            type="integer",
+            description="Maximum characters to return. Default: 4000. Increase for longer content, decrease for summaries.",
+            required=False,
+            default=4000,
+        ),
+    ],
+    handler=_web_fetch_impl,
+))
+
+# Expose for direct calls
+web_fetch = _web_fetch_impl

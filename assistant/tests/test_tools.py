@@ -9,7 +9,9 @@ from server.services.tools import (
     registry,
     get_current_datetime,
     calculate,
+    web_fetch,
 )
+from unittest.mock import patch, MagicMock
 
 
 class TestToolRegistry:
@@ -230,3 +232,93 @@ class TestGlobalRegistry:
         result = registry.execute("calculate", expression="2 + 2")
         assert result["success"] is True
         assert result["result"] == "4"
+
+    def test_global_registry_has_web_fetch(self):
+        """Test that global registry has web_fetch tool."""
+        tools = registry.list_tools()
+        assert "web_fetch" in tools
+
+
+class TestWebFetchTool:
+    """Tests for the web_fetch tool."""
+
+    def test_web_fetch_invalid_scheme(self):
+        """Test web_fetch rejects invalid URL schemes."""
+        result = web_fetch("ftp://example.com")
+        assert "Error" in result
+        assert "Invalid URL scheme" in result
+
+    def test_web_fetch_invalid_url(self):
+        """Test web_fetch rejects invalid URLs."""
+        result = web_fetch("not-a-url")
+        assert "Error" in result
+
+    def test_web_fetch_success(self):
+        """Test web_fetch with mocked successful response."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "<html>Hello World</html>"
+        mock_response.reason_phrase = "OK"
+        mock_response.headers = {"content-type": "text/html"}
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+            result = web_fetch("https://example.com")
+
+        assert "URL: https://example.com" in result
+        assert "Status: 200" in result
+        assert "Hello World" in result
+
+    def test_web_fetch_truncation(self):
+        """Test web_fetch truncates long content."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "A" * 10000
+        mock_response.reason_phrase = "OK"
+        mock_response.headers = {"content-type": "text/html"}
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+            result = web_fetch("https://example.com", max_length=100)
+
+        assert "[Content truncated at 100 characters" in result
+
+    def test_web_fetch_http_error(self):
+        """Test web_fetch handles HTTP errors."""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.reason_phrase = "Not Found"
+        mock_response.headers = {}
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+            result = web_fetch("https://example.com/notfound")
+
+        assert "Error" in result
+        assert "404" in result
+
+    def test_web_fetch_timeout(self):
+        """Test web_fetch handles timeouts."""
+        import httpx
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.side_effect = httpx.TimeoutException("timeout")
+            result = web_fetch("https://example.com")
+
+        assert "Error" in result
+        assert "timed out" in result
+
+    def test_web_fetch_via_registry(self):
+        """Test executing web_fetch via global registry."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "Test content"
+        mock_response.reason_phrase = "OK"
+        mock_response.headers = {"content-type": "text/plain"}
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+            result = registry.execute("web_fetch", url="https://example.com")
+
+        assert result["success"] is True
+        assert "Test content" in result["result"]

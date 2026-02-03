@@ -6,7 +6,7 @@
 - [x] Add comprehensive tests for chat API
 
 ## Priority: Medium
-- [~] Tool registry system ← **FOUNDATION DONE** (next: integrate with chat API)
+- [x] Tool registry system ← **COMPLETE** (registry, datetime, calculate, web_fetch tools)
 - [ ] Eval framework for LLM outputs
 - [x] Add health check endpoint for monitoring
 - [ ] Error recovery and auto-restart

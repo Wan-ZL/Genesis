@@ -47,6 +47,12 @@ GitHub Issue #1: Implement AI Assistant v1
   - Fixed get_current_datetime parameter description (was causing LLM to pass invalid format)
   - Datetime tool tested: returns correct time
   - Calculate tool tested: computes 15*7=105 correctly
+- **web_fetch tool added**:
+  - Fetches content from URLs (http/https)
+  - Validates URL scheme and domain
+  - Logs all external calls per network rules
+  - Truncates long content with configurable max_length
+  - 8 new tests in test_tools.py (57 total tests)
 
 ## Acceptance Criteria Status
 - [x] Simple Web UI (input box + message history + status panel)
@@ -56,7 +62,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Issue #1 acceptance criteria met (pending ANTHROPIC_API_KEY). Consider adding more useful tools (e.g., web search, file read) or tackle next backlog item.
+Issue #1 acceptance criteria met (pending ANTHROPIC_API_KEY). Three built-in tools now available (datetime, calculate, web_fetch). Consider adding file_read/file_write tools or tackle eval framework from backlog.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)
