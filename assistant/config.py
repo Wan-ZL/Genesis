@@ -25,6 +25,9 @@ USE_CLAUDE = bool(ANTHROPIC_API_KEY)
 CLAUDE_MODEL = "claude-sonnet-4-20250514"  # Claude Sonnet for good balance of quality/speed
 OPENAI_MODEL = "gpt-4o"
 
+# Active model (for logging/display)
+MODEL = CLAUDE_MODEL if USE_CLAUDE else OPENAI_MODEL
+
 # Server settings
 HOST = "127.0.0.1"
 PORT = 8080

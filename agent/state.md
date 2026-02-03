@@ -27,9 +27,11 @@ GitHub Issue #1: Implement AI Assistant v1
 - **Claude API integration code complete** (requires API key to activate)
 - Roadmap and backlog updated to reflect current progress
 - **Comprehensive chat API tests added** (tests/test_chat_api.py + tests/test_memory_service.py: 27 new tests)
-- **Supervisor service created** (assistant/service/):
+- **Supervisor service created and tested** (assistant/service/):
   - launchd plist template for macOS
   - Management script (install/uninstall/start/stop/status/logs)
+  - Bug fix: Added missing `config.MODEL` attribute
+  - Service verified running via launchd with auto-restart on crash
 
 ## Acceptance Criteria Status
 - [x] Simple Web UI (input box + message history + status panel)
@@ -39,7 +41,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Test the supervisor service by running `./assistant/service/assistant-service.sh install && ./assistant/service/assistant-service.sh start` to verify 24/7 operation. Issue #1 remains **BLOCKED** on ANTHROPIC_API_KEY.
+Issue #1 is **BLOCKED** on ANTHROPIC_API_KEY. All code complete and tested. Service running at http://127.0.0.1:8080. To unblock: add API key to `.claude/anthropic-key-secrets.env` in format `ANTHROPIC_API_KEY=sk-ant-...`
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)
