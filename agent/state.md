@@ -32,6 +32,12 @@ GitHub Issue #1: Implement AI Assistant v1
   - Management script (install/uninstall/start/stop/status/logs)
   - Bug fix: Added missing `config.MODEL` attribute
   - Service verified running via launchd with auto-restart on crash
+- **Tool registry system created** (assistant/server/services/tools.py):
+  - ToolSpec + ToolParameter interface definitions
+  - ToolRegistry class with decorator and explicit registration
+  - OpenAI and Claude format converters
+  - Built-in tools: get_current_datetime, calculate
+  - 19 tests passing (tests/test_tools.py)
 
 ## Acceptance Criteria Status
 - [x] Simple Web UI (input box + message history + status panel)
@@ -41,7 +47,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Issue #1 is **BLOCKED** on ANTHROPIC_API_KEY. All code complete and tested. Service running at http://127.0.0.1:8080. To unblock: add API key to `.claude/anthropic-key-secrets.env` in format `ANTHROPIC_API_KEY=sk-ant-...`
+Integrate tool registry with chat API so assistant can use tools (function calling). Issue #1 remains **BLOCKED** on ANTHROPIC_API_KEY.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)
