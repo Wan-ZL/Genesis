@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI Assistant</h1>
+        </header>
+
+        <main>
+            <div class="chat-container">
+                <div id="messages" class="messages"></div>
+
+                <div id="file-preview" class="file-preview"></div>
+                <div class="input-area">
+                    <input type="file" id="file-input" accept="image/*,.pdf" style="display:none" multiple>
+                    <button id="attach-btn" type="button" title="Attach image or PDF">📎</button>
+                    <textarea
+                        id="message-input"
+                        placeholder="Type your message..."
+                        rows="1"
+                    ></textarea>
+                    <button id="send-btn" type="button">Send</button>
+                </div>
+            </div>
+
+            <aside class="status-panel">
+                <h2>Status</h2>
+                <div id="status-content">
+                    <div class="status-section">
+                        <h3>Current Focus</h3>
+                        <p id="current-focus">Loading...</p>
+                    </div>
+                    <div class="status-section">
+                        <h3>Last Run</h3>
+                        <p id="last-run">Loading...</p>
+                    </div>
+                    <div class="status-section">
+                        <h3>Conversations</h3>
+                        <ul id="conversations-list"></ul>
+                        <button id="new-conversation-btn">New Conversation</button>
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/zelin/Startups/Genesis/hooks/8-SessionEnd-trigger-next.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

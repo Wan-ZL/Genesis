@@ -1,0 +1,36 @@
+# Claude Code secrets (never commit)
+.claude/*-secrets.env
+.claude/*-secrets/
+
+# Auto-loop flags (local only)
+.auto-loop
+hooks/loop_claude_code.txt
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.env
+
+# SQLite
+*.db
+*.db-journal
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Assistant uploaded files
+assistant/memory/files/
