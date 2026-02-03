@@ -436,5 +436,164 @@ class TestSingleConversation:
         assert DEFAULT_CONVERSATION_ID == "main"
 
 
+class TestContextSummarization:
+    """Tests for context summarization functionality (Issue #4)."""
+
+    @pytest.mark.asyncio
+    async def test_get_context_few_messages_no_summary(self, memory_service):
+        """Test that few messages returns all verbatim without summarization."""
+        # Add fewer than RECENT_MESSAGES_VERBATIM messages
+        for i in range(5):
+            await memory_service.add_to_conversation("user", f"Message {i}")
+            await memory_service.add_to_conversation("assistant", f"Response {i}")
+
+        messages, metadata = await memory_service.get_context_for_api()
+
+        # Should have system + 10 messages (5 pairs)
+        assert len(messages) == 11
+        assert metadata["total_messages"] == 10
+        assert metadata["summarized_count"] == 0
+        assert metadata["verbatim_count"] == 10
+
+    @pytest.mark.asyncio
+    async def test_get_context_many_messages_uses_summary(self, memory_service, monkeypatch):
+        """Test that many messages triggers summarization."""
+        # Set a low threshold for testing
+        monkeypatch.setattr("config.RECENT_MESSAGES_VERBATIM", 5)
+        monkeypatch.setattr("config.MESSAGES_PER_SUMMARY_BATCH", 3)
+        monkeypatch.setattr("config.MAX_SUMMARY_LENGTH", 200)
+
+        # Add more messages than threshold
+        for i in range(15):
+            await memory_service.add_to_conversation("user", f"User message {i}")
+
+        messages, metadata = await memory_service.get_context_for_api()
+
+        assert metadata["total_messages"] == 15
+        assert metadata["summarized_count"] == 10  # 15 - 5 recent
+        assert metadata["verbatim_count"] == 5
+
+        # Check that we have system prompt, summary context, and recent messages
+        # System prompt is first
+        assert messages[0]["role"] == "system"
+        # Recent verbatim messages should be last 5
+        verbatim_messages = [m for m in messages if m["role"] in ("user", "assistant") and
+                            not m.get("content", "").startswith("[Previous conversation")]
+        assert len(verbatim_messages) >= 5
+
+    @pytest.mark.asyncio
+    async def test_summaries_are_stored(self, memory_service, monkeypatch):
+        """Test that summaries are persisted in database."""
+        monkeypatch.setattr("config.RECENT_MESSAGES_VERBATIM", 5)
+        monkeypatch.setattr("config.MESSAGES_PER_SUMMARY_BATCH", 3)
+
+        for i in range(15):
+            await memory_service.add_to_conversation("user", f"Message {i}")
+
+        # First call creates summaries
+        await memory_service.get_context_for_api()
+
+        # Check summaries are stored
+        summaries = await memory_service.get_summaries()
+        assert len(summaries) > 0
+
+        # Each summary should have required fields
+        for s in summaries:
+            assert "id" in s
+            assert "summary" in s
+            assert "message_count" in s
+
+    @pytest.mark.asyncio
+    async def test_summaries_reused_on_subsequent_calls(self, memory_service, monkeypatch):
+        """Test that existing summaries are reused."""
+        monkeypatch.setattr("config.RECENT_MESSAGES_VERBATIM", 5)
+        monkeypatch.setattr("config.MESSAGES_PER_SUMMARY_BATCH", 3)
+
+        for i in range(15):
+            await memory_service.add_to_conversation("user", f"Message {i}")
+
+        # First call creates summaries
+        _, meta1 = await memory_service.get_context_for_api()
+        summaries_after_first = await memory_service.get_summaries()
+
+        # Second call should reuse summaries
+        _, meta2 = await memory_service.get_context_for_api()
+        summaries_after_second = await memory_service.get_summaries()
+
+        # Should have same number of summaries (not creating duplicates)
+        assert len(summaries_after_second) == len(summaries_after_first)
+
+    @pytest.mark.asyncio
+    async def test_clear_summaries(self, memory_service, monkeypatch):
+        """Test clearing all summaries."""
+        monkeypatch.setattr("config.RECENT_MESSAGES_VERBATIM", 5)
+        monkeypatch.setattr("config.MESSAGES_PER_SUMMARY_BATCH", 3)
+
+        for i in range(15):
+            await memory_service.add_to_conversation("user", f"Message {i}")
+
+        await memory_service.get_context_for_api()
+        assert len(await memory_service.get_summaries()) > 0
+
+        await memory_service.clear_summaries()
+        assert len(await memory_service.get_summaries()) == 0
+
+    @pytest.mark.asyncio
+    async def test_summary_includes_message_content(self, memory_service, monkeypatch):
+        """Test that summaries include content from original messages."""
+        monkeypatch.setattr("config.RECENT_MESSAGES_VERBATIM", 2)
+        monkeypatch.setattr("config.MESSAGES_PER_SUMMARY_BATCH", 3)
+
+        # Add messages with identifiable content
+        await memory_service.add_to_conversation("user", "UNIQUE_MARKER_ABC")
+        await memory_service.add_to_conversation("assistant", "Response to marker")
+        await memory_service.add_to_conversation("user", "Follow up")
+        await memory_service.add_to_conversation("user", "Recent 1")
+        await memory_service.add_to_conversation("user", "Recent 2")
+
+        await memory_service.get_context_for_api()
+        summaries = await memory_service.get_summaries()
+
+        # At least one summary should contain reference to our unique content
+        all_summaries_text = " ".join(s["summary"] for s in summaries)
+        assert "UNIQUE_MARKER_ABC" in all_summaries_text or "U:" in all_summaries_text
+
+    @pytest.mark.asyncio
+    async def test_original_messages_preserved_after_summarization(self, memory_service, monkeypatch):
+        """Test that original messages are preserved (Issue #4 requirement)."""
+        monkeypatch.setattr("config.RECENT_MESSAGES_VERBATIM", 5)
+        monkeypatch.setattr("config.MESSAGES_PER_SUMMARY_BATCH", 3)
+
+        for i in range(15):
+            await memory_service.add_to_conversation("user", f"Original message {i}")
+
+        # Trigger summarization
+        await memory_service.get_context_for_api()
+
+        # Original messages should still be searchable
+        results = await memory_service.search_messages("Original message 0")
+        assert len(results) == 1
+        assert "Original message 0" in results[0]["content"]
+
+        # All messages should be in get_messages without limit
+        all_messages = await memory_service.get_messages()
+        assert len(all_messages) == 16  # 15 + system
+
+    @pytest.mark.asyncio
+    async def test_context_includes_summary_prefix(self, memory_service, monkeypatch):
+        """Test that context includes a summary indicator."""
+        monkeypatch.setattr("config.RECENT_MESSAGES_VERBATIM", 5)
+        monkeypatch.setattr("config.MESSAGES_PER_SUMMARY_BATCH", 3)
+
+        for i in range(15):
+            await memory_service.add_to_conversation("user", f"Message {i}")
+
+        messages, _ = await memory_service.get_context_for_api()
+
+        # Should have a message with summary prefix
+        summary_messages = [m for m in messages if "[Previous conversation summary" in m.get("content", "")]
+        assert len(summary_messages) == 1
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -40,3 +40,11 @@ FILES_PATH = BASE_DIR / "memory" / "files"
 # Ensure directories exist
 DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
 FILES_PATH.mkdir(parents=True, exist_ok=True)
+
+# Context window management
+# Number of recent messages to keep verbatim in context
+RECENT_MESSAGES_VERBATIM = 20
+# Number of older messages to summarize as one batch
+MESSAGES_PER_SUMMARY_BATCH = 10
+# Maximum characters for a summary
+MAX_SUMMARY_LENGTH = 500

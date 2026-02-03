@@ -349,8 +349,15 @@ async def chat(request: ChatMessage):
     await memory.add_to_conversation("user", message_text)
 
     try:
-        # Get conversation history from single infinite conversation
-        messages = await memory.get_messages()
+        # Get conversation history with automatic summarization for long conversations
+        messages, context_meta = await memory.get_context_for_api()
+
+        if context_meta["summarized_count"] > 0:
+            logger.info(
+                f"Context: {context_meta['total_messages']} total msgs, "
+                f"{context_meta['summarized_count']} summarized, "
+                f"{context_meta['verbatim_count']} verbatim"
+            )
 
         # Try Claude first, fallback to OpenAI
         model_used = None

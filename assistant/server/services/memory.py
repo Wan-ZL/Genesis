@@ -2,8 +2,10 @@
 import aiosqlite
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 import uuid
+
+import config
 
 
 # Single infinite conversation - all messages go to this conversation
@@ -50,6 +52,19 @@ class MemoryService:
                     size INTEGER,
                     conversation_id TEXT,
                     uploaded_at TIMESTAMP,
+                    FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+                )
+            """)
+            # Table for storing summaries of old message batches
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS message_summaries (
+                    id TEXT PRIMARY KEY,
+                    conversation_id TEXT,
+                    start_message_id TEXT,
+                    end_message_id TEXT,
+                    message_count INTEGER,
+                    summary TEXT,
+                    created_at TIMESTAMP,
                     FOREIGN KEY (conversation_id) REFERENCES conversations(id)
                 )
             """)
@@ -214,6 +229,176 @@ class MemoryService:
         await self._ensure_initialized()
         await self._ensure_default_conversation()
         await self.remove_last_message(DEFAULT_CONVERSATION_ID)
+
+    async def get_context_for_api(self) -> Tuple[list[dict], dict]:
+        """Get messages optimized for LLM context window.
+
+        For long conversations, this method:
+        1. Keeps recent messages verbatim
+        2. Summarizes older messages to save context space
+        3. Original messages are always preserved in DB
+
+        Returns:
+            Tuple of (messages_list, metadata) where:
+            - messages_list: Messages in OpenAI format with system prompt
+            - metadata: Dict with summarization info (total_messages, summarized_count, etc.)
+        """
+        await self._ensure_initialized()
+        await self._ensure_default_conversation()
+
+        # Get total message count
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM messages WHERE conversation_id = ?",
+                (DEFAULT_CONVERSATION_ID,)
+            )
+            row = await cursor.fetchone()
+            total_messages = row[0] if row else 0
+
+        # If few messages, return all verbatim
+        if total_messages <= config.RECENT_MESSAGES_VERBATIM:
+            messages = await self.get_messages()
+            return messages, {
+                "total_messages": total_messages,
+                "summarized_count": 0,
+                "verbatim_count": total_messages,
+                "summaries_used": 0
+            }
+
+        # Need to summarize older messages
+        verbatim_count = config.RECENT_MESSAGES_VERBATIM
+        messages_to_summarize = total_messages - verbatim_count
+
+        # Start with system prompt
+        messages = [
+            {"role": "system", "content": "You are a helpful AI assistant. Be concise and helpful."}
+        ]
+
+        # Get or create summaries for older messages
+        async with aiosqlite.connect(self.db_path) as db:
+            # Get all messages ordered by time
+            cursor = await db.execute(
+                """SELECT id, role, content, created_at FROM messages
+                   WHERE conversation_id = ?
+                   ORDER BY created_at""",
+                (DEFAULT_CONVERSATION_ID,)
+            )
+            all_messages = await cursor.fetchall()
+
+            # Split into old (to summarize) and recent (verbatim)
+            old_messages = all_messages[:messages_to_summarize]
+            recent_messages = all_messages[messages_to_summarize:]
+
+            # Check for existing summaries
+            cursor = await db.execute(
+                """SELECT start_message_id, end_message_id, summary
+                   FROM message_summaries
+                   WHERE conversation_id = ?
+                   ORDER BY created_at""",
+                (DEFAULT_CONVERSATION_ID,)
+            )
+            existing_summaries = await cursor.fetchall()
+
+        # Determine which messages need new summaries
+        summarized_message_ids = set()
+        summaries_to_add = []
+
+        for start_id, end_id, summary in existing_summaries:
+            # Find range of summarized messages
+            in_range = False
+            for msg_id, _, _, _ in old_messages:
+                if msg_id == start_id:
+                    in_range = True
+                if in_range:
+                    summarized_message_ids.add(msg_id)
+                if msg_id == end_id:
+                    break
+            summaries_to_add.append(summary)
+
+        # Create summaries for unsummarized old messages
+        unsummarized = [(m[0], m[1], m[2], m[3]) for m in old_messages if m[0] not in summarized_message_ids]
+
+        if unsummarized:
+            # Group into batches and create summaries
+            batch_size = config.MESSAGES_PER_SUMMARY_BATCH
+            for i in range(0, len(unsummarized), batch_size):
+                batch = unsummarized[i:i + batch_size]
+                if batch:
+                    summary = _create_text_summary(batch, config.MAX_SUMMARY_LENGTH)
+                    summaries_to_add.append(summary)
+
+                    # Store the summary
+                    summary_id = f"sum_{uuid.uuid4().hex[:12]}"
+                    async with aiosqlite.connect(self.db_path) as db:
+                        await db.execute(
+                            """INSERT INTO message_summaries
+                               (id, conversation_id, start_message_id, end_message_id,
+                                message_count, summary, created_at)
+                               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                            (summary_id, DEFAULT_CONVERSATION_ID,
+                             batch[0][0], batch[-1][0],
+                             len(batch), summary, datetime.now().isoformat())
+                        )
+                        await db.commit()
+
+        # Add summaries as context
+        if summaries_to_add:
+            combined_summary = "\n---\n".join(summaries_to_add)
+            messages.append({
+                "role": "system",
+                "content": f"[Previous conversation summary ({messages_to_summarize} messages):\n{combined_summary}]"
+            })
+
+        # Add recent messages verbatim
+        for _, role, content, _ in recent_messages:
+            messages.append({"role": role, "content": content})
+
+        return messages, {
+            "total_messages": total_messages,
+            "summarized_count": messages_to_summarize,
+            "verbatim_count": verbatim_count,
+            "summaries_used": len(summaries_to_add)
+        }
+
+    async def get_summaries(self) -> list[dict]:
+        """Get all stored summaries for the conversation.
+
+        Returns:
+            List of summary records with metadata
+        """
+        await self._ensure_initialized()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """SELECT id, start_message_id, end_message_id, message_count, summary, created_at
+                   FROM message_summaries
+                   WHERE conversation_id = ?
+                   ORDER BY created_at""",
+                (DEFAULT_CONVERSATION_ID,)
+            )
+            rows = await cursor.fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "start_message_id": row[1],
+                    "end_message_id": row[2],
+                    "message_count": row[3],
+                    "summary": row[4],
+                    "created_at": row[5]
+                }
+                for row in rows
+            ]
+
+    async def clear_summaries(self):
+        """Clear all stored summaries (useful for testing or reset)."""
+        await self._ensure_initialized()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "DELETE FROM message_summaries WHERE conversation_id = ?",
+                (DEFAULT_CONVERSATION_ID,)
+            )
+            await db.commit()
 
     async def list_conversations(self) -> list[dict]:
         """List all conversations with metadata."""
@@ -413,6 +598,46 @@ class MemoryService:
             cursor = await db.execute("SELECT COUNT(*) FROM messages")
             row = await cursor.fetchone()
             return row[0] if row else 0
+
+
+def _create_text_summary(messages: list, max_length: int = 500) -> str:
+    """Create a text-based summary of a batch of messages.
+
+    This is a simple text summarization that truncates long messages
+    and combines them. For better quality, this could be replaced
+    with LLM-based summarization in the future.
+
+    Args:
+        messages: List of (id, role, content, created_at) tuples
+        max_length: Maximum characters for the summary
+
+    Returns:
+        A condensed summary of the messages
+    """
+    if not messages:
+        return ""
+
+    # Build summary by extracting key parts from each message
+    summary_parts = []
+    chars_per_msg = max_length // max(len(messages), 1)
+
+    for _, role, content, _ in messages:
+        # Truncate long messages
+        if len(content) > chars_per_msg:
+            truncated = content[:chars_per_msg - 3] + "..."
+        else:
+            truncated = content
+
+        # Use shorter role labels
+        role_label = "U" if role == "user" else "A"
+        summary_parts.append(f"{role_label}: {truncated}")
+
+    # Combine and final truncation if needed
+    summary = " | ".join(summary_parts)
+    if len(summary) > max_length:
+        summary = summary[:max_length - 3] + "..."
+
+    return summary
 
 
 def _extract_snippet(content: str, query: str, context_chars: int = 50) -> str:

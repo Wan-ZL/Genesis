@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #4 in progress.** Single conversation storage implemented as second increment.
+**Issue #4 CLOSED.** All acceptance criteria complete. Next priority: Issue #2.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -131,14 +131,20 @@
   - Removed `loadConversations()`, `loadConversation()`, `startNewConversation()` functions (app.js)
   - Added `loadSingleConversation()` to auto-load conversation on page load
   - Removed conversation-related CSS styles (style.css)
+- **Issue #4 Progress - Automatic summarization COMPLETE**:
+  - Added `message_summaries` table for storing summaries
+  - Added `get_context_for_api()` method with automatic summarization
+  - Config: `RECENT_MESSAGES_VERBATIM=20`, `MESSAGES_PER_SUMMARY_BATCH=10`
+  - Original messages preserved in DB (summaries used for LLM context only)
+  - 8 new tests for summarization functionality
 
 ## Next Step (single step)
-Continue Issue #4: Implement automatic summarization of old messages for context window.
+Start Issue #2: Implement proactive permission escalation and tool discovery.
 
 ## Risks / Notes
-- Issue #4 remaining items: automatic summarization, original messages preserved
-- Issue #2 (Permission escalation) involves security-sensitive code
-- 165 tests passing, CI workflow active
+- Issue #4 CLOSED - all features complete
+- Issue #2 (Permission escalation) involves security-sensitive code - handle carefully
+- 173 tests passing, CI workflow active
 
 ## How to test quickly
 ```bash
