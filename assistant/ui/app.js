@@ -24,6 +24,19 @@ const refreshMetricsBtn = document.getElementById('refresh-metrics-btn');
 const toggleStatusBtn = document.getElementById('toggle-status-btn');
 const statusPanel = document.querySelector('.status-panel');
 
+// Settings elements
+const settingsBtn = document.getElementById('settings-btn');
+const settingsModal = document.getElementById('settings-modal');
+const settingsCloseBtn = document.getElementById('settings-close-btn');
+const settingsSaveBtn = document.getElementById('settings-save-btn');
+const settingsCancelBtn = document.getElementById('settings-cancel-btn');
+const openaiKeyInput = document.getElementById('openai-key-input');
+const anthropicKeyInput = document.getElementById('anthropic-key-input');
+const openaiKeyStatus = document.getElementById('openai-key-status');
+const anthropicKeyStatus = document.getElementById('anthropic-key-status');
+const modelSelect = document.getElementById('model-select');
+const permissionSelect = document.getElementById('permission-select');
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadStatus();
@@ -72,6 +85,24 @@ function setupEventListeners() {
     // Voice input
     if (voiceBtn) {
         voiceBtn.addEventListener('click', toggleVoiceInput);
+    }
+
+    // Settings
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', openSettings);
+    }
+    if (settingsCloseBtn) {
+        settingsCloseBtn.addEventListener('click', closeSettings);
+    }
+    if (settingsSaveBtn) {
+        settingsSaveBtn.addEventListener('click', saveSettings);
+    }
+    if (settingsCancelBtn) {
+        settingsCancelBtn.addEventListener('click', closeSettings);
+    }
+    // Close modal on backdrop click
+    if (settingsModal) {
+        settingsModal.querySelector('.modal-backdrop').addEventListener('click', closeSettings);
     }
 }
 
@@ -495,5 +526,114 @@ async function loadMetrics() {
         successRateEl.textContent = '-';
         latencyEl.textContent = '-';
         messagesEl.textContent = '-';
+    }
+}
+
+// Settings functions
+async function openSettings() {
+    settingsModal.classList.remove('hidden');
+    await loadSettings();
+}
+
+function closeSettings() {
+    settingsModal.classList.add('hidden');
+    // Clear password inputs on close
+    openaiKeyInput.value = '';
+    anthropicKeyInput.value = '';
+}
+
+async function loadSettings() {
+    try {
+        const response = await fetch('/api/settings');
+        const data = await response.json();
+
+        // Update key status indicators
+        updateKeyStatus('openai', data.openai_api_key_set, data.openai_api_key_masked);
+        updateKeyStatus('anthropic', data.anthropic_api_key_set, data.anthropic_api_key_masked);
+
+        // Populate model dropdown
+        modelSelect.innerHTML = '';
+        data.available_models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = model.name;
+            if (model.id === data.model) {
+                option.selected = true;
+            }
+            modelSelect.appendChild(option);
+        });
+
+        // Set permission level
+        permissionSelect.value = data.permission_level;
+
+    } catch (error) {
+        console.error('Failed to load settings:', error);
+    }
+}
+
+function updateKeyStatus(provider, isSet, maskedKey) {
+    const statusEl = provider === 'openai' ? openaiKeyStatus : anthropicKeyStatus;
+    const inputEl = provider === 'openai' ? openaiKeyInput : anthropicKeyInput;
+
+    if (isSet) {
+        statusEl.textContent = maskedKey;
+        statusEl.className = 'key-status key-set';
+        inputEl.placeholder = 'Enter new key to replace';
+    } else {
+        statusEl.textContent = 'Not set';
+        statusEl.className = 'key-status key-not-set';
+        inputEl.placeholder = provider === 'openai' ? 'sk-...' : 'sk-ant-...';
+    }
+}
+
+async function saveSettings() {
+    const updates = {};
+
+    // Only include API keys if user entered new ones
+    if (openaiKeyInput.value.trim()) {
+        updates.openai_api_key = openaiKeyInput.value.trim();
+    }
+    if (anthropicKeyInput.value.trim()) {
+        updates.anthropic_api_key = anthropicKeyInput.value.trim();
+    }
+
+    // Always include model and permission
+    updates.model = modelSelect.value;
+    updates.permission_level = parseInt(permissionSelect.value);
+
+    try {
+        settingsSaveBtn.disabled = true;
+        settingsSaveBtn.textContent = 'Saving...';
+
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            // Reload settings to show updated status
+            await loadSettings();
+            // Clear password fields
+            openaiKeyInput.value = '';
+            anthropicKeyInput.value = '';
+            // Show success briefly
+            settingsSaveBtn.textContent = 'Saved!';
+            setTimeout(() => {
+                settingsSaveBtn.textContent = 'Save Settings';
+                settingsSaveBtn.disabled = false;
+            }, 1500);
+        } else {
+            const error = await response.json();
+            alert(`Failed to save: ${error.detail || 'Unknown error'}`);
+            settingsSaveBtn.textContent = 'Save Settings';
+            settingsSaveBtn.disabled = false;
+        }
+    } catch (error) {
+        console.error('Failed to save settings:', error);
+        alert(`Error: ${error.message}`);
+        settingsSaveBtn.textContent = 'Save Settings';
+        settingsSaveBtn.disabled = false;
     }
 }

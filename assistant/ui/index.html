@@ -10,7 +10,10 @@
     <div class="container">
         <header>
             <h1>AI Assistant</h1>
-            <button id="toggle-status-btn" class="mobile-only" aria-label="Toggle status panel">Menu</button>
+            <div class="header-buttons">
+                <button id="settings-btn" title="Settings">⚙️</button>
+                <button id="toggle-status-btn" class="mobile-only" aria-label="Toggle status panel">Menu</button>
+            </div>
         </header>
 
         <main>
@@ -83,6 +86,64 @@
                 </div>
             </aside>
         </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button id="settings-close-btn" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3>API Keys</h3>
+                    <div class="settings-field">
+                        <label for="openai-key-input">OpenAI API Key</label>
+                        <div class="key-input-wrapper">
+                            <input type="password" id="openai-key-input" placeholder="sk-...">
+                            <span id="openai-key-status" class="key-status"></span>
+                        </div>
+                        <small>Get your key at <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a></small>
+                    </div>
+                    <div class="settings-field">
+                        <label for="anthropic-key-input">Anthropic API Key</label>
+                        <div class="key-input-wrapper">
+                            <input type="password" id="anthropic-key-input" placeholder="sk-ant-...">
+                            <span id="anthropic-key-status" class="key-status"></span>
+                        </div>
+                        <small>Get your key at <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a></small>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>Model Selection</h3>
+                    <div class="settings-field">
+                        <label for="model-select">Active Model</label>
+                        <select id="model-select">
+                            <!-- Options populated dynamically -->
+                        </select>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>Permission Level</h3>
+                    <div class="settings-field">
+                        <label for="permission-select">AI Access Level</label>
+                        <select id="permission-select">
+                            <option value="0">SANDBOX - Only assistant memory</option>
+                            <option value="1">LOCAL - Entire project</option>
+                            <option value="2">SYSTEM - Execute commands (restricted)</option>
+                            <option value="3">FULL - Complete access</option>
+                        </select>
+                        <small>Controls what the AI assistant can access</small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="settings-save-btn" class="btn-primary">Save Settings</button>
+                <button id="settings-cancel-btn" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
     </div>
 
     <script src="/static/app.js"></script>

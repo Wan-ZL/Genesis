@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #3 CLOSED.** Remaining open issues: #2, #4, #5.
+**Issue #5 IN PROGRESS.** Settings page created with API key inputs, model selection, permission level.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -103,22 +103,29 @@
   - Fixed latency path: `data.latency.overall.avg`
   - Added tooltips to clarify what each metric measures
   - Verified persistence behavior (request metrics reset on restart, messages persist in SQLite)
+- **Settings page implemented** (Issue #5 - partial):
+  - Backend: SettingsService with SQLite persistence (assistant/server/services/settings.py)
+  - Backend: Settings API endpoints GET/POST /api/settings (assistant/server/routes/settings.py)
+  - UI: Settings modal with ⚙️ button in header
+  - API key inputs with masked display (showing last 4 chars)
+  - Model dropdown (GPT-4o, GPT-4o Mini, Claude Sonnet 4, Claude 3.5 Haiku)
+  - Permission level selector (SANDBOX/LOCAL/SYSTEM/FULL)
+  - 17 new tests (139 total)
 
-## Acceptance Criteria Status (Issue #1 - CLOSED)
-- [x] Simple Web UI (input box + message history + status panel)
-- [x] Can call Claude/OpenAI API for conversation (OpenAI active, Claude ready when key added)
-- [x] Support image/PDF upload and processing
-- [x] Persist conversation history
-- [x] Display current focus and recent runlog status
+## Acceptance Criteria Status (Issue #5 - IN PROGRESS)
+- [x] Settings page accessible from UI
+- [x] API key input fields (masked/secure)
+- [x] Model dropdown selection
+- [x] Settings persisted (SQLite)
+- [ ] Settings applied without restart (partial - some require restart)
 
 ## Next Step (single step)
-Pick next issue from open issues (#2, #4, #5) in next iteration.
+Implement full runtime config reload so API key changes take effect without service restart (complete Issue #5).
 
 ## Risks / Notes
-- Without API key, system falls back to OpenAI (still functional)
-- Claude vision format differs from OpenAI (implemented)
-- PDF support via Claude document type (implemented)
-- All other acceptance criteria are met - only API key is blocking completion
+- Settings currently stored in SQLite alongside conversation data
+- API key changes may require restart for full effect (chat.py reads from config at import time)
+- Need to update chat.py to read from settings service instead of config module
 
 ## How to test quickly
 ```bash
@@ -128,10 +135,14 @@ cd /Users/zelin/Startups/Genesis/assistant
 pip3 install -r requirements.txt
 python3 -m server.main
 # Visit http://127.0.0.1:8080
+# Click ⚙️ button to open settings
 
 # Option 2: Install as 24/7 service (macOS)
 ./service/assistant-service.sh install
 ./service/assistant-service.sh start
 ./service/assistant-service.sh status
 ./service/assistant-service.sh logs
+
+# Run tests
+python3 -m pytest tests/test_settings.py -v
 ```
