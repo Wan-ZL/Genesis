@@ -5,12 +5,15 @@
 // State
 let currentConversationId = null;
 let pendingFiles = []; // Files waiting to be sent with next message
+let isRecording = false;
+let speechRecognition = null;
 
 // DOM Elements
 const messagesContainer = document.getElementById('messages');
 const messageInput = document.getElementById('message-input');
 const sendBtn = document.getElementById('send-btn');
 const attachBtn = document.getElementById('attach-btn');
+const voiceBtn = document.getElementById('voice-btn');
 const fileInput = document.getElementById('file-input');
 const filePreview = document.getElementById('file-preview');
 const currentFocusEl = document.getElementById('current-focus');
@@ -27,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadConversations();
     loadMetrics();
     setupEventListeners();
+    initVoiceInput();
 
     // Refresh metrics every 30 seconds
     setInterval(loadMetrics, 30000);
@@ -64,11 +68,117 @@ function setupEventListeners() {
     if (toggleStatusBtn) {
         toggleStatusBtn.addEventListener('click', toggleStatusPanel);
     }
+
+    // Voice input
+    if (voiceBtn) {
+        voiceBtn.addEventListener('click', toggleVoiceInput);
+    }
 }
 
 function toggleStatusPanel() {
     statusPanel.classList.toggle('show');
     toggleStatusBtn.textContent = statusPanel.classList.contains('show') ? 'Close' : 'Menu';
+}
+
+// Voice input using Web Speech API
+function initVoiceInput() {
+    // Check for browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+        // Hide voice button if not supported
+        if (voiceBtn) {
+            voiceBtn.style.display = 'none';
+            console.log('Speech recognition not supported in this browser');
+        }
+        return;
+    }
+
+    speechRecognition = new SpeechRecognition();
+    speechRecognition.continuous = true;
+    speechRecognition.interimResults = true;
+    speechRecognition.lang = 'en-US'; // Default language
+
+    // Handle results
+    speechRecognition.onresult = (event) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                finalTranscript += transcript;
+            } else {
+                interimTranscript += transcript;
+            }
+        }
+
+        // Append final transcript to input
+        if (finalTranscript) {
+            const currentValue = messageInput.value;
+            const separator = currentValue && !currentValue.endsWith(' ') ? ' ' : '';
+            messageInput.value = currentValue + separator + finalTranscript;
+            // Trigger auto-resize
+            messageInput.dispatchEvent(new Event('input'));
+        }
+    };
+
+    // Handle errors
+    speechRecognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        stopVoiceInput();
+
+        if (event.error === 'not-allowed') {
+            alert('Microphone access denied. Please allow microphone access in your browser settings.');
+        } else if (event.error === 'no-speech') {
+            // Silently restart if no speech detected
+        }
+    };
+
+    // Handle end
+    speechRecognition.onend = () => {
+        if (isRecording) {
+            // Restart if still recording (continuous mode)
+            speechRecognition.start();
+        }
+    };
+}
+
+function toggleVoiceInput() {
+    if (isRecording) {
+        stopVoiceInput();
+    } else {
+        startVoiceInput();
+    }
+}
+
+function startVoiceInput() {
+    if (!speechRecognition) {
+        alert('Voice input is not supported in this browser. Try Chrome or Safari.');
+        return;
+    }
+
+    try {
+        speechRecognition.start();
+        isRecording = true;
+        voiceBtn.classList.add('recording');
+        voiceBtn.title = 'Stop recording';
+        messageInput.placeholder = 'Listening...';
+    } catch (error) {
+        console.error('Failed to start speech recognition:', error);
+    }
+}
+
+function stopVoiceInput() {
+    if (speechRecognition) {
+        speechRecognition.stop();
+    }
+    isRecording = false;
+    if (voiceBtn) {
+        voiceBtn.classList.remove('recording');
+        voiceBtn.title = 'Voice input';
+    }
+    messageInput.placeholder = 'Type your message...';
 }
 
 // File handling

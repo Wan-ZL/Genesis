@@ -92,6 +92,12 @@ GitHub Issue #1: Implement AI Assistant v1
   - iOS safe area handling (notch, home indicator)
   - Menu toggle button for mobile navigation
   - Prevents iOS auto-zoom on input focus (16px font)
+- **Voice input support complete** (assistant/ui/):
+  - Web Speech API integration (SpeechRecognition)
+  - Continuous mode with real-time transcription
+  - Visual feedback: recording state with pulse animation
+  - Graceful browser fallback (hides button if unsupported)
+  - Mobile-friendly touch targets
 
 ## Acceptance Criteria Status
 - [x] Simple Web UI (input box + message history + status panel)
@@ -101,7 +107,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Mobile UI complete. Consider voice input support from backlog, or close Issue #1 if user confirms API key is not a blocker.
+All backlog items complete. Issue #1 is code-complete (only needs user to add API key). Consider closing Issue #1 or picking from Ideas (unscoped) in backlog.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)

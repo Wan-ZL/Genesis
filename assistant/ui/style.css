@@ -291,7 +291,8 @@ main {
 }
 
 /* File upload */
-#attach-btn {
+#attach-btn,
+#voice-btn {
     padding: 12px 16px;
     background-color: #6c757d;
     color: white;
@@ -302,8 +303,20 @@ main {
     transition: background-color 0.2s;
 }
 
-#attach-btn:hover {
+#attach-btn:hover,
+#voice-btn:hover {
     background-color: #5a6268;
+}
+
+#voice-btn.recording {
+    background-color: #dc3545;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
 }
 
 .file-preview {
@@ -491,13 +504,15 @@ header {
     }
 
     #send-btn,
-    #attach-btn {
+    #attach-btn,
+    #voice-btn {
         min-height: 44px; /* Touch-friendly tap target */
         min-width: 44px;
         padding: 10px 16px;
     }
 
-    #attach-btn {
+    #attach-btn,
+    #voice-btn {
         padding: 10px 12px;
     }
 

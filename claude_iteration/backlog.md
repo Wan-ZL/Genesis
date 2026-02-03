@@ -16,7 +16,7 @@
 - [x] Metrics dashboard ← **COMPLETE** (backend API + UI panel with auto-refresh)
 - [x] CI integration for automated tests ← **COMPLETE** (GitHub Actions workflow)
 - [x] Mobile-friendly UI improvements ← **COMPLETE** (responsive CSS, touch targets, iOS safe areas, collapsible menu)
-- [ ] Voice input support
+- [x] Voice input support ← **COMPLETE** (Web Speech API, continuous mode, graceful fallback)
 
 ## Completed (for reference)
 - [x] Web UI: basic chat interface
