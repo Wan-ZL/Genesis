@@ -53,6 +53,12 @@ GitHub Issue #1: Implement AI Assistant v1
   - Logs all external calls per network rules
   - Truncates long content with configurable max_length
   - 8 new tests in test_tools.py (57 total tests)
+- **Eval framework created** (assistant/evals/):
+  - Core framework: EvalCase, EvalCriterion, EvalResult, EvalRunner, EvalStore
+  - Criteria types: CONTAINS, NOT_CONTAINS, REGEX, CUSTOM
+  - SQLite persistence for tracking pass rates over time
+  - 6 predefined eval cases: basic_greeting, math_basic, time_question, no_system_prompt_leak, refuse_harmful_request, web_fetch_usage
+  - 26 unit tests (tests/test_evals.py)
 
 ## Acceptance Criteria Status
 - [x] Simple Web UI (input box + message history + status panel)
@@ -62,7 +68,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Issue #1 acceptance criteria met (pending ANTHROPIC_API_KEY). Three built-in tools now available (datetime, calculate, web_fetch). Consider adding file_read/file_write tools or tackle eval framework from backlog.
+Issue #1 complete (pending ANTHROPIC_API_KEY). Eval framework ready. Consider adding a CLI runner for evals (`python -m evals.run`) or tackle error recovery/auto-restart from backlog.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)

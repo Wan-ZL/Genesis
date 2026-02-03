@@ -7,9 +7,10 @@
 
 ## Priority: Medium
 - [x] Tool registry system ← **COMPLETE** (registry, datetime, calculate, web_fetch tools)
-- [ ] Eval framework for LLM outputs
+- [x] Eval framework for LLM outputs ← **COMPLETE** (framework, 6 cases, SQLite storage, 26 tests)
 - [x] Add health check endpoint for monitoring
 - [ ] Error recovery and auto-restart
+- [ ] CLI runner for evals (`python -m evals.run`)
 
 ## Priority: Low
 - [ ] Metrics dashboard

@@ -10,9 +10,9 @@
 - [x] Implement conversation persistence (SQLite)
 - [x] Add multimodal support (images, PDFs)
 - [x] Claude API integration (code ready, needs API key)
-- [ ] Create tool registry and first tools
-- [ ] Add basic evals for assistant behavior
-- [ ] Supervisor service for process management
+- [x] Create tool registry and first tools (datetime, calculate, web_fetch)
+- [x] Add basic evals for assistant behavior
+- [x] Supervisor service for process management
 
 ## Phase 3: Self-Improvement Loop
 - [ ] Automated test runs on each iteration
