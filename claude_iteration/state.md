@@ -159,14 +159,21 @@
   - Chat API detects escalation, returns formatted message asking user to grant
   - `run_shell_command` tool added (requires SYSTEM permission)
   - 14 new tests (240 total)
+- **Issue #2 Progress - Audit Log for Permission Changes**:
+  - `AuditLogService` created (`assistant/server/services/audit_log.py`)
+  - SQLite table `permission_audit_log` with indexed timestamp
+  - Logs: timestamp, old_level, new_level, source, ip_address, user_agent, reason
+  - `POST /api/permissions` now logs all changes to audit log
+  - `GET /api/permissions/audit` endpoint to view audit history (with pagination, filtering)
+  - 16 new tests (256 total)
 
 ## Next Step (single step)
-Continue Issue #2: Implement audit log for permission changes (track who/when/what changed).
+Continue Issue #2: Implement proactive tool suggestions (AI suggests useful discovered tools based on user requests).
 
 ## Risks / Notes
 - Issue #2 IN PROGRESS - 5/6 acceptance criteria complete
-- Remaining: proactive tool suggestions, audit log
-- 240 tests passing (+14 new), CI workflow active
+- Remaining: proactive tool suggestions (last item)
+- 256 tests passing (+16 new), CI workflow active
 
 ## How to test quickly
 ```bash
