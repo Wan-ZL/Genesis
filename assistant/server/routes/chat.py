@@ -31,6 +31,17 @@ class ChatMessage(BaseModel):
     file_ids: Optional[List[str]] = None
 
 
+class PermissionEscalation(BaseModel):
+    """Permission escalation request model."""
+    tool_name: str
+    tool_description: str
+    current_level: int
+    current_level_name: str
+    required_level: int
+    required_level_name: str
+    pending_args: dict = {}
+
+
 class ChatResponse(BaseModel):
     """Chat response model."""
     response: str
@@ -38,6 +49,8 @@ class ChatResponse(BaseModel):
     conversation_id: str
     timestamp: str
     model: str  # Which model was used
+    # Optional: permission escalation request from tool
+    permission_escalation: Optional[PermissionEscalation] = None
 
 
 def get_anthropic_client():
@@ -141,8 +154,11 @@ def load_file_for_openai(file_id: str) -> Optional[dict]:
 
 
 @api_retry
-async def call_claude_api(messages: list, file_ids: list, user_message: str) -> tuple[str, str]:
-    """Call Claude API with tool support and return (response, model_name).
+async def call_claude_api(messages: list, file_ids: list, user_message: str) -> tuple[str, str, Optional[dict]]:
+    """Call Claude API with tool support and return (response, model_name, escalation).
+
+    Returns:
+        tuple: (response_text, model_name, permission_escalation_or_none)
 
     Includes automatic retry with exponential backoff for transient failures.
     """
@@ -193,11 +209,13 @@ async def call_claude_api(messages: list, file_ids: list, user_message: str) -> 
             # No tool calls, extract text response
             text_blocks = [b for b in response.content if b.type == "text"]
             if text_blocks:
-                return text_blocks[0].text, config.CLAUDE_MODEL
-            return "", config.CLAUDE_MODEL
+                return text_blocks[0].text, config.CLAUDE_MODEL, None
+            return "", config.CLAUDE_MODEL, None
 
         # Process tool calls
         tool_results = []
+        permission_escalation = None  # Track if any tool needs escalation
+
         for tool_block in tool_use_blocks:
             tool_name = tool_block.name
             tool_input = tool_block.input
@@ -215,6 +233,24 @@ async def call_claude_api(messages: list, file_ids: list, user_message: str) -> 
                     "tool_use_id": tool_id,
                     "content": str(result["result"]),
                 })
+            elif "permission_escalation" in result:
+                # Tool requires elevated permission - return escalation request
+                escalation = result["permission_escalation"]
+                permission_escalation = escalation
+                logger.info(
+                    f"Tool {tool_name} requires permission escalation: "
+                    f"{escalation['current_level_name']} -> {escalation['required_level_name']}"
+                )
+                # Return a message asking for permission instead of error
+                escalation_msg = (
+                    f"I need elevated permissions to use the **{tool_name}** tool.\n\n"
+                    f"**Current permission level:** {escalation['current_level_name']}\n"
+                    f"**Required permission level:** {escalation['required_level_name']}\n\n"
+                    f"Would you like to grant {escalation['required_level_name']} permission? "
+                    f"This will allow me to: {escalation['tool_description']}"
+                )
+                # Return the escalation response immediately
+                return escalation_msg, config.CLAUDE_MODEL, escalation
             else:
                 tool_results.append({
                     "type": "tool_result",
@@ -234,12 +270,15 @@ async def call_claude_api(messages: list, file_ids: list, user_message: str) -> 
         })
 
     # If we exit the loop, return what we have
-    return "I apologize, I couldn't complete the task after multiple tool attempts.", config.CLAUDE_MODEL
+    return "I apologize, I couldn't complete the task after multiple tool attempts.", config.CLAUDE_MODEL, None
 
 
 @api_retry
-async def call_openai_api(messages: list, file_ids: list, user_message: str) -> tuple[str, str]:
-    """Call OpenAI API with tool support and return (response, model_name).
+async def call_openai_api(messages: list, file_ids: list, user_message: str) -> tuple[str, str, Optional[dict]]:
+    """Call OpenAI API with tool support and return (response, model_name, escalation).
+
+    Returns:
+        tuple: (response_text, model_name, permission_escalation_or_none)
 
     Includes automatic retry with exponential backoff for transient failures.
     """
@@ -274,7 +313,7 @@ async def call_openai_api(messages: list, file_ids: list, user_message: str) -> 
 
         # Check if response contains tool calls
         if not choice.message.tool_calls:
-            return choice.message.content or "", config.OPENAI_MODEL
+            return choice.message.content or "", config.OPENAI_MODEL, None
 
         # Process tool calls
         # First, add the assistant's message with tool calls
@@ -310,6 +349,21 @@ async def call_openai_api(messages: list, file_ids: list, user_message: str) -> 
 
             if result["success"]:
                 tool_result = str(result["result"])
+            elif "permission_escalation" in result:
+                # Tool requires elevated permission - return escalation request
+                escalation = result["permission_escalation"]
+                logger.info(
+                    f"Tool {tool_name} requires permission escalation: "
+                    f"{escalation['current_level_name']} -> {escalation['required_level_name']}"
+                )
+                escalation_msg = (
+                    f"I need elevated permissions to use the **{tool_name}** tool.\n\n"
+                    f"**Current permission level:** {escalation['current_level_name']}\n"
+                    f"**Required permission level:** {escalation['required_level_name']}\n\n"
+                    f"Would you like to grant {escalation['required_level_name']} permission? "
+                    f"This will allow me to: {escalation['tool_description']}"
+                )
+                return escalation_msg, config.OPENAI_MODEL, escalation
             else:
                 tool_result = f"Error: {result['error']}"
 
@@ -320,7 +374,7 @@ async def call_openai_api(messages: list, file_ids: list, user_message: str) -> 
             })
 
     # If we exit the loop, return what we have
-    return "I apologize, I couldn't complete the task after multiple tool attempts.", config.OPENAI_MODEL
+    return "I apologize, I couldn't complete the task after multiple tool attempts.", config.OPENAI_MODEL, None
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -362,11 +416,12 @@ async def chat(request: ChatMessage):
         # Try Claude first, fallback to OpenAI
         model_used = None
         assistant_message = None
+        permission_escalation = None
 
         if config.USE_CLAUDE:
             try:
                 logger.info(f"Calling Claude API with model {config.CLAUDE_MODEL}, files: {request.file_ids or []}")
-                assistant_message, model_used = await call_claude_api(
+                assistant_message, model_used, permission_escalation = await call_claude_api(
                     messages, request.file_ids or [], request.message
                 )
             except Exception as e:
@@ -374,7 +429,7 @@ async def chat(request: ChatMessage):
 
         if assistant_message is None:
             logger.info(f"Calling OpenAI API with model {config.OPENAI_MODEL}, files: {request.file_ids or []}")
-            assistant_message, model_used = await call_openai_api(
+            assistant_message, model_used, permission_escalation = await call_openai_api(
                 messages, request.file_ids or [], request.message
             )
 
@@ -387,11 +442,25 @@ async def chat(request: ChatMessage):
         latency_ms = (time.time() - start_time) * 1000
         metrics.record_request("/api/chat", latency_ms, success=True)
 
+        # Convert escalation dict to Pydantic model if present
+        escalation_model = None
+        if permission_escalation:
+            escalation_model = PermissionEscalation(
+                tool_name=permission_escalation["tool_name"],
+                tool_description=permission_escalation["tool_description"],
+                current_level=permission_escalation["current_level"],
+                current_level_name=permission_escalation["current_level_name"],
+                required_level=permission_escalation["required_level"],
+                required_level_name=permission_escalation["required_level_name"],
+                pending_args=permission_escalation.get("pending_args", {}),
+            )
+
         return ChatResponse(
             response=assistant_message,
             conversation_id=DEFAULT_CONVERSATION_ID,
             timestamp=datetime.now().isoformat(),
-            model=model_used
+            model=model_used,
+            permission_escalation=escalation_model,
         )
 
     except Exception as e:

@@ -19,6 +19,13 @@ import logging
 import re
 from urllib.parse import urlparse
 
+# Import permission system
+import sys
+from pathlib import Path
+# Add parent path for core module
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from core.permissions import PermissionLevel, get_permission_level, can_access
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,6 +47,8 @@ class ToolSpec:
     parameters: list[ToolParameter] = field(default_factory=list)
     # The actual function to execute
     handler: Optional[Callable[..., Any]] = None
+    # Permission level required to execute this tool (default: SANDBOX)
+    required_permission: PermissionLevel = PermissionLevel.SANDBOX
 
 
 class ToolRegistry:
@@ -136,11 +145,36 @@ class ToolRegistry:
         Execute a tool by name with given arguments.
 
         Returns:
-            dict with 'success' bool and 'result' or 'error'
+            dict with:
+            - 'success' bool and 'result' for successful execution
+            - 'success' False and 'error' for errors
+            - 'success' False and 'permission_escalation' for permission requests
         """
         tool = self._tools.get(name)
         if not tool:
             return {"success": False, "error": f"Tool not found: {name}"}
+
+        # Check permission before execution
+        current_level = get_permission_level()
+        required_level = tool.required_permission
+
+        if not can_access(required_level):
+            logger.info(
+                f"Tool {name} requires {required_level.name} permission "
+                f"(current: {current_level.name}). Returning escalation request."
+            )
+            return {
+                "success": False,
+                "permission_escalation": {
+                    "tool_name": name,
+                    "tool_description": tool.description,
+                    "current_level": current_level.value,
+                    "current_level_name": current_level.name,
+                    "required_level": required_level.value,
+                    "required_level_name": required_level.name,
+                    "pending_args": kwargs,
+                }
+            }
 
         try:
             result = tool.handler(**kwargs)
@@ -362,3 +396,91 @@ registry.register_tool(ToolSpec(
 
 # Expose for direct calls
 web_fetch = _web_fetch_impl
+
+
+def _run_shell_command_impl(command: str, timeout: int = 30) -> str:
+    """Implementation for run_shell_command tool.
+
+    Requires SYSTEM permission level.
+    """
+    import subprocess
+
+    # Safety check: block extremely dangerous commands
+    dangerous_patterns = [
+        "rm -rf /",
+        "rm -rf ~",
+        ":(){:|:&};:",  # fork bomb
+        "mkfs.",
+        "dd if=/dev/zero",
+        "> /dev/sda",
+    ]
+
+    cmd_lower = command.lower()
+    for pattern in dangerous_patterns:
+        if pattern in cmd_lower:
+            return f"Error: Command blocked for safety reasons (matched pattern: {pattern})"
+
+    logger.info(f"run_shell_command: Executing command='{command}', timeout={timeout}")
+
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=str(Path(__file__).parent.parent.parent.parent)  # Genesis root
+        )
+
+        output_parts = []
+        if result.stdout:
+            output_parts.append(f"STDOUT:\n{result.stdout}")
+        if result.stderr:
+            output_parts.append(f"STDERR:\n{result.stderr}")
+        if not output_parts:
+            output_parts.append("(no output)")
+
+        output_parts.append(f"\nExit code: {result.returncode}")
+
+        output = "\n".join(output_parts)
+
+        # Truncate if too long
+        if len(output) > 4000:
+            output = output[:4000] + f"\n\n[Output truncated at 4000 characters]"
+
+        logger.info(f"run_shell_command: exit_code={result.returncode}, output_length={len(output)}")
+        return output
+
+    except subprocess.TimeoutExpired:
+        logger.warning(f"run_shell_command: Command timed out after {timeout}s")
+        return f"Error: Command timed out after {timeout} seconds"
+    except Exception as e:
+        logger.error(f"run_shell_command: Error executing command: {e}")
+        return f"Error: {str(e)}"
+
+
+# Register run_shell_command with SYSTEM permission requirement
+registry.register_tool(ToolSpec(
+    name="run_shell_command",
+    description="Execute a shell command on the system. Returns stdout, stderr, and exit code. Use for file operations, git commands, running scripts, etc. Note: This tool requires SYSTEM permission level.",
+    parameters=[
+        ToolParameter(
+            name="command",
+            type="string",
+            description="The shell command to execute. Example: 'ls -la' or 'git status'",
+            required=True,
+        ),
+        ToolParameter(
+            name="timeout",
+            type="integer",
+            description="Maximum seconds to wait for command completion. Default: 30",
+            required=False,
+            default=30,
+        ),
+    ],
+    handler=_run_shell_command_impl,
+    required_permission=PermissionLevel.SYSTEM,  # Requires elevated permission
+))
+
+# Expose for direct calls (bypasses permission check)
+run_shell_command = _run_shell_command_impl

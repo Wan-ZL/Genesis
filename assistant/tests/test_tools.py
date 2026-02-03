@@ -1,15 +1,18 @@
 """Tests for the Tool Registry System."""
 
+import os
 import pytest
 from datetime import datetime
 from server.services.tools import (
     ToolRegistry,
     ToolSpec,
     ToolParameter,
+    PermissionLevel,
     registry,
     get_current_datetime,
     calculate,
     web_fetch,
+    run_shell_command,
 )
 from unittest.mock import patch, MagicMock
 
@@ -322,3 +325,155 @@ class TestWebFetchTool:
 
         assert result["success"] is True
         assert "Test content" in result["result"]
+
+
+class TestPermissionEscalation:
+    """Tests for permission-aware tool execution."""
+
+    def test_tool_spec_has_required_permission(self):
+        """Test that ToolSpec supports required_permission field."""
+        spec = ToolSpec(
+            name="test",
+            description="Test tool",
+            handler=lambda: "test",
+            required_permission=PermissionLevel.SYSTEM,
+        )
+        assert spec.required_permission == PermissionLevel.SYSTEM
+
+    def test_tool_spec_default_permission_is_sandbox(self):
+        """Test that default permission level is SANDBOX."""
+        spec = ToolSpec(
+            name="test",
+            description="Test tool",
+            handler=lambda: "test",
+        )
+        assert spec.required_permission == PermissionLevel.SANDBOX
+
+    def test_execute_returns_escalation_when_permission_insufficient(self):
+        """Test that execute returns escalation request when permission is insufficient."""
+        reg = ToolRegistry()
+        reg.register_tool(ToolSpec(
+            name="admin_tool",
+            description="Admin operation",
+            handler=lambda: "done",
+            required_permission=PermissionLevel.SYSTEM,
+        ))
+
+        # Set permission to LOCAL (below SYSTEM)
+        with patch.dict(os.environ, {"ASSISTANT_PERMISSION_LEVEL": "1"}):
+            result = reg.execute("admin_tool")
+
+        assert result["success"] is False
+        assert "permission_escalation" in result
+        escalation = result["permission_escalation"]
+        assert escalation["tool_name"] == "admin_tool"
+        assert escalation["current_level"] == 1
+        assert escalation["current_level_name"] == "LOCAL"
+        assert escalation["required_level"] == 2
+        assert escalation["required_level_name"] == "SYSTEM"
+
+    def test_execute_succeeds_with_sufficient_permission(self):
+        """Test that execute succeeds when permission is sufficient."""
+        reg = ToolRegistry()
+        reg.register_tool(ToolSpec(
+            name="admin_tool",
+            description="Admin operation",
+            handler=lambda: "done",
+            required_permission=PermissionLevel.SYSTEM,
+        ))
+
+        # Set permission to SYSTEM (equal to required)
+        with patch.dict(os.environ, {"ASSISTANT_PERMISSION_LEVEL": "2"}):
+            result = reg.execute("admin_tool")
+
+        assert result["success"] is True
+        assert result["result"] == "done"
+
+    def test_execute_succeeds_with_higher_permission(self):
+        """Test that execute succeeds when permission exceeds requirement."""
+        reg = ToolRegistry()
+        reg.register_tool(ToolSpec(
+            name="local_tool",
+            description="Local operation",
+            handler=lambda: "done",
+            required_permission=PermissionLevel.LOCAL,
+        ))
+
+        # Set permission to FULL (above LOCAL)
+        with patch.dict(os.environ, {"ASSISTANT_PERMISSION_LEVEL": "3"}):
+            result = reg.execute("local_tool")
+
+        assert result["success"] is True
+        assert result["result"] == "done"
+
+    def test_escalation_includes_pending_args(self):
+        """Test that escalation request includes the pending arguments."""
+        reg = ToolRegistry()
+        reg.register_tool(ToolSpec(
+            name="parameterized_tool",
+            description="Tool with params",
+            parameters=[
+                ToolParameter("cmd", "string", "Command to run"),
+            ],
+            handler=lambda cmd: f"ran {cmd}",
+            required_permission=PermissionLevel.SYSTEM,
+        ))
+
+        with patch.dict(os.environ, {"ASSISTANT_PERMISSION_LEVEL": "0"}):
+            result = reg.execute("parameterized_tool", cmd="ls -la")
+
+        assert "permission_escalation" in result
+        assert result["permission_escalation"]["pending_args"] == {"cmd": "ls -la"}
+
+
+class TestRunShellCommand:
+    """Tests for the run_shell_command tool."""
+
+    def test_global_registry_has_run_shell_command(self):
+        """Test that global registry has run_shell_command tool."""
+        assert "run_shell_command" in registry.list_tools()
+
+    def test_run_shell_command_tool_requires_system_permission(self):
+        """Test that run_shell_command requires SYSTEM permission."""
+        tool = registry.get_tool("run_shell_command")
+        assert tool.required_permission == PermissionLevel.SYSTEM
+
+    def test_run_shell_command_returns_escalation_at_local_permission(self):
+        """Test that run_shell_command returns escalation at LOCAL permission."""
+        with patch.dict(os.environ, {"ASSISTANT_PERMISSION_LEVEL": "1"}):
+            result = registry.execute("run_shell_command", command="echo hello")
+
+        assert result["success"] is False
+        assert "permission_escalation" in result
+        assert result["permission_escalation"]["required_level_name"] == "SYSTEM"
+
+    def test_run_shell_command_executes_at_system_permission(self):
+        """Test that run_shell_command works at SYSTEM permission."""
+        with patch.dict(os.environ, {"ASSISTANT_PERMISSION_LEVEL": "2"}):
+            result = registry.execute("run_shell_command", command="echo hello")
+
+        assert result["success"] is True
+        assert "hello" in result["result"]
+
+    def test_run_shell_command_direct_call(self):
+        """Test direct call to run_shell_command function."""
+        result = run_shell_command("echo test123")
+        assert "test123" in result
+        assert "Exit code: 0" in result
+
+    def test_run_shell_command_captures_stderr(self):
+        """Test that stderr is captured."""
+        result = run_shell_command("ls /nonexistent/path/xyz")
+        assert "STDERR" in result or "Exit code:" in result
+
+    def test_run_shell_command_blocks_dangerous_commands(self):
+        """Test that dangerous commands are blocked."""
+        result = run_shell_command("rm -rf /")
+        assert "Error" in result
+        assert "blocked for safety" in result
+
+    def test_run_shell_command_timeout(self):
+        """Test command timeout."""
+        result = run_shell_command("sleep 10", timeout=1)
+        assert "Error" in result
+        assert "timed out" in result

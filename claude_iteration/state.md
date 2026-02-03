@@ -152,14 +152,21 @@
   - `GET /api/permissions/levels` - list all permission levels
   - `POST /api/permissions` - set permission level
   - 18 new tests (226 total)
+- **Issue #2 Progress - Permission Escalation Prompt System**:
+  - `ToolSpec` now supports `required_permission` field (default: SANDBOX)
+  - `ToolRegistry.execute()` checks permissions before running tools
+  - Returns structured `permission_escalation` response when permission insufficient
+  - Chat API detects escalation, returns formatted message asking user to grant
+  - `run_shell_command` tool added (requires SYSTEM permission)
+  - 14 new tests (240 total)
 
 ## Next Step (single step)
-Continue Issue #2: Implement permission escalation prompt system (AI proactively asks for elevated permissions when needed).
+Continue Issue #2: Implement audit log for permission changes (track who/when/what changed).
 
 ## Risks / Notes
-- Issue #2 IN PROGRESS - 4/6 acceptance criteria complete
-- Remaining: permission escalation prompts, proactive tool suggestions, audit log
-- 226 tests passing, CI workflow active
+- Issue #2 IN PROGRESS - 5/6 acceptance criteria complete
+- Remaining: proactive tool suggestions, audit log
+- 240 tests passing (+14 new), CI workflow active
 
 ## How to test quickly
 ```bash
@@ -186,8 +193,16 @@ python3 -c "from core.capability_scanner import CapabilityScanner; s=CapabilityS
 # Check discovered capabilities
 cat memory/capabilities.json | jq '.[] | select(.available==true) | .name'
 
-# Test capabilities API (new)
+# Test capabilities API
 curl http://127.0.0.1:8080/api/capabilities | jq '{total: .total, available: .available}'
 curl http://127.0.0.1:8080/api/capabilities?available_only=true | jq '.capabilities[].name'
 curl http://127.0.0.1:8080/api/permissions | jq .
+
+# Test permission escalation (new)
+# At LOCAL permission (default), run_shell_command will return escalation request
+# Try asking the assistant to run a shell command like "ls"
+# Response will include permission_escalation field with grant request
+# Grant SYSTEM permission:
+curl -X POST http://127.0.0.1:8080/api/permissions -H "Content-Type: application/json" -d '{"level": 2}' | jq .
+# Then retry the request - tool will now execute
 ```
