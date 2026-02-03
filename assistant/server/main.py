@@ -28,6 +28,16 @@ async def lifespan(app: FastAPI):
     from server.routes.settings import load_settings_on_startup
     await load_settings_on_startup()
 
+    # Scan for available capabilities (tools, services, etc.)
+    from core.capability_scanner import CapabilityScanner
+    from core.permissions import get_permission_level
+    scanner = CapabilityScanner()
+    scanner.scan_all()
+    available_count = len(scanner.get_available())
+    total_count = len(scanner.capabilities)
+    logger.info(f"Capability scan complete: {available_count}/{total_count} available")
+    logger.info(f"Permission level: {get_permission_level().name}")
+
     logger.info(f"Using model: {config.MODEL}")
     if not config.OPENAI_API_KEY and not config.ANTHROPIC_API_KEY:
         logger.warning("No API key set - configure via Settings page or .env files")
@@ -52,13 +62,14 @@ app.add_middleware(
 )
 
 # Import and include routers
-from server.routes import chat, status, upload, metrics, settings
+from server.routes import chat, status, upload, metrics, settings, capabilities
 
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(status.router, prefix="/api", tags=["status"])
 app.include_router(upload.router, prefix="/api", tags=["upload"])
 app.include_router(metrics.router, prefix="/api", tags=["metrics"])
 app.include_router(settings.router, prefix="/api", tags=["settings"])
+app.include_router(capabilities.router, prefix="/api", tags=["capabilities"])
 
 # Serve static UI files (when they exist)
 UI_PATH = Path(__file__).parent.parent / "ui"
