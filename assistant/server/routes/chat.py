@@ -2,6 +2,7 @@
 import logging
 import base64
 import json
+import time
 from datetime import datetime
 from typing import Optional, List
 from pathlib import Path
@@ -12,6 +13,7 @@ import config
 from server.services.memory import MemoryService
 from server.services.tools import registry as tool_registry
 from server.services.retry import api_retry
+from server.services.metrics import metrics
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -200,8 +202,9 @@ async def call_claude_api(messages: list, file_ids: list, user_message: str) -> 
 
             logger.info(f"Claude calling tool: {tool_name} with input: {tool_input}")
 
-            # Execute the tool
+            # Execute the tool and record metrics
             result = tool_registry.execute(tool_name, **tool_input)
+            metrics.record_tool_call(tool_name)
 
             if result["success"]:
                 tool_results.append({
@@ -298,8 +301,9 @@ async def call_openai_api(messages: list, file_ids: list, user_message: str) -> 
 
             logger.info(f"OpenAI calling tool: {tool_name} with input: {tool_args}")
 
-            # Execute the tool
+            # Execute the tool and record metrics
             result = tool_registry.execute(tool_name, **tool_args)
+            metrics.record_tool_call(tool_name)
 
             if result["success"]:
                 tool_result = str(result["result"])
@@ -319,6 +323,8 @@ async def call_openai_api(messages: list, file_ids: list, user_message: str) -> 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatMessage):
     """Send a message and get AI response (Claude primary, OpenAI fallback)."""
+    start_time = time.time()
+
     # Create new conversation or use existing
     if request.conversation_id:
         if not await memory.conversation_exists(request.conversation_id):
@@ -368,6 +374,10 @@ async def chat(request: ChatMessage):
 
         logger.info(f"Chat completed for conversation {conversation_id} using {model_used}")
 
+        # Record successful request metrics
+        latency_ms = (time.time() - start_time) * 1000
+        metrics.record_request("/api/chat", latency_ms, success=True)
+
         return ChatResponse(
             response=assistant_message,
             conversation_id=conversation_id,
@@ -377,6 +387,11 @@ async def chat(request: ChatMessage):
 
     except Exception as e:
         logger.error(f"API error: {e}")
+        # Record failed request metrics
+        latency_ms = (time.time() - start_time) * 1000
+        metrics.record_request("/api/chat", latency_ms, success=False)
+        metrics.record_error("/api/chat", type(e).__name__)
+
         # Remove the user message if API call failed
         await memory.remove_last_message(conversation_id)
         raise HTTPException(status_code=500, detail=str(e))

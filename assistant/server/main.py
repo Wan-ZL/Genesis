@@ -46,11 +46,12 @@ app.add_middleware(
 )
 
 # Import and include routers
-from server.routes import chat, status, upload
+from server.routes import chat, status, upload, metrics
 
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(status.router, prefix="/api", tags=["status"])
 app.include_router(upload.router, prefix="/api", tags=["upload"])
+app.include_router(metrics.router, prefix="/api", tags=["metrics"])
 
 # Serve static UI files (when they exist)
 UI_PATH = Path(__file__).parent.parent / "ui"

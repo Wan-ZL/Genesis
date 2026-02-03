@@ -13,7 +13,7 @@
 - [x] CLI runner for evals (`python -m evals`) ← **COMPLETE**
 
 ## Priority: Low
-- [ ] Metrics dashboard
+- [~] Metrics dashboard ← **BACKEND DONE** (API at /api/metrics, UI panel pending)
 - [x] CI integration for automated tests ← **COMPLETE** (GitHub Actions workflow)
 - [ ] Mobile-friendly UI improvements
 - [ ] Voice input support

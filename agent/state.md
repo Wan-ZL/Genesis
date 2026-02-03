@@ -79,6 +79,11 @@ GitHub Issue #1: Implement AI Assistant v1
   - Tests on Python 3.9, 3.10, 3.11 matrix
   - Includes lint job for syntax checking
   - Uses pip caching for faster builds
+- **Metrics dashboard backend** (assistant/server/services/metrics.py):
+  - MetricsService with request/error/latency tracking
+  - Tool usage statistics and percentile calculations (p50, p95, p99)
+  - GET /api/metrics endpoint
+  - 13 new tests (119 total)
 
 ## Acceptance Criteria Status
 - [x] Simple Web UI (input box + message history + status panel)
@@ -88,7 +93,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Issue #1 complete (pending ANTHROPIC_API_KEY). CI workflow added. Consider metrics dashboard or mobile-friendly UI from backlog.
+Metrics backend complete. Consider adding UI panel for metrics visualization, or mobile-friendly UI from backlog.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)
