@@ -237,6 +237,59 @@ main {
     background-color: #218838;
 }
 
+/* Metrics panel */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.metric-item {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+}
+
+.metric-label {
+    display: block;
+    font-size: 0.75rem;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+.metric-value {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.metric-value.metric-good {
+    color: #28a745;
+}
+
+.metric-value.metric-warn {
+    color: #fd7e14;
+}
+
+#refresh-metrics-btn {
+    width: 100%;
+    padding: 8px;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#refresh-metrics-btn:hover {
+    background-color: #5a6268;
+}
+
 /* File upload */
 #attach-btn {
     padding: 12px 16px;

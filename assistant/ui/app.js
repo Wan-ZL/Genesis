@@ -17,12 +17,17 @@ const currentFocusEl = document.getElementById('current-focus');
 const lastRunEl = document.getElementById('last-run');
 const conversationsList = document.getElementById('conversations-list');
 const newConversationBtn = document.getElementById('new-conversation-btn');
+const refreshMetricsBtn = document.getElementById('refresh-metrics-btn');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadStatus();
     loadConversations();
+    loadMetrics();
     setupEventListeners();
+
+    // Refresh metrics every 30 seconds
+    setInterval(loadMetrics, 30000);
 });
 
 function setupEventListeners() {
@@ -45,6 +50,9 @@ function setupEventListeners() {
 
     // New conversation
     newConversationBtn.addEventListener('click', startNewConversation);
+
+    // Refresh metrics
+    refreshMetricsBtn.addEventListener('click', loadMetrics);
 
     // File upload
     attachBtn.addEventListener('click', () => fileInput.click());
@@ -293,5 +301,53 @@ async function loadStatus() {
     } catch (error) {
         currentFocusEl.textContent = 'Error loading status';
         lastRunEl.textContent = 'Error loading status';
+    }
+}
+
+async function loadMetrics() {
+    const requestsEl = document.getElementById('metric-requests');
+    const successRateEl = document.getElementById('metric-success-rate');
+    const latencyEl = document.getElementById('metric-latency');
+    const messagesEl = document.getElementById('metric-messages');
+
+    try {
+        const response = await fetch('/api/metrics');
+        const data = await response.json();
+
+        // Total requests
+        const totalRequests = data.requests?.total || 0;
+        requestsEl.textContent = totalRequests.toLocaleString();
+
+        // Success rate
+        if (totalRequests > 0) {
+            const successCount = data.requests?.success || 0;
+            const successRate = ((successCount / totalRequests) * 100).toFixed(1);
+            successRateEl.textContent = `${successRate}%`;
+            successRateEl.className = 'metric-value ' + (parseFloat(successRate) >= 90 ? 'metric-good' : 'metric-warn');
+        } else {
+            successRateEl.textContent = '-';
+            successRateEl.className = 'metric-value';
+        }
+
+        // Average latency
+        const avgLatency = data.latency_ms?.average;
+        if (avgLatency !== undefined && avgLatency !== null) {
+            latencyEl.textContent = `${Math.round(avgLatency)}ms`;
+            latencyEl.className = 'metric-value ' + (avgLatency < 2000 ? 'metric-good' : 'metric-warn');
+        } else {
+            latencyEl.textContent = '-';
+            latencyEl.className = 'metric-value';
+        }
+
+        // Total messages
+        const totalMessages = data.conversations?.total_messages || 0;
+        messagesEl.textContent = totalMessages.toLocaleString();
+
+    } catch (error) {
+        console.error('Failed to load metrics:', error);
+        requestsEl.textContent = 'Error';
+        successRateEl.textContent = '-';
+        latencyEl.textContent = '-';
+        messagesEl.textContent = '-';
     }
 }

@@ -45,6 +45,28 @@
                         <ul id="conversations-list"></ul>
                         <button id="new-conversation-btn">New Conversation</button>
                     </div>
+                    <div class="status-section">
+                        <h3>Metrics</h3>
+                        <div id="metrics-panel" class="metrics-grid">
+                            <div class="metric-item">
+                                <span class="metric-label">Requests</span>
+                                <span class="metric-value" id="metric-requests">-</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Success Rate</span>
+                                <span class="metric-value" id="metric-success-rate">-</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Avg Latency</span>
+                                <span class="metric-value" id="metric-latency">-</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Messages</span>
+                                <span class="metric-value" id="metric-messages">-</span>
+                            </div>
+                        </div>
+                        <button id="refresh-metrics-btn">Refresh Metrics</button>
+                    </div>
                 </div>
             </aside>
         </main>

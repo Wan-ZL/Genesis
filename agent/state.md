@@ -79,11 +79,13 @@ GitHub Issue #1: Implement AI Assistant v1
   - Tests on Python 3.9, 3.10, 3.11 matrix
   - Includes lint job for syntax checking
   - Uses pip caching for faster builds
-- **Metrics dashboard backend** (assistant/server/services/metrics.py):
-  - MetricsService with request/error/latency tracking
-  - Tool usage statistics and percentile calculations (p50, p95, p99)
-  - GET /api/metrics endpoint
-  - 13 new tests (119 total)
+- **Metrics dashboard complete** (backend + UI):
+  - Backend: MetricsService with request/error/latency tracking (assistant/server/services/metrics.py)
+  - Backend: Tool usage statistics and percentile calculations (p50, p95, p99)
+  - Backend: GET /api/metrics endpoint
+  - **UI panel added**: 2x2 grid showing Requests, Success Rate, Avg Latency, Messages
+  - Auto-refresh every 30s, manual refresh button, color-coded values
+  - 119 tests total
 
 ## Acceptance Criteria Status
 - [x] Simple Web UI (input box + message history + status panel)
@@ -93,7 +95,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Metrics backend complete. Consider adding UI panel for metrics visualization, or mobile-friendly UI from backlog.
+Metrics dashboard complete. Consider mobile-friendly UI improvements or voice input support from backlog.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)
