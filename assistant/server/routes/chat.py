@@ -1,6 +1,7 @@
 """Chat API endpoint with Claude API (primary) and OpenAI fallback."""
 import logging
 import base64
+import json
 from datetime import datetime
 from typing import Optional, List
 from pathlib import Path
@@ -9,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 
 import config
 from server.services.memory import MemoryService
+from server.services.tools import registry as tool_registry
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -133,7 +135,7 @@ def load_file_for_openai(file_id: str) -> Optional[dict]:
 
 
 async def call_claude_api(messages: list, file_ids: list, user_message: str) -> tuple[str, str]:
-    """Call Claude API and return (response, model_name)."""
+    """Call Claude API with tool support and return (response, model_name)."""
     client = get_anthropic_client()
     if not client:
         raise ValueError("Anthropic client not available")
@@ -158,17 +160,74 @@ async def call_claude_api(messages: list, file_ids: list, user_message: str) -> 
     else:
         claude_messages.append({"role": "user", "content": user_message})
 
-    response = client.messages.create(
-        model=config.CLAUDE_MODEL,
-        max_tokens=4096,
-        messages=claude_messages
-    )
+    # Get tools in Claude format
+    tools = tool_registry.to_claude_tools()
 
-    return response.content[0].text, config.CLAUDE_MODEL
+    # Loop to handle tool calls
+    max_tool_iterations = 5
+    for iteration in range(max_tool_iterations):
+        api_kwargs = {
+            "model": config.CLAUDE_MODEL,
+            "max_tokens": 4096,
+            "messages": claude_messages,
+        }
+        if tools:
+            api_kwargs["tools"] = tools
+
+        response = client.messages.create(**api_kwargs)
+
+        # Check if response contains tool use
+        tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
+
+        if not tool_use_blocks:
+            # No tool calls, extract text response
+            text_blocks = [b for b in response.content if b.type == "text"]
+            if text_blocks:
+                return text_blocks[0].text, config.CLAUDE_MODEL
+            return "", config.CLAUDE_MODEL
+
+        # Process tool calls
+        tool_results = []
+        for tool_block in tool_use_blocks:
+            tool_name = tool_block.name
+            tool_input = tool_block.input
+            tool_id = tool_block.id
+
+            logger.info(f"Claude calling tool: {tool_name} with input: {tool_input}")
+
+            # Execute the tool
+            result = tool_registry.execute(tool_name, **tool_input)
+
+            if result["success"]:
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_id,
+                    "content": str(result["result"]),
+                })
+            else:
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_id,
+                    "content": f"Error: {result['error']}",
+                    "is_error": True,
+                })
+
+        # Add assistant message with tool use and tool results
+        claude_messages.append({
+            "role": "assistant",
+            "content": response.content,
+        })
+        claude_messages.append({
+            "role": "user",
+            "content": tool_results,
+        })
+
+    # If we exit the loop, return what we have
+    return "I apologize, I couldn't complete the task after multiple tool attempts.", config.CLAUDE_MODEL
 
 
 async def call_openai_api(messages: list, file_ids: list, user_message: str) -> tuple[str, str]:
-    """Call OpenAI API and return (response, model_name)."""
+    """Call OpenAI API with tool support and return (response, model_name)."""
     client = get_openai_client()
     if not client:
         raise ValueError("OpenAI client not available")
@@ -182,12 +241,70 @@ async def call_openai_api(messages: list, file_ids: list, user_message: str) -> 
                 content_parts.append(file_content)
         messages[-1] = {"role": "user", "content": content_parts}
 
-    completion = client.chat.completions.create(
-        model=config.OPENAI_MODEL,
-        messages=messages
-    )
+    # Get tools in OpenAI format
+    tools = tool_registry.to_openai_tools()
 
-    return completion.choices[0].message.content, config.OPENAI_MODEL
+    # Loop to handle tool calls
+    max_tool_iterations = 5
+    for iteration in range(max_tool_iterations):
+        api_kwargs = {
+            "model": config.OPENAI_MODEL,
+            "messages": messages,
+        }
+        if tools:
+            api_kwargs["tools"] = tools
+
+        completion = client.chat.completions.create(**api_kwargs)
+        choice = completion.choices[0]
+
+        # Check if response contains tool calls
+        if not choice.message.tool_calls:
+            return choice.message.content or "", config.OPENAI_MODEL
+
+        # Process tool calls
+        # First, add the assistant's message with tool calls
+        messages.append({
+            "role": "assistant",
+            "content": choice.message.content,
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    }
+                }
+                for tc in choice.message.tool_calls
+            ]
+        })
+
+        # Execute each tool and add results
+        for tool_call in choice.message.tool_calls:
+            tool_name = tool_call.function.name
+            try:
+                tool_args = json.loads(tool_call.function.arguments)
+            except json.JSONDecodeError:
+                tool_args = {}
+
+            logger.info(f"OpenAI calling tool: {tool_name} with input: {tool_args}")
+
+            # Execute the tool
+            result = tool_registry.execute(tool_name, **tool_args)
+
+            if result["success"]:
+                tool_result = str(result["result"])
+            else:
+                tool_result = f"Error: {result['error']}"
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": tool_result,
+            })
+
+    # If we exit the loop, return what we have
+    return "I apologize, I couldn't complete the task after multiple tool attempts.", config.OPENAI_MODEL
 
 
 @router.post("/chat", response_model=ChatResponse)

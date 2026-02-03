@@ -305,5 +305,83 @@ class TestChatModels:
         assert resp.model == "gpt-4o-mini"
 
 
+class TestToolIntegration:
+    """Tests for tool calling integration."""
+
+    def test_openai_tool_calling(self, client):
+        """Test that OpenAI tool calling flow works."""
+        # Create mock tool call response followed by final response
+        mock_tool_call = MagicMock()
+        mock_tool_call.id = "call_123"
+        mock_tool_call.function.name = "get_current_datetime"
+        mock_tool_call.function.arguments = '{"format": "%Y-%m-%d"}'
+
+        # First response with tool call
+        mock_response1 = MagicMock()
+        mock_response1.choices = [MagicMock()]
+        mock_response1.choices[0].message.content = None
+        mock_response1.choices[0].message.tool_calls = [mock_tool_call]
+
+        # Second response after tool execution
+        mock_response2 = MagicMock()
+        mock_response2.choices = [MagicMock()]
+        mock_response2.choices[0].message.content = "The current date is 2026-02-02."
+        mock_response2.choices[0].message.tool_calls = None
+
+        with patch('server.routes.chat.get_openai_client') as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.side_effect = [mock_response1, mock_response2]
+            mock_get_client.return_value = mock_client
+
+            with patch('server.routes.chat.config') as mock_config:
+                mock_config.USE_CLAUDE = False
+                mock_config.OPENAI_API_KEY = "test-key"
+                mock_config.OPENAI_MODEL = "gpt-4o-mini"
+                mock_config.DATABASE_PATH = Path(tempfile.gettempdir()) / "test_chat.db"
+                mock_config.FILES_PATH = Path(tempfile.gettempdir()) / "test_files"
+
+                response = client.post("/api/chat", json={"message": "What is the date?"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "2026-02-02" in data["response"]
+
+    def test_tool_registry_is_imported(self):
+        """Test that tool registry is available in chat module."""
+        from server.routes.chat import tool_registry
+
+        # Verify builtin tools are available
+        tools = tool_registry.list_tools()
+        assert "get_current_datetime" in tools
+        assert "calculate" in tools
+
+    def test_openai_tools_format_in_api_call(self, client):
+        """Test that tools are passed to OpenAI API in correct format."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "Hello!"
+        mock_response.choices[0].message.tool_calls = None
+
+        with patch('server.routes.chat.get_openai_client') as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_response
+            mock_get_client.return_value = mock_client
+
+            with patch('server.routes.chat.config') as mock_config:
+                mock_config.USE_CLAUDE = False
+                mock_config.OPENAI_API_KEY = "test-key"
+                mock_config.OPENAI_MODEL = "gpt-4o-mini"
+                mock_config.DATABASE_PATH = Path(tempfile.gettempdir()) / "test_chat.db"
+                mock_config.FILES_PATH = Path(tempfile.gettempdir()) / "test_files"
+
+                response = client.post("/api/chat", json={"message": "Hello"})
+
+        assert response.status_code == 200
+        # Verify tools were passed to the API
+        call_kwargs = mock_client.chat.completions.create.call_args
+        assert "tools" in call_kwargs.kwargs
+        assert len(call_kwargs.kwargs["tools"]) >= 2  # At least get_current_datetime and calculate
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

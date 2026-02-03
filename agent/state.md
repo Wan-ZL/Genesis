@@ -38,6 +38,11 @@ GitHub Issue #1: Implement AI Assistant v1
   - OpenAI and Claude format converters
   - Built-in tools: get_current_datetime, calculate
   - 19 tests passing (tests/test_tools.py)
+- **Tool integration with chat API** (assistant/server/routes/chat.py):
+  - Both Claude and OpenAI APIs now receive tools
+  - Tool calls are detected and executed automatically
+  - Results fed back to continue conversation
+  - 3 new tests for tool integration (tests/test_chat_api.py)
 
 ## Acceptance Criteria Status
 - [x] Simple Web UI (input box + message history + status panel)
@@ -47,7 +52,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Integrate tool registry with chat API so assistant can use tools (function calling). Issue #1 remains **BLOCKED** on ANTHROPIC_API_KEY.
+Test tool integration E2E with running assistant (ask "what time is it?" or "calculate 15 * 7"). Issue #1 remains **BLOCKED** on ANTHROPIC_API_KEY.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)
