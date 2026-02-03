@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #4 in progress.** Message search functionality implemented as first increment.
+**Issue #4 in progress.** Single conversation storage implemented as second increment.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -115,17 +115,24 @@
 - **Issue #1 Fixed**: Import path bug in status.py resolved
 - **Issue #4 Progress - Search functionality added**:
   - `search_messages()` method in MemoryService with keyword search, pagination, snippet extraction
-  - `GET /api/messages/search` endpoint with query, limit, offset, conversation_id params
+  - `GET /api/messages/search` endpoint with query, limit, offset params
   - `get_message_count()` method for total message count
   - 17 new tests (10 memory service, 7 API endpoint)
+- **Issue #4 Progress - Single conversation storage**:
+  - `DEFAULT_CONVERSATION_ID = "main"` constant for single infinite conversation
+  - `add_to_conversation(role, content)` simplified API
+  - `get_messages(limit=None)` method with optional recent message limit
+  - `GET /api/conversation` new endpoint for single conversation
+  - Chat API always uses "main" conversation, ignores conversation_id parameter
+  - 7 new tests for single conversation model
 
 ## Next Step (single step)
-Continue Issue #4: Implement single conversation storage (remove conversation_id concept).
+Continue Issue #4: Remove "new chat" / "reset" UI elements from web interface.
 
 ## Risks / Notes
-- Issue #4 remaining items: single conversation storage, automatic summarization, UI changes
+- Issue #4 remaining items: automatic summarization, UI changes
 - Issue #2 (Permission escalation) involves security-sensitive code
-- 158 tests passing, CI workflow active
+- 165 tests passing, CI workflow active
 
 ## How to test quickly
 ```bash

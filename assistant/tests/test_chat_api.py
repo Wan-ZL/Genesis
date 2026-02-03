@@ -48,8 +48,8 @@ def mock_claude_response():
 class TestChatEndpoint:
     """Tests for POST /api/chat endpoint."""
 
-    def test_chat_creates_new_conversation(self, client, mock_openai_response):
-        """Test that chat creates a new conversation when none specified."""
+    def test_chat_uses_single_conversation(self, client, mock_openai_response):
+        """Test that chat uses the single infinite conversation."""
         with patch('server.routes.chat.get_openai_client') as mock_get_client:
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_openai_response
@@ -69,12 +69,13 @@ class TestChatEndpoint:
         data = response.json()
         assert "response" in data
         assert "conversation_id" in data
-        assert data["conversation_id"].startswith("conv_")
+        # Single infinite conversation always returns "main"
+        assert data["conversation_id"] == "main"
         assert "timestamp" in data
         assert "model" in data
 
     def test_chat_uses_existing_conversation(self, client, mock_openai_response):
-        """Test that chat uses existing conversation when ID provided."""
+        """Test that multiple chats all use the same single conversation."""
         with patch('server.routes.chat.get_openai_client') as mock_get_client:
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_openai_response
@@ -87,28 +88,43 @@ class TestChatEndpoint:
                 mock_config.DATABASE_PATH = Path(tempfile.gettempdir()) / "test_chat.db"
                 mock_config.FILES_PATH = Path(tempfile.gettempdir()) / "test_files"
 
-                # First message creates conversation
+                # First message
                 response1 = client.post("/api/chat", json={"message": "Hello"})
                 assert response1.status_code == 200
                 conv_id = response1.json()["conversation_id"]
 
-                # Second message uses same conversation
+                # Second message - also uses same single conversation
                 response2 = client.post("/api/chat", json={
-                    "message": "How are you?",
-                    "conversation_id": conv_id
+                    "message": "How are you?"
                 })
 
         assert response2.status_code == 200
-        assert response2.json()["conversation_id"] == conv_id
+        # Both messages use the same single conversation
+        assert response2.json()["conversation_id"] == conv_id == "main"
 
-    def test_chat_returns_404_for_invalid_conversation(self, client):
-        """Test that chat returns 404 for non-existent conversation."""
-        response = client.post("/api/chat", json={
-            "message": "Hello",
-            "conversation_id": "conv_nonexistent123"
-        })
-        assert response.status_code == 404
-        assert "not found" in response.json()["detail"].lower()
+    def test_chat_ignores_conversation_id_parameter(self, client, mock_openai_response):
+        """Test that conversation_id parameter is ignored (single conversation model)."""
+        with patch('server.routes.chat.get_openai_client') as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_openai_response
+            mock_get_client.return_value = mock_client
+
+            with patch('server.routes.chat.config') as mock_config:
+                mock_config.USE_CLAUDE = False
+                mock_config.OPENAI_API_KEY = "test-key"
+                mock_config.OPENAI_MODEL = "gpt-4o-mini"
+                mock_config.DATABASE_PATH = Path(tempfile.gettempdir()) / "test_chat.db"
+                mock_config.FILES_PATH = Path(tempfile.gettempdir()) / "test_files"
+
+                # Even with a fake conversation_id, should use single conversation
+                response = client.post("/api/chat", json={
+                    "message": "Hello",
+                    "conversation_id": "conv_nonexistent123"
+                })
+
+        # Should succeed and use "main" conversation
+        assert response.status_code == 200
+        assert response.json()["conversation_id"] == "main"
 
     def test_chat_falls_back_to_openai_when_claude_fails(self, client, mock_openai_response, mock_claude_response):
         """Test that chat falls back to OpenAI when Claude fails."""
@@ -143,16 +159,41 @@ class TestChatEndpoint:
 class TestConversationsEndpoint:
     """Tests for conversation list/get endpoints."""
 
+    def test_get_single_conversation(self, client, mock_openai_response):
+        """Test getting the single infinite conversation."""
+        # First create some messages
+        with patch('server.routes.chat.get_openai_client') as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_openai_response
+            mock_get_client.return_value = mock_client
+
+            with patch('server.routes.chat.config') as mock_config:
+                mock_config.USE_CLAUDE = False
+                mock_config.OPENAI_API_KEY = "test-key"
+                mock_config.OPENAI_MODEL = "gpt-4o-mini"
+                mock_config.DATABASE_PATH = Path(tempfile.gettempdir()) / "test_conv.db"
+                mock_config.FILES_PATH = Path(tempfile.gettempdir()) / "test_files"
+
+                client.post("/api/chat", json={"message": "Hello"})
+
+        # Get the single conversation
+        response = client.get("/api/conversation")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == "main"
+        assert "messages" in data
+        assert len(data["messages"]) >= 1
+
     def test_list_conversations(self, client):
-        """Test listing all conversations."""
+        """Test listing all conversations (deprecated but still works)."""
         response = client.get("/api/conversations")
         assert response.status_code == 200
         data = response.json()
         assert "conversations" in data
         assert isinstance(data["conversations"], list)
 
-    def test_get_conversation(self, client, mock_openai_response):
-        """Test getting a specific conversation."""
+    def test_get_conversation_by_id(self, client, mock_openai_response):
+        """Test getting conversation by ID (deprecated, uses single conv)."""
         # First create a conversation
         with patch('server.routes.chat.get_openai_client') as mock_get_client:
             mock_client = MagicMock()
@@ -169,7 +210,7 @@ class TestConversationsEndpoint:
                 chat_response = client.post("/api/chat", json={"message": "Hello"})
                 conv_id = chat_response.json()["conversation_id"]
 
-        # Get the conversation
+        # Get the conversation by ID (deprecated endpoint)
         response = client.get(f"/api/conversation/{conv_id}")
         assert response.status_code == 200
         data = response.json()
@@ -439,9 +480,10 @@ class TestMessageSearch:
         assert response.status_code == 200
         # Should not error, just cap internally
 
-    def test_search_endpoint_with_conversation_filter(self, client):
-        """Test that search accepts conversation_id filter."""
-        response = client.get("/api/messages/search?q=test&conversation_id=conv_123")
+    def test_search_endpoint_works_without_conversation_filter(self, client):
+        """Test that search works in single conversation model (no filter needed)."""
+        # In single conversation model, all messages are in one conversation
+        response = client.get("/api/messages/search?q=test")
         assert response.status_code == 200
 
     def test_search_endpoint_with_pagination(self, client):

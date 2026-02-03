@@ -7,7 +7,7 @@ import asyncio
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from server.services.memory import MemoryService
+from server.services.memory import MemoryService, DEFAULT_CONVERSATION_ID
 
 
 @pytest.fixture
@@ -354,6 +354,86 @@ class TestMessageCount:
         """Test message count is zero for empty database."""
         count = await memory_service.get_message_count()
         assert count == 0
+
+
+class TestSingleConversation:
+    """Tests for single infinite conversation model."""
+
+    @pytest.mark.asyncio
+    async def test_add_to_conversation(self, memory_service):
+        """Test adding messages to the single conversation."""
+        msg_id = await memory_service.add_to_conversation("user", "Hello")
+        assert msg_id is not None
+        assert msg_id.startswith("msg_")
+
+        # Verify it's in the default conversation
+        conv = await memory_service.get_conversation(DEFAULT_CONVERSATION_ID)
+        assert conv is not None
+        assert len(conv["messages"]) == 1
+        assert conv["messages"][0]["content"] == "Hello"
+
+    @pytest.mark.asyncio
+    async def test_get_messages(self, memory_service):
+        """Test getting messages from the single conversation."""
+        await memory_service.add_to_conversation("user", "First message")
+        await memory_service.add_to_conversation("assistant", "Response")
+        await memory_service.add_to_conversation("user", "Second message")
+
+        messages = await memory_service.get_messages()
+
+        # Should include system message + 3 conversation messages
+        assert len(messages) == 4
+        assert messages[0]["role"] == "system"
+        assert messages[1]["content"] == "First message"
+        assert messages[2]["content"] == "Response"
+        assert messages[3]["content"] == "Second message"
+
+    @pytest.mark.asyncio
+    async def test_get_messages_with_limit(self, memory_service):
+        """Test getting limited number of recent messages."""
+        for i in range(10):
+            await memory_service.add_to_conversation("user", f"Message {i}")
+
+        # Get only last 3 messages
+        messages = await memory_service.get_messages(limit=3)
+
+        # Should have system + 3 messages
+        assert len(messages) == 4
+        assert messages[0]["role"] == "system"
+        # Should be the last 3 messages in chronological order
+        assert messages[1]["content"] == "Message 7"
+        assert messages[2]["content"] == "Message 8"
+        assert messages[3]["content"] == "Message 9"
+
+    @pytest.mark.asyncio
+    async def test_remove_last_message_from_conversation(self, memory_service):
+        """Test removing the last message from single conversation."""
+        await memory_service.add_to_conversation("user", "First")
+        await memory_service.add_to_conversation("user", "Second")
+
+        await memory_service.remove_last_message_from_conversation()
+
+        messages = await memory_service.get_messages()
+        # System + 1 message
+        assert len(messages) == 2
+        assert messages[1]["content"] == "First"
+
+    @pytest.mark.asyncio
+    async def test_default_conversation_auto_created(self, memory_service):
+        """Test that default conversation is created automatically."""
+        # Before any operation, default conversation shouldn't exist
+        exists = await memory_service.conversation_exists(DEFAULT_CONVERSATION_ID)
+        assert exists is False
+
+        # After using single conversation API, it should exist
+        await memory_service.add_to_conversation("user", "Test")
+        exists = await memory_service.conversation_exists(DEFAULT_CONVERSATION_ID)
+        assert exists is True
+
+    @pytest.mark.asyncio
+    async def test_default_conversation_id_is_main(self, memory_service):
+        """Test that the default conversation ID is 'main'."""
+        assert DEFAULT_CONVERSATION_ID == "main"
 
 
 if __name__ == "__main__":

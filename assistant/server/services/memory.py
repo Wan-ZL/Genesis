@@ -6,6 +6,10 @@ from typing import Optional
 import uuid
 
 
+# Single infinite conversation - all messages go to this conversation
+DEFAULT_CONVERSATION_ID = "main"
+
+
 class MemoryService:
     """Service for managing conversation memory in SQLite."""
 
@@ -52,6 +56,22 @@ class MemoryService:
             await db.commit()
         self._initialized = True
 
+    async def _ensure_default_conversation(self):
+        """Ensure the single default conversation exists."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT 1 FROM conversations WHERE id = ?",
+                (DEFAULT_CONVERSATION_ID,)
+            )
+            row = await cursor.fetchone()
+            if not row:
+                now = datetime.now().isoformat()
+                await db.execute(
+                    "INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                    (DEFAULT_CONVERSATION_ID, "Conversation", now, now)
+                )
+                await db.commit()
+
     async def create_conversation(self, title: Optional[str] = None) -> str:
         """Create a new conversation and return its ID."""
         await self._ensure_initialized()
@@ -81,7 +101,11 @@ class MemoryService:
             return row is not None
 
     async def add_message(self, conversation_id: str, role: str, content: str) -> str:
-        """Add a message to a conversation."""
+        """Add a message to a conversation.
+
+        Note: For single conversation mode, use conversation_id=DEFAULT_CONVERSATION_ID
+        or call the simplified add_to_conversation() method.
+        """
         await self._ensure_initialized()
 
         message_id = f"msg_{uuid.uuid4().hex[:12]}"
@@ -99,6 +123,16 @@ class MemoryService:
             await db.commit()
 
         return message_id
+
+    async def add_to_conversation(self, role: str, content: str) -> str:
+        """Add a message to the single infinite conversation.
+
+        This is the simplified API for the single-conversation model.
+        Messages are added to the default conversation timeline.
+        """
+        await self._ensure_initialized()
+        await self._ensure_default_conversation()
+        return await self.add_message(DEFAULT_CONVERSATION_ID, role, content)
 
     async def remove_last_message(self, conversation_id: str):
         """Remove the last message from a conversation (for error recovery)."""
@@ -132,6 +166,54 @@ class MemoryService:
                 messages.append({"role": role, "content": content})
 
         return messages
+
+    async def get_messages(self, limit: Optional[int] = None) -> list[dict]:
+        """Get messages from the single infinite conversation in OpenAI format.
+
+        This is the simplified API for the single-conversation model.
+
+        Args:
+            limit: Optional limit on number of recent messages to return.
+                   If None, returns all messages.
+
+        Returns:
+            Messages in OpenAI format with system prompt prepended.
+        """
+        await self._ensure_initialized()
+        await self._ensure_default_conversation()
+
+        messages = [
+            {"role": "system", "content": "You are a helpful AI assistant. Be concise and helpful."}
+        ]
+
+        async with aiosqlite.connect(self.db_path) as db:
+            if limit:
+                cursor = await db.execute(
+                    """SELECT role, content FROM messages
+                       WHERE conversation_id = ?
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (DEFAULT_CONVERSATION_ID, limit)
+                )
+                rows = await cursor.fetchall()
+                # Reverse to get chronological order
+                for role, content in reversed(rows):
+                    messages.append({"role": role, "content": content})
+            else:
+                cursor = await db.execute(
+                    "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at",
+                    (DEFAULT_CONVERSATION_ID,)
+                )
+                rows = await cursor.fetchall()
+                for role, content in rows:
+                    messages.append({"role": role, "content": content})
+
+        return messages
+
+    async def remove_last_message_from_conversation(self):
+        """Remove the last message from the single conversation (for error recovery)."""
+        await self._ensure_initialized()
+        await self._ensure_default_conversation()
+        await self.remove_last_message(DEFAULT_CONVERSATION_ID)
 
     async def list_conversations(self) -> list[dict]:
         """List all conversations with metadata."""

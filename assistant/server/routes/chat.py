@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
 
 import config
-from server.services.memory import MemoryService
+from server.services.memory import MemoryService, DEFAULT_CONVERSATION_ID
 from server.services.tools import registry as tool_registry
 from server.services.retry import api_retry
 from server.services.metrics import metrics
@@ -25,6 +25,8 @@ memory = MemoryService(config.DATABASE_PATH)
 class ChatMessage(BaseModel):
     """Chat message request model."""
     message: str
+    # Deprecated: conversation_id is kept for backward compatibility but ignored
+    # All messages now go to the single infinite conversation
     conversation_id: Optional[str] = None
     file_ids: Optional[List[str]] = None
 
@@ -32,6 +34,7 @@ class ChatMessage(BaseModel):
 class ChatResponse(BaseModel):
     """Chat response model."""
     response: str
+    # Always returns DEFAULT_CONVERSATION_ID for the single infinite conversation
     conversation_id: str
     timestamp: str
     model: str  # Which model was used
@@ -322,16 +325,15 @@ async def call_openai_api(messages: list, file_ids: list, user_message: str) -> 
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatMessage):
-    """Send a message and get AI response (Claude primary, OpenAI fallback)."""
+    """Send a message and get AI response (Claude primary, OpenAI fallback).
+
+    All messages are stored in a single infinite conversation.
+    The conversation_id parameter is deprecated and ignored.
+    """
     start_time = time.time()
 
-    # Create new conversation or use existing
-    if request.conversation_id:
-        if not await memory.conversation_exists(request.conversation_id):
-            raise HTTPException(status_code=404, detail="Conversation not found")
-        conversation_id = request.conversation_id
-    else:
-        conversation_id = await memory.create_conversation()
+    # Single infinite conversation - always use the default
+    # Note: conversation_id in request is ignored (kept for backward compatibility)
 
     # Build message content with attachments
     file_refs = []
@@ -344,11 +346,11 @@ async def chat(request: ChatMessage):
     if file_refs:
         message_text = f"{request.message}\n[Attached files: {', '.join(file_refs)}]"
 
-    await memory.add_message(conversation_id, "user", message_text)
+    await memory.add_to_conversation("user", message_text)
 
     try:
-        # Get conversation history
-        messages = await memory.get_conversation_messages(conversation_id)
+        # Get conversation history from single infinite conversation
+        messages = await memory.get_messages()
 
         # Try Claude first, fallback to OpenAI
         model_used = None
@@ -370,9 +372,9 @@ async def chat(request: ChatMessage):
             )
 
         # Save assistant response
-        await memory.add_message(conversation_id, "assistant", assistant_message)
+        await memory.add_to_conversation("assistant", assistant_message)
 
-        logger.info(f"Chat completed for conversation {conversation_id} using {model_used}")
+        logger.info(f"Chat completed in single conversation using {model_used}")
 
         # Record successful request metrics
         latency_ms = (time.time() - start_time) * 1000
@@ -380,7 +382,7 @@ async def chat(request: ChatMessage):
 
         return ChatResponse(
             response=assistant_message,
-            conversation_id=conversation_id,
+            conversation_id=DEFAULT_CONVERSATION_ID,
             timestamp=datetime.now().isoformat(),
             model=model_used
         )
@@ -393,20 +395,43 @@ async def chat(request: ChatMessage):
         metrics.record_error("/api/chat", type(e).__name__)
 
         # Remove the user message if API call failed
-        await memory.remove_last_message(conversation_id)
+        await memory.remove_last_message_from_conversation()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/conversation")
+async def get_the_conversation():
+    """Get the single infinite conversation with messages.
+
+    In the single-conversation model, there is only one conversation
+    that grows forever. This endpoint returns all messages.
+    """
+    conversation = await memory.get_conversation(DEFAULT_CONVERSATION_ID)
+    if not conversation:
+        # Auto-create if doesn't exist
+        await memory._ensure_default_conversation()
+        conversation = await memory.get_conversation(DEFAULT_CONVERSATION_ID)
+    return conversation
 
 
 @router.get("/conversations")
 async def list_conversations():
-    """List all conversations."""
+    """List all conversations (deprecated).
+
+    In the single-conversation model, this returns only the default conversation.
+    Kept for backward compatibility.
+    """
     conversations = await memory.list_conversations()
     return {"conversations": conversations}
 
 
 @router.get("/conversation/{conversation_id}")
 async def get_conversation(conversation_id: str):
-    """Get a single conversation with messages."""
+    """Get a conversation by ID (deprecated).
+
+    In the single-conversation model, only DEFAULT_CONVERSATION_ID is used.
+    Kept for backward compatibility.
+    """
     conversation = await memory.get_conversation(conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -416,15 +441,13 @@ async def get_conversation(conversation_id: str):
 @router.get("/messages/search")
 async def search_messages(
     q: str,
-    conversation_id: Optional[str] = None,
     limit: int = 50,
     offset: int = 0
 ):
-    """Search messages by keyword.
+    """Search messages by keyword in the infinite conversation.
 
     Args:
         q: Search query (required)
-        conversation_id: Optional filter for specific conversation
         limit: Maximum results (default 50, max 100)
         offset: Pagination offset
 
@@ -440,9 +463,10 @@ async def search_messages(
     # Cap limit to prevent abuse
     limit = min(limit, 100)
 
+    # Search in the single infinite conversation
     results = await memory.search_messages(
         query=q.strip(),
-        conversation_id=conversation_id,
+        conversation_id=DEFAULT_CONVERSATION_ID,
         limit=limit,
         offset=offset
     )
