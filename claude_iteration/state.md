@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**No open GitHub Issues.** Issue #1 closed (all criteria met).
+**Issue #3 CLOSED.** Remaining open issues: #2, #4, #5.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -98,6 +98,11 @@
   - Visual feedback: recording state with pulse animation
   - Graceful browser fallback (hides button if unsupported)
   - Mobile-friendly touch targets
+- **Metrics dashboard bugs fixed** (Issue #3):
+  - Fixed success rate calculation: `(total - errors) / total * 100`
+  - Fixed latency path: `data.latency.overall.avg`
+  - Added tooltips to clarify what each metric measures
+  - Verified persistence behavior (request metrics reset on restart, messages persist in SQLite)
 
 ## Acceptance Criteria Status (Issue #1 - CLOSED)
 - [x] Simple Web UI (input box + message history + status panel)
@@ -107,7 +112,7 @@
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-No open issues, backlog complete. Loop should stop. Pick from Ideas (unscoped) in backlog if user creates new issue.
+Pick next issue from open issues (#2, #4, #5) in next iteration.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)

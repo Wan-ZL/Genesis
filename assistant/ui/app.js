@@ -463,9 +463,10 @@ async function loadMetrics() {
         const totalRequests = data.requests?.total || 0;
         requestsEl.textContent = totalRequests.toLocaleString();
 
-        // Success rate
+        // Success rate: calculated as (total - errors) / total
         if (totalRequests > 0) {
-            const successCount = data.requests?.success || 0;
+            const totalErrors = data.errors?.total || 0;
+            const successCount = totalRequests - totalErrors;
             const successRate = ((successCount / totalRequests) * 100).toFixed(1);
             successRateEl.textContent = `${successRate}%`;
             successRateEl.className = 'metric-value ' + (parseFloat(successRate) >= 90 ? 'metric-good' : 'metric-warn');
@@ -474,8 +475,8 @@ async function loadMetrics() {
             successRateEl.className = 'metric-value';
         }
 
-        // Average latency
-        const avgLatency = data.latency_ms?.average;
+        // Average latency: from data.latency.overall.avg
+        const avgLatency = data.latency?.overall?.avg;
         if (avgLatency !== undefined && avgLatency !== null) {
             latencyEl.textContent = `${Math.round(avgLatency)}ms`;
             latencyEl.className = 'metric-value ' + (avgLatency < 2000 ? 'metric-good' : 'metric-warn');
@@ -484,7 +485,7 @@ async function loadMetrics() {
             latencyEl.className = 'metric-value';
         }
 
-        // Total messages
+        // Total messages (all conversations)
         const totalMessages = data.conversations?.total_messages || 0;
         messagesEl.textContent = totalMessages.toLocaleString();
 
