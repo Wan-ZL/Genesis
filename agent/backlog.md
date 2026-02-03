@@ -15,7 +15,7 @@
 ## Priority: Low
 - [x] Metrics dashboard ← **COMPLETE** (backend API + UI panel with auto-refresh)
 - [x] CI integration for automated tests ← **COMPLETE** (GitHub Actions workflow)
-- [ ] Mobile-friendly UI improvements
+- [x] Mobile-friendly UI improvements ← **COMPLETE** (responsive CSS, touch targets, iOS safe areas, collapsible menu)
 - [ ] Voice input support
 
 ## Completed (for reference)

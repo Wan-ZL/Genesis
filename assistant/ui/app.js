@@ -18,6 +18,8 @@ const lastRunEl = document.getElementById('last-run');
 const conversationsList = document.getElementById('conversations-list');
 const newConversationBtn = document.getElementById('new-conversation-btn');
 const refreshMetricsBtn = document.getElementById('refresh-metrics-btn');
+const toggleStatusBtn = document.getElementById('toggle-status-btn');
+const statusPanel = document.querySelector('.status-panel');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -57,6 +59,16 @@ function setupEventListeners() {
     // File upload
     attachBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', handleFileSelect);
+
+    // Mobile status panel toggle
+    if (toggleStatusBtn) {
+        toggleStatusBtn.addEventListener('click', toggleStatusPanel);
+    }
+}
+
+function toggleStatusPanel() {
+    statusPanel.classList.toggle('show');
+    toggleStatusBtn.textContent = statusPanel.classList.contains('show') ? 'Close' : 'Menu';
 }
 
 // File handling

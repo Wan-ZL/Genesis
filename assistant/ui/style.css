@@ -364,7 +364,18 @@ main {
     opacity: 0.8;
 }
 
-/* Responsive */
+/* Mobile toggle button - hidden by default */
+.mobile-only {
+    display: none;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Responsive - Tablet */
 @media (max-width: 900px) {
     main {
         flex-direction: column-reverse;
@@ -377,5 +388,189 @@ main {
 
     .message {
         max-width: 90%;
+    }
+}
+
+/* Responsive - Mobile */
+@media (max-width: 600px) {
+    /* iOS safe area handling */
+    body {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+    }
+
+    .container {
+        padding: 12px;
+    }
+
+    header {
+        padding: 8px 0 12px;
+    }
+
+    header h1 {
+        font-size: 1.25rem;
+    }
+
+    /* Show mobile menu toggle */
+    .mobile-only {
+        display: block;
+    }
+
+    #toggle-status-btn {
+        padding: 10px 16px;
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        min-height: 44px; /* Touch-friendly */
+        min-width: 44px;
+    }
+
+    #toggle-status-btn:active {
+        background-color: #5a6268;
+    }
+
+    main {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    /* Status panel - hidden by default on mobile, slides in */
+    .status-panel {
+        display: none;
+        width: 100%;
+        max-height: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 100;
+        border-radius: 0;
+        padding: 20px;
+        padding-top: calc(20px + env(safe-area-inset-top));
+        overflow-y: auto;
+    }
+
+    .status-panel.show {
+        display: flex;
+    }
+
+    /* Chat container full height on mobile */
+    .chat-container {
+        min-height: calc(100vh - 140px);
+        border-radius: 8px;
+    }
+
+    .messages {
+        padding: 12px;
+        gap: 12px;
+    }
+
+    .message {
+        max-width: 95%;
+        padding: 10px 14px;
+        font-size: 0.95rem;
+    }
+
+    /* Touch-friendly input area */
+    .input-area {
+        padding: 12px;
+        gap: 8px;
+        padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+
+    #message-input {
+        font-size: 16px; /* Prevents iOS zoom on focus */
+        padding: 10px 12px;
+        min-height: 44px; /* Touch-friendly */
+    }
+
+    #send-btn,
+    #attach-btn {
+        min-height: 44px; /* Touch-friendly tap target */
+        min-width: 44px;
+        padding: 10px 16px;
+    }
+
+    #attach-btn {
+        padding: 10px 12px;
+    }
+
+    /* File preview on mobile */
+    .file-preview {
+        padding: 8px 12px;
+    }
+
+    .file-preview-item {
+        padding: 6px 10px;
+        font-size: 0.8rem;
+    }
+
+    .file-preview-item img,
+    .file-preview-item .file-icon {
+        width: 32px;
+        height: 32px;
+    }
+
+    .file-preview-item .remove-file {
+        min-width: 32px;
+        min-height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Status panel sections on mobile */
+    .status-section {
+        padding: 10px 0;
+    }
+
+    .status-section h3 {
+        font-size: 0.85rem;
+    }
+
+    #conversations-list {
+        max-height: 150px;
+    }
+
+    #conversations-list li {
+        padding: 12px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    #new-conversation-btn,
+    #refresh-metrics-btn {
+        min-height: 44px;
+        font-size: 1rem;
+    }
+
+    /* Metrics grid responsive */
+    .metrics-grid {
+        gap: 8px;
+    }
+
+    .metric-item {
+        padding: 8px;
+    }
+
+    .metric-label {
+        font-size: 0.7rem;
+    }
+
+    .metric-value {
+        font-size: 1rem;
+    }
+
+    /* Model badge smaller on mobile */
+    .model-badge {
+        font-size: 0.65rem;
+        padding: 2px 6px;
     }
 }

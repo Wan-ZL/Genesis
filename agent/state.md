@@ -86,6 +86,12 @@ GitHub Issue #1: Implement AI Assistant v1
   - **UI panel added**: 2x2 grid showing Requests, Success Rate, Avg Latency, Messages
   - Auto-refresh every 30s, manual refresh button, color-coded values
   - 119 tests total
+- **Mobile-friendly UI complete** (assistant/ui/):
+  - Responsive CSS for phones (<600px) with collapsible status panel
+  - Touch-friendly tap targets (44px minimum)
+  - iOS safe area handling (notch, home indicator)
+  - Menu toggle button for mobile navigation
+  - Prevents iOS auto-zoom on input focus (16px font)
 
 ## Acceptance Criteria Status
 - [x] Simple Web UI (input box + message history + status panel)
@@ -95,7 +101,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Metrics dashboard complete. Consider mobile-friendly UI improvements or voice input support from backlog.
+Mobile UI complete. Consider voice input support from backlog, or close Issue #1 if user confirms API key is not a blocker.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)
