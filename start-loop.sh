@@ -4,7 +4,7 @@
 
 GENESIS_DIR="/Users/zelin/Startups/Genesis"
 LOOP_FLAG_FILE="$GENESIS_DIR/hooks/loop_claude_code.txt"
-RUNLOG_DIR="$GENESIS_DIR/agent/runlog"
+RUNLOG_DIR="$GENESIS_DIR/claude_iteration/runlog"
 
 # 获取最近的 runlog 文件名（最多 3 个）
 get_recent_runlogs() {
@@ -36,4 +36,4 @@ echo ""
 
 # 启动第一轮
 cd "$GENESIS_DIR"
-claude --dangerously-skip-permissions "Execute one iteration per the contract in CLAUDE.md. Check GitHub Issues first, then agent/state.md for next step. Recent runlogs: $RECENT_RUNLOGS"
+claude --dangerously-skip-permissions "Execute one iteration per the contract in CLAUDE.md. Check GitHub Issues first, then claude_iteration/state.md for next step. Recent runlogs: $RECENT_RUNLOGS"

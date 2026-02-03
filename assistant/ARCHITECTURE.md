@@ -128,8 +128,9 @@ CREATE TABLE files (
 - 消息历史显示（支持 Markdown 渲染）
 - 文件上传按钮（图片/PDF）
 - 状态面板：
-  - Claude Code 当前 focus（读取 agent/state.md）
-  - 最近 runlog 状态
+  - AI Assistant 版本号
+  - 运行时间（uptime）
+  - 消息计数
 
 ## 数据流
 
@@ -188,7 +189,8 @@ python -m server.main
 - Claude Code 读取此文档了解产品架构
 - Claude Code 迭代实现 `assistant/` 下的代码
 - AI Assistant 运行时独立，不依赖 Claude Code
-- Web UI 可显示 `agent/state.md` 状态（只读）
+- Web UI 显示 AI Assistant 自身状态（版本、运行时间、消息数）
+- **注意**: AI Assistant 不显示 Claude Code 的开发状态（它们是独立的系统）
 
 ## v1 优先级
 

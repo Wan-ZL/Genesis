@@ -4,7 +4,7 @@
 
 GENESIS_DIR="/Users/zelin/Startups/Genesis"
 LOOP_FLAG_FILE="$GENESIS_DIR/hooks/loop_claude_code.txt"
-RUNLOG_DIR="$GENESIS_DIR/agent/runlog"
+RUNLOG_DIR="$GENESIS_DIR/claude_iteration/runlog"
 
 # Get recent runlog filenames (up to 3)
 get_recent_runlogs() {
@@ -76,7 +76,7 @@ echo "   Recent runlogs: $RECENT_RUNLOGS"
 (sleep 3 && osascript -e "
     tell application \"Terminal\"
         activate
-        do script \"cd '$GENESIS_DIR' && claude --dangerously-skip-permissions 'Execute one iteration per the contract in CLAUDE.md. Check GitHub Issues first, then agent/state.md for next step. Recent runlogs: $RECENT_RUNLOGS (read more logs as needed)'\"
+        do script \"cd '$GENESIS_DIR' && claude --dangerously-skip-permissions 'Execute one iteration per the contract in CLAUDE.md. Check GitHub Issues first, then claude_iteration/state.md for next step. Recent runlogs: $RECENT_RUNLOGS (read more logs as needed)'\"
     end tell
 ") &
 disown

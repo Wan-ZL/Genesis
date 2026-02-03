@@ -14,7 +14,7 @@
 
 ## 日志输出位置
 
-所有日志写入 `/Users/zelin/Startups/Genesis/agent/runlog/`:
+所有日志写入 `/Users/zelin/Startups/Genesis/claude_iteration/runlog/`:
 - `session-YYYY-MM-DD.log` - session 启动记录
 - `tool-usage-YYYY-MM-DD.log` - 工具调用记录
 - `YYYY-MM-DD_HHMM.md` - 每次 Stop 时的 runlog

@@ -2,7 +2,7 @@
 # Hook: PostToolUse (2)
 # Purpose: Log all tool usage for auditability
 
-LOGDIR="/Users/zelin/Startups/Genesis/agent/runlog"
+LOGDIR="/Users/zelin/Startups/Genesis/claude_iteration/runlog"
 LOGFILE="$LOGDIR/tool-usage-$(date +%Y-%m-%d).log"
 
 INPUT=$(cat)

@@ -7,7 +7,7 @@
 ## Dangerous operations
 - No privilege escalation.
 - No destructive filesystem operations.
-- If a risky action seems required, write a proposal in agent/runlog and choose a safer alternative.
+- If a risky action seems required, write a proposal in claude_iteration/runlog and choose a safer alternative.
 
 ## Auditability
 - Prefer changes that are reviewable and testable.

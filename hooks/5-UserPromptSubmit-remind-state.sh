@@ -7,7 +7,7 @@ cat << 'EOF'
 {
   "hookSpecificOutput": {
     "hookEventName": "UserPromptSubmit",
-    "additionalContext": "REMINDER: First read agent/state.md to understand current focus, then check GitHub Issues for priority work."
+    "additionalContext": "REMINDER: First read claude_iteration/state.md to understand current focus, then check GitHub Issues for priority work."
   }
 }
 EOF

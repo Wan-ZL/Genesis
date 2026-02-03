@@ -1,94 +1,125 @@
 #!/bin/bash
-# Genesis AI Assistant - Service Management Script for macOS
+# Genesis AI Assistant - Service Management Script
+# Uses Supervisor for cross-platform compatibility
 # Usage: ./assistant-service.sh [install|uninstall|start|stop|restart|status|logs]
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ASSISTANT_DIR="$(dirname "$SCRIPT_DIR")"
-SERVICE_NAME="com.genesis.assistant"
-PLIST_TEMPLATE="$SCRIPT_DIR/$SERVICE_NAME.plist"
-PLIST_INSTALLED="$HOME/Library/LaunchAgents/$SERVICE_NAME.plist"
+GENESIS_DIR="$(dirname "$ASSISTANT_DIR")"
+SUPERVISOR_CONF="$SCRIPT_DIR/supervisord.conf"
 LOG_DIR="$HOME/Library/Logs/Genesis"
+SOCK_FILE="/tmp/genesis-supervisor.sock"
+PID_FILE="/tmp/genesis-supervisord.pid"
 
-# Find Python path
-find_python() {
-    if command -v python3 &> /dev/null; then
-        python3 -c "import sys; print(sys.executable)"
-    else
-        echo "ERROR: python3 not found" >&2
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Check if supervisor is installed
+check_supervisor() {
+    if ! command -v supervisord &> /dev/null; then
+        echo -e "${RED}ERROR: supervisord not found${NC}"
+        echo "Install with: pip install supervisor"
+        echo "Or: brew install supervisor"
         exit 1
     fi
 }
 
-# Install the service
+# Install/setup the service
 install_service() {
-    echo "Installing Genesis AI Assistant service..."
-
-    PYTHON_PATH=$(find_python)
-    echo "Using Python: $PYTHON_PATH"
-    echo "Assistant directory: $ASSISTANT_DIR"
+    echo "Setting up Genesis AI Assistant service..."
+    check_supervisor
 
     # Create log directory
     mkdir -p "$LOG_DIR"
+    echo -e "${GREEN}Log directory: $LOG_DIR${NC}"
 
-    # Create LaunchAgents directory if needed
-    mkdir -p "$HOME/Library/LaunchAgents"
-
-    # Generate plist from template with paths substituted
-    sed -e "s|__PYTHON_PATH__|$PYTHON_PATH|g" \
-        -e "s|__ASSISTANT_DIR__|$ASSISTANT_DIR|g" \
-        -e "s|__LOG_DIR__|$LOG_DIR|g" \
-        "$PLIST_TEMPLATE" > "$PLIST_INSTALLED"
-
-    echo "Plist installed to: $PLIST_INSTALLED"
-    echo "Logs will be at: $LOG_DIR/"
+    # Update config with correct paths
+    echo "Supervisor config: $SUPERVISOR_CONF"
     echo ""
+    echo -e "${GREEN}Installation complete!${NC}"
     echo "Run './assistant-service.sh start' to start the service"
 }
 
 # Uninstall the service
 uninstall_service() {
-    echo "Uninstalling Genesis AI Assistant service..."
+    echo "Stopping and cleaning up Genesis AI Assistant service..."
 
-    # Stop if running
-    if launchctl list | grep -q "$SERVICE_NAME"; then
-        launchctl unload "$PLIST_INSTALLED" 2>/dev/null || true
+    # Stop supervisor if running
+    if [ -S "$SOCK_FILE" ]; then
+        supervisorctl -c "$SUPERVISOR_CONF" shutdown 2>/dev/null || true
     fi
 
-    # Remove plist
-    if [ -f "$PLIST_INSTALLED" ]; then
-        rm "$PLIST_INSTALLED"
-        echo "Removed: $PLIST_INSTALLED"
-    fi
+    # Remove pid file
+    rm -f "$PID_FILE"
+    rm -f "$SOCK_FILE"
 
-    echo "Service uninstalled. Logs remain at: $LOG_DIR/"
+    echo -e "${GREEN}Service stopped. Logs remain at: $LOG_DIR/${NC}"
 }
 
 # Start the service
 start_service() {
-    if [ ! -f "$PLIST_INSTALLED" ]; then
-        echo "Service not installed. Run './assistant-service.sh install' first."
-        exit 1
+    check_supervisor
+
+    if [ -S "$SOCK_FILE" ]; then
+        echo -e "${YELLOW}Supervisor already running. Starting assistant...${NC}"
+        supervisorctl -c "$SUPERVISOR_CONF" start assistant
+    else
+        echo "Starting Supervisor daemon..."
+        mkdir -p "$LOG_DIR"
+
+        # Export required environment variables
+        export HOME="$HOME"
+        export GENESIS_DIR="$GENESIS_DIR"
+
+        supervisord -c "$SUPERVISOR_CONF"
+        sleep 2
     fi
 
-    echo "Starting Genesis AI Assistant..."
-    launchctl load "$PLIST_INSTALLED"
-    sleep 2
     show_status
 }
 
 # Stop the service
 stop_service() {
     echo "Stopping Genesis AI Assistant..."
-    launchctl unload "$PLIST_INSTALLED" 2>/dev/null || echo "Service was not running"
+
+    if [ -S "$SOCK_FILE" ]; then
+        supervisorctl -c "$SUPERVISOR_CONF" stop assistant 2>/dev/null || true
+        echo -e "${GREEN}Assistant stopped${NC}"
+    else
+        echo -e "${YELLOW}Supervisor not running${NC}"
+    fi
+}
+
+# Stop supervisor daemon completely
+shutdown_service() {
+    echo "Shutting down Supervisor daemon..."
+
+    if [ -S "$SOCK_FILE" ]; then
+        supervisorctl -c "$SUPERVISOR_CONF" shutdown
+        echo -e "${GREEN}Supervisor shutdown complete${NC}"
+    else
+        echo -e "${YELLOW}Supervisor not running${NC}"
+    fi
 }
 
 # Restart the service
 restart_service() {
-    stop_service
-    sleep 1
-    start_service
+    echo "Restarting Genesis AI Assistant..."
+
+    if [ -S "$SOCK_FILE" ]; then
+        supervisorctl -c "$SUPERVISOR_CONF" restart assistant
+    else
+        echo -e "${YELLOW}Supervisor not running. Starting...${NC}"
+        start_service
+    fi
+
+    sleep 2
+    show_status
 }
 
 # Show service status
@@ -96,21 +127,20 @@ show_status() {
     echo "=== Genesis AI Assistant Status ==="
     echo ""
 
-    if launchctl list | grep -q "$SERVICE_NAME"; then
-        echo "Service: RUNNING"
-        launchctl list "$SERVICE_NAME" 2>/dev/null || true
+    if [ -S "$SOCK_FILE" ]; then
+        echo -e "${GREEN}Supervisor: RUNNING${NC}"
+        supervisorctl -c "$SUPERVISOR_CONF" status assistant
     else
-        echo "Service: STOPPED"
+        echo -e "${RED}Supervisor: NOT RUNNING${NC}"
     fi
 
     echo ""
     echo "Checking if server is responding..."
-    if curl -s "http://127.0.0.1:8080/api/health" > /dev/null 2>&1; then
-        echo "HTTP: OK (http://127.0.0.1:8080)"
-    elif curl -s "http://127.0.0.1:8080/" > /dev/null 2>&1; then
-        echo "HTTP: OK (http://127.0.0.1:8080)"
+    if curl -s "http://127.0.0.1:8080/api/health" 2>/dev/null; then
+        echo ""
+        echo -e "${GREEN}HTTP: OK (http://127.0.0.1:8080)${NC}"
     else
-        echo "HTTP: NOT RESPONDING"
+        echo -e "${RED}HTTP: NOT RESPONDING${NC}"
     fi
 }
 
@@ -118,14 +148,20 @@ show_status() {
 show_logs() {
     echo "=== Recent Logs ==="
     echo ""
-    if [ -f "$LOG_DIR/assistant.out.log" ]; then
-        echo "--- stdout (last 20 lines) ---"
-        tail -20 "$LOG_DIR/assistant.out.log"
-    fi
-    echo ""
-    if [ -f "$LOG_DIR/assistant.err.log" ]; then
-        echo "--- stderr (last 20 lines) ---"
-        tail -20 "$LOG_DIR/assistant.err.log"
+
+    if [ -S "$SOCK_FILE" ]; then
+        echo "--- Live tail (Ctrl+C to exit) ---"
+        supervisorctl -c "$SUPERVISOR_CONF" tail -f assistant
+    else
+        if [ -f "$LOG_DIR/assistant.out.log" ]; then
+            echo "--- stdout (last 30 lines) ---"
+            tail -30 "$LOG_DIR/assistant.out.log"
+        fi
+        echo ""
+        if [ -f "$LOG_DIR/assistant.err.log" ]; then
+            echo "--- stderr (last 30 lines) ---"
+            tail -30 "$LOG_DIR/assistant.err.log"
+        fi
     fi
 }
 
@@ -143,6 +179,9 @@ case "${1:-}" in
     stop)
         stop_service
         ;;
+    shutdown)
+        shutdown_service
+        ;;
     restart)
         restart_service
         ;;
@@ -153,18 +192,23 @@ case "${1:-}" in
         show_logs
         ;;
     *)
-        echo "Genesis AI Assistant - Service Manager"
+        echo "Genesis AI Assistant - Service Manager (Supervisor)"
         echo ""
-        echo "Usage: $0 {install|uninstall|start|stop|restart|status|logs}"
+        echo "Usage: $0 {install|uninstall|start|stop|shutdown|restart|status|logs}"
         echo ""
         echo "Commands:"
-        echo "  install   - Install the launchd service (runs at login)"
-        echo "  uninstall - Remove the launchd service"
-        echo "  start     - Start the service"
-        echo "  stop      - Stop the service"
-        echo "  restart   - Restart the service"
+        echo "  install   - Set up the service (creates log directory)"
+        echo "  uninstall - Stop and clean up the service"
+        echo "  start     - Start the Supervisor daemon and assistant"
+        echo "  stop      - Stop the assistant (keeps Supervisor running)"
+        echo "  shutdown  - Stop everything including Supervisor daemon"
+        echo "  restart   - Restart the assistant"
         echo "  status    - Show service status"
-        echo "  logs      - Show recent log output"
+        echo "  logs      - Show/tail log output"
+        echo ""
+        echo "Prerequisites:"
+        echo "  pip install supervisor"
+        echo "  # or: brew install supervisor"
         exit 1
         ;;
 esac

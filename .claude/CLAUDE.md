@@ -21,18 +21,18 @@ Key loop:
 ## 2) Definitions
 - "Assistant Runtime": the always-on service the user interacts with (web UI initially).
 - "Builder/Tester": Claude Code, running in iterations to improve the runtime and tooling.
-- "Persistent memory": `.claude/` + `agent/` documents that are loaded every run.
+- "Persistent memory": `.claude/` + `claude_iteration/` documents that are loaded every run.
 
 ## 3) Execution contract (EVERY run)
 Follow these steps in order:
 A) Read:
    - `.claude/CLAUDE.md`
    - `.claude/rules/*`
-   - `agent/state.md`
-   - Latest 3 runlogs from `agent/runlog/` (for continuity with previous sessions)
+   - `claude_iteration/state.md`
+   - Latest 3 runlogs from `claude_iteration/runlog/` (for continuity with previous sessions)
 B) Discover work:
    - If any GitHub Issues are open, pick the highest-priority one.
-   - Otherwise, pick the best item from `agent/backlog.md`.
+   - Otherwise, pick the best item from `claude_iteration/backlog.md`.
 C) Do ONE smallest meaningful increment only:
    - Implement or refactor.
    - Add/extend tests and/or evals.
@@ -40,7 +40,7 @@ C) Do ONE smallest meaningful increment only:
 D) Validate:
    - Run the project's tests (or write clearly why tests cannot run).
 E) Persist memory (Claude Code must do this, not hooks):
-   - Write a run log to `agent/runlog/YYYY-MM-DD_HHMM.md` with:
+   - Write a run log to `claude_iteration/runlog/YYYY-MM-DD_HHMM.md` with:
      ```
      # Run Log: YYYY-MM-DD HH:MM
      ## Focus
@@ -52,8 +52,8 @@ E) Persist memory (Claude Code must do this, not hooks):
      ## Next
      [Single next step]
      ```
-   - Update `agent/state.md` with (1) what changed (2) what to do next
-   - Update `agent/roadmap.md` if milestone or priority changed
+   - Update `claude_iteration/state.md` with (1) what changed (2) what to do next
+   - Update `claude_iteration/roadmap.md` if milestone or priority changed
 F) Exit cleanly.
 
 ## 4) Output format at end of every run
@@ -61,15 +61,15 @@ Print:
 - Summary (what changed)
 - How to test locally
 - Files touched
-- Next step (from agent/state.md)
+- Next step (from claude_iteration/state.md)
 
 And end with:
 
 [RUN_STATUS]
 result = SUCCESS | NEEDS_INPUT | BLOCKED
 next = CONTINUE | WAIT_FOR_USER | WAIT_FOR_REVIEW
-state_file = agent/state.md
-runlog_file = agent/runlog/<latest>.md
+state_file = claude_iteration/state.md
+runlog_file = claude_iteration/runlog/<latest>.md
 
 ## 5) Current user preferences
 - Deployment: always-on on Mac mini.
@@ -82,6 +82,6 @@ runlog_file = agent/runlog/<latest>.md
 - Never commit secrets.
 
 ## 7) Roadmap pointer
-- High-level goals: `agent/roadmap.md`
-- Next step + working context: `agent/state.md`
-- Self-improvement tasks: `agent/backlog.md`
+- High-level goals: `claude_iteration/roadmap.md`
+- Next step + working context: `claude_iteration/state.md`
+- Self-improvement tasks: `claude_iteration/backlog.md`

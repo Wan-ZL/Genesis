@@ -15,8 +15,8 @@ Do not start multi-day refactors unless it is explicitly scoped and tracked as m
 - Prefer automated checks on every iteration.
 
 ## Logging rules
-- Every run writes `agent/runlog/...`.
-- Every run updates `agent/state.md`.
+- Every run writes `claude_iteration/runlog/...`.
+- Every run updates `claude_iteration/state.md`.
 - If blocked, write a concrete unblock plan.
 
 ## PR etiquette

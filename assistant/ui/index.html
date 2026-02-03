@@ -34,12 +34,23 @@
                 <h2>Status</h2>
                 <div id="status-content">
                     <div class="status-section">
-                        <h3>Current Focus</h3>
-                        <p id="current-focus">Loading...</p>
-                    </div>
-                    <div class="status-section">
-                        <h3>Last Run</h3>
-                        <p id="last-run">Loading...</p>
+                        <h3>Assistant Status</h3>
+                        <div class="assistant-status-grid">
+                            <div class="status-item">
+                                <span class="status-label">Version</span>
+                                <span class="status-value" id="assistant-version">-</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">Uptime</span>
+                                <span class="status-value" id="assistant-uptime">-</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">Messages</span>
+                                <span class="status-value" id="assistant-msg-count">-</span>
+                            </div>
+                        </div>
+                        <p id="current-focus" style="display:none">Loading...</p>
+                        <p id="last-run" style="display:none">Loading...</p>
                     </div>
                     <div class="status-section">
                         <h3>Conversations</h3>

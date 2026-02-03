@@ -299,21 +299,44 @@ async function loadStatus() {
         const response = await fetch('/api/status');
         const data = await response.json();
 
-        if (data.claude_code_focus) {
-            currentFocusEl.textContent = data.claude_code_focus;
-        } else {
-            currentFocusEl.textContent = 'Not available';
+        // Display AI Assistant's own status (not Claude Code status)
+        const versionEl = document.getElementById('assistant-version');
+        const uptimeEl = document.getElementById('assistant-uptime');
+        const msgCountEl = document.getElementById('assistant-msg-count');
+
+        if (versionEl) {
+            versionEl.textContent = data.version || 'Unknown';
         }
 
-        if (data.last_run) {
-            lastRunEl.textContent = `${data.last_run.file}: ${data.last_run.result || 'Unknown'}`;
-        } else {
-            lastRunEl.textContent = 'No recent runs';
+        if (uptimeEl) {
+            const uptime = data.uptime_seconds || 0;
+            uptimeEl.textContent = formatUptime(uptime);
+        }
+
+        if (msgCountEl) {
+            msgCountEl.textContent = data.message_count || 0;
+        }
+
+        // Legacy elements - show status info
+        if (currentFocusEl) {
+            currentFocusEl.textContent = `v${data.version || '?'} - ${data.status || 'unknown'}`;
+        }
+
+        if (lastRunEl) {
+            lastRunEl.textContent = `Uptime: ${formatUptime(data.uptime_seconds || 0)}`;
         }
     } catch (error) {
-        currentFocusEl.textContent = 'Error loading status';
-        lastRunEl.textContent = 'Error loading status';
+        if (currentFocusEl) currentFocusEl.textContent = 'Error loading status';
+        if (lastRunEl) lastRunEl.textContent = 'Error loading status';
     }
+}
+
+function formatUptime(seconds) {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${mins}m`;
 }
 
 async function loadMetrics() {

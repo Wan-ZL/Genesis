@@ -2,7 +2,7 @@
 # Hook: SessionStart (6)
 # Purpose: Initialize session, create daily log file
 
-LOGDIR="/Users/zelin/Startups/Genesis/agent/runlog"
+LOGDIR="/Users/zelin/Startups/Genesis/claude_iteration/runlog"
 TODAY=$(date +%Y-%m-%d)
 SESSION_LOG="$LOGDIR/session-$TODAY.log"
 
