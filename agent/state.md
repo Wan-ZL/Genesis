@@ -43,6 +43,10 @@ GitHub Issue #1: Implement AI Assistant v1
   - Tool calls are detected and executed automatically
   - Results fed back to continue conversation
   - 3 new tests for tool integration (tests/test_chat_api.py)
+- **Tool E2E verified working**:
+  - Fixed get_current_datetime parameter description (was causing LLM to pass invalid format)
+  - Datetime tool tested: returns correct time
+  - Calculate tool tested: computes 15*7=105 correctly
 
 ## Acceptance Criteria Status
 - [x] Simple Web UI (input box + message history + status panel)
@@ -52,7 +56,7 @@ GitHub Issue #1: Implement AI Assistant v1
 - [x] Display current focus and recent runlog status
 
 ## Next Step (single step)
-Test tool integration E2E with running assistant (ask "what time is it?" or "calculate 15 * 7"). Issue #1 remains **BLOCKED** on ANTHROPIC_API_KEY.
+Issue #1 acceptance criteria met (pending ANTHROPIC_API_KEY). Consider adding more useful tools (e.g., web search, file read) or tackle next backlog item.
 
 ## Risks / Notes
 - Without API key, system falls back to OpenAI (still functional)

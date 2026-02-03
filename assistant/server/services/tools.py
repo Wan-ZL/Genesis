@@ -220,13 +220,29 @@ registry = ToolRegistry()
 # Built-in Tools
 # ============================================================
 
-@registry.register
-def get_current_datetime(format: str = "%Y-%m-%d %H:%M:%S") -> str:
-    """
-    Get the current date and time.
-    Useful for answering questions about what time or day it is.
-    """
+def _get_current_datetime_impl(format: str = "%Y-%m-%d %H:%M:%S") -> str:
+    """Implementation for get_current_datetime."""
     return datetime.now().strftime(format)
+
+
+# Register with explicit spec for better LLM understanding
+registry.register_tool(ToolSpec(
+    name="get_current_datetime",
+    description="Get the current date and time. Returns the current local date and time in the specified format. Useful for answering 'what time is it?' or 'what day is today?'",
+    parameters=[
+        ToolParameter(
+            name="format",
+            type="string",
+            description="Python strftime format string. Common formats: '%Y-%m-%d %H:%M:%S' (full datetime), '%H:%M' (time only), '%Y-%m-%d' (date only), '%A' (day name), '%B %d, %Y' (readable date). Default: '%Y-%m-%d %H:%M:%S'",
+            required=False,
+            default="%Y-%m-%d %H:%M:%S",
+        )
+    ],
+    handler=_get_current_datetime_impl,
+))
+
+# Expose implementation for direct calls and testing
+get_current_datetime = _get_current_datetime_impl
 
 
 @registry.register
