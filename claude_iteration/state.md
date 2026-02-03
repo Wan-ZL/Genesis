@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #4 CLOSED.** All acceptance criteria complete. Next priority: Issue #2.
+**Issue #2 IN PROGRESS.** Permission escalation and tool discovery. First increment complete.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -137,14 +137,21 @@
   - Config: `RECENT_MESSAGES_VERBATIM=20`, `MESSAGES_PER_SUMMARY_BATCH=10`
   - Original messages preserved in DB (summaries used for LLM context only)
   - 8 new tests for summarization functionality
+- **Issue #2 Progress - Permission system + CapabilityScanner**:
+  - Created `assistant/core/` module
+  - `permissions.py`: PermissionLevel enum, require_permission decorator, can_access helper
+  - `capability_scanner.py`: Scans for CLI tools, services, system capabilities
+  - Discovers 23+ common tools (git, docker, python, node, etc.)
+  - Caches results in `assistant/memory/capabilities.json`
+  - 35 new tests (208 total)
 
 ## Next Step (single step)
-Start Issue #2: Implement proactive permission escalation and tool discovery.
+Continue Issue #2: Integrate capability scanner with server startup and add permission escalation prompt system.
 
 ## Risks / Notes
-- Issue #4 CLOSED - all features complete
-- Issue #2 (Permission escalation) involves security-sensitive code - handle carefully
-- 173 tests passing, CI workflow active
+- Issue #2 IN PROGRESS - 2/6 acceptance criteria complete (discovery + storage)
+- Permission escalation involves security-sensitive code - handle carefully
+- 208 tests passing, CI workflow active
 
 ## How to test quickly
 ```bash
@@ -164,4 +171,10 @@ python3 -m server.main
 
 # Run tests
 python3 -m pytest tests/ -v
+
+# Test capability scanner
+python3 -c "from core.capability_scanner import CapabilityScanner; s=CapabilityScanner(); s.scan_all(); print(s.get_summary())"
+
+# Check discovered capabilities
+cat memory/capabilities.json | jq '.[] | select(.available==true) | .name'
 ```

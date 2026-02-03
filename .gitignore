@@ -32,5 +32,6 @@ env/
 *.swp
 *.swo
 
-# Assistant uploaded files
+# Assistant memory (runtime data)
 assistant/memory/files/
+assistant/memory/capabilities.json
