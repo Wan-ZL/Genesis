@@ -2,7 +2,7 @@
 # Hook: SessionEnd (8)
 # Purpose: Commit changes to git, push to remote, then trigger next iteration
 
-GENESIS_DIR="/Users/zelin/Startups/Genesis"
+GENESIS_DIR="/Volumes/Storage/Server/Startup/Genesis"
 LOOP_FLAG_FILE="$GENESIS_DIR/hooks/loop_claude_code.txt"
 RUNLOG_DIR="$GENESIS_DIR/claude_iteration/runlog"
 

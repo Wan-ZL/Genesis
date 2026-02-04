@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /Users/zelin/Startups/Genesis/hooks/8-SessionEnd-trigger-next.sh"
+            "command": "bash /Volumes/Storage/Server/Startup/Genesis/hooks/8-SessionEnd-trigger-next.sh"
           }
         ]
       }

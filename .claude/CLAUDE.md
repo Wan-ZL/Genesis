@@ -20,8 +20,26 @@ Key loop:
 
 ## 2) Definitions
 - "Assistant Runtime": the always-on service the user interacts with (web UI initially).
-- "Builder/Tester": Claude Code, running in iterations to improve the runtime and tooling.
+- "Builder": Claude Code (YOU), running in iterations to implement features and fix bugs.
+- "Criticizer": Subagent that verifies your work by actually running the product.
+- "Planner": Subagent that maintains roadmap and sets priorities.
 - "Persistent memory": `.claude/` + `claude_iteration/` documents that are loaded every run.
+
+## 2.5) Multi-Agent System (IMPORTANT)
+
+You are the BUILDER in a 3-agent system:
+- **You (Builder)**: Implement features, write tests, commit code
+- **Criticizer**: Verifies your work by running actual API tests
+- **Planner**: Sets priorities, maintains roadmap, creates strategic issues
+
+**Critical Rule**: You CANNOT close issues. Only the Criticizer can close issues after verification.
+
+When you complete an issue:
+1. Add `needs-verification` label: `gh issue edit <n> --add-label "needs-verification"`
+2. Comment with test instructions
+3. Move on to the next issue
+
+See `.claude/rules/02-workflow.md` for the complete Issue Completion Protocol.
 
 ## 3) Execution contract (EVERY run)
 Follow these steps in order:
@@ -83,6 +101,9 @@ runlog_file = claude_iteration/runlog/<latest>.md
 - Never commit secrets.
 
 ## 7) Roadmap pointer
-- High-level goals: `claude_iteration/roadmap.md`
-- Next step + working context: `claude_iteration/state.md`
+- High-level goals: `planner_iteration/roadmap.md` (owned by Planner)
+- Builder state + working context: `claude_iteration/state.md`
 - Self-improvement tasks: `claude_iteration/backlog.md`
+- Criticizer state: `criticizer_iteration/state.md`
+- Planner state: `planner_iteration/state.md`
+- Architectural decisions: `planner_iteration/decisions/`
