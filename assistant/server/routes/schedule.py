@@ -1,6 +1,6 @@
 """Schedule API endpoints for task automation."""
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
 
@@ -62,8 +62,8 @@ class CreateTaskRequest(BaseModel):
         description="Optional metadata"
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "examples": [
                 {
                     "name": "Morning Briefing",
@@ -97,6 +97,7 @@ class CreateTaskRequest(BaseModel):
                 }
             ]
         }
+    )
 
 
 class UpdateTaskRequest(BaseModel):

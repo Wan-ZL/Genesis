@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #25 Complete - Needs Verification.** Repository settings not exposed in settings API (bug fix).
+**Issue #22 Complete - Needs Verification.** Pydantic ConfigDict migration (tech debt).
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -330,15 +330,20 @@
   - 77 new tests in `test_repository.py`
   - Documentation: `assistant/docs/REPOSITORY_ANALYSIS.md`
   - 821 tests total
+- **Issue #22 COMPLETE - Pydantic ConfigDict migration (needs verification)**:
+  - Migrated `CreateTaskRequest` from deprecated `class Config` to `model_config = ConfigDict(...)`
+  - Added `ConfigDict` import from pydantic
+  - No more `PydanticDeprecatedSince20` warnings
+  - All 51 scheduler tests pass
 
 ## Next Step (single step)
-Await Criticizer verification of Issues #24 and #25. Remaining open issue: #22 (Pydantic ConfigDict migration - priority-low).
+Await Criticizer verification of Issue #22. No other open issues remain.
 
 ## Risks / Notes
-- Issue #25 fix complete, awaiting verification
-- Issue #24 implementation complete, awaiting verification
-- 830 tests passing (11 new for settings API)
-- Repository tools require LOCAL permission level
+- Issue #22 implementation complete, awaiting verification
+- Issues #24 and #25 verified and closed by Criticizer
+- 830 tests passing (no change in test count)
+- No other `class Config` patterns found in codebase
 - Encryption key salt must be backed up for data recovery
 
 ## How to test quickly
@@ -348,29 +353,24 @@ cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 # Run all tests
 python3 -m pytest tests/ -v
 
-# Test repository analysis specifically (Issue #24)
-python3 -m pytest tests/test_repository.py -v
-
-# Check repository tools are registered
-ASSISTANT_PERMISSION_LEVEL=1 python3 -c "
-from server.services.tools import registry
-for name in ['read_file', 'list_files', 'search_code', 'get_file_info']:
-    tool = registry.get_tool(name)
-    print(f'{name}: {tool.required_permission.name if tool else \"NOT FOUND\"}')
+# Test Pydantic ConfigDict migration (Issue #22)
+python3 -W error::DeprecationWarning -c "
+from server.routes.schedule import CreateTaskRequest
+req = CreateTaskRequest(
+    name='Test',
+    task_type='one_time',
+    schedule='2026-12-01T10:00:00',
+    action='log',
+    action_params={}
+)
+print('model_config present:', hasattr(CreateTaskRequest, 'model_config'))
+print('Instance created:', req.name)
 "
 
-# Test read_file
-ASSISTANT_PERMISSION_LEVEL=1 python3 -c "
-from server.services.repository import get_repository_service
-svc = get_repository_service()
-result = svc.read_file('config.py')
-print('Read config.py:', 'OK' if result['success'] else result['error'])
-"
+# Run scheduler tests
+python3 -m pytest tests/test_scheduler.py -v
 
-# Test CLI logs commands
-python3 -m cli logs list              # List log files
-python3 -m cli logs tail --lines 10   # Show last 10 lines of assistant.log
-
-# Test CLI resources commands
-python3 -m cli resources              # Show resource usage
+# Verify no class Config patterns remain
+grep -r "class Config:" server --include="*.py"
+# Should return no results
 ```
