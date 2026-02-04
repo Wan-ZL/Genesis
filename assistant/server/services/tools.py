@@ -550,3 +550,528 @@ registry.register_tool(ToolSpec(
 
 # Expose for direct calls (bypasses permission check)
 run_shell_command = _run_shell_command_impl
+
+
+# ============================================================
+# Calendar Tools
+# ============================================================
+
+def _list_events_impl(
+    start_date: str = "",
+    end_date: str = "",
+    calendar_name: str = ""
+) -> str:
+    """Implementation for list_events tool."""
+    import asyncio
+    from .calendar import get_calendar_service, CALDAV_AVAILABLE
+
+    if not CALDAV_AVAILABLE:
+        return "Error: Calendar functionality not available. Install caldav: pip install caldav"
+
+    service = get_calendar_service()
+    if not service.is_configured:
+        return "Error: Calendar not configured. Set calendar credentials in settings."
+
+    try:
+        # Parse dates
+        start = None
+        end = None
+        if start_date:
+            start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            if start.tzinfo:
+                start = start.replace(tzinfo=None)
+        if end_date:
+            end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            if end.tzinfo:
+                end = end.replace(tzinfo=None)
+
+        # Run async function
+        loop = asyncio.new_event_loop()
+        try:
+            events = loop.run_until_complete(
+                service.list_events(
+                    start=start,
+                    end=end,
+                    calendar_name=calendar_name or None
+                )
+            )
+        finally:
+            loop.close()
+
+        if not events:
+            return "No events found in the specified date range."
+
+        # Format output
+        lines = [f"Found {len(events)} event(s):\n"]
+        for event in events:
+            lines.append(f"- {event.title}")
+            lines.append(f"  Start: {event.start.strftime('%Y-%m-%d %H:%M')}")
+            lines.append(f"  End: {event.end.strftime('%Y-%m-%d %H:%M')}")
+            if event.location:
+                lines.append(f"  Location: {event.location}")
+            if event.calendar_name:
+                lines.append(f"  Calendar: {event.calendar_name}")
+            lines.append(f"  ID: {event.event_id}")
+            lines.append("")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"list_events error: {e}")
+        return f"Error listing events: {str(e)}"
+
+
+# Register list_events tool
+registry.register_tool(ToolSpec(
+    name="list_events",
+    description="List calendar events in a date range. Returns upcoming events from the user's calendar. Useful for checking schedule, finding appointments, or reviewing upcoming meetings.",
+    parameters=[
+        ToolParameter(
+            name="start_date",
+            type="string",
+            description="Start date in ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). Default: now",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="end_date",
+            type="string",
+            description="End date in ISO format. Default: 7 days from start",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="calendar_name",
+            type="string",
+            description="Specific calendar name to search. Default: all calendars",
+            required=False,
+            default="",
+        ),
+    ],
+    handler=_list_events_impl,
+    required_permission=PermissionLevel.SYSTEM,  # Calendar access is sensitive
+))
+
+
+def _create_event_impl(
+    title: str,
+    start: str,
+    end: str,
+    location: str = "",
+    notes: str = "",
+    calendar_name: str = ""
+) -> str:
+    """Implementation for create_event tool."""
+    import asyncio
+    from .calendar import get_calendar_service, CALDAV_AVAILABLE
+
+    if not CALDAV_AVAILABLE:
+        return "Error: Calendar functionality not available. Install caldav: pip install caldav"
+
+    service = get_calendar_service()
+    if not service.is_configured:
+        return "Error: Calendar not configured. Set calendar credentials in settings."
+
+    try:
+        # Parse dates
+        start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
+        end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
+
+        # Remove timezone info for consistency
+        if start_dt.tzinfo:
+            start_dt = start_dt.replace(tzinfo=None)
+        if end_dt.tzinfo:
+            end_dt = end_dt.replace(tzinfo=None)
+
+        # Run async function
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(
+                service.create_event(
+                    title=title,
+                    start=start_dt,
+                    end=end_dt,
+                    location=location or None,
+                    notes=notes or None,
+                    calendar_name=calendar_name or None
+                )
+            )
+        finally:
+            loop.close()
+
+        if result["success"]:
+            response = f"Event created successfully!\nTitle: {title}\nStart: {start_dt}\nEnd: {end_dt}\nID: {result['event_id']}"
+            if result.get("conflicts"):
+                response += f"\n\nWarning: Conflicts with {len(result['conflicts'])} existing event(s):"
+                for conflict in result["conflicts"]:
+                    response += f"\n- {conflict['title']} ({conflict['start']} - {conflict['end']})"
+            return response
+        else:
+            return f"Error creating event: {result.get('error')}"
+
+    except ValueError as e:
+        return f"Error: Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS). {str(e)}"
+    except Exception as e:
+        logger.error(f"create_event error: {e}")
+        return f"Error creating event: {str(e)}"
+
+
+# Register create_event tool
+registry.register_tool(ToolSpec(
+    name="create_event",
+    description="Create a new calendar event. Use this to schedule meetings, appointments, or reminders on the user's calendar.",
+    parameters=[
+        ToolParameter(
+            name="title",
+            type="string",
+            description="Event title/summary",
+            required=True,
+        ),
+        ToolParameter(
+            name="start",
+            type="string",
+            description="Event start time in ISO format (e.g., 2026-02-05T14:00:00)",
+            required=True,
+        ),
+        ToolParameter(
+            name="end",
+            type="string",
+            description="Event end time in ISO format (e.g., 2026-02-05T15:00:00)",
+            required=True,
+        ),
+        ToolParameter(
+            name="location",
+            type="string",
+            description="Event location (optional)",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="notes",
+            type="string",
+            description="Event description/notes (optional)",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="calendar_name",
+            type="string",
+            description="Calendar to add event to (optional, uses default)",
+            required=False,
+            default="",
+        ),
+    ],
+    handler=_create_event_impl,
+    required_permission=PermissionLevel.SYSTEM,
+))
+
+
+def _update_event_impl(
+    event_id: str,
+    title: str = "",
+    start: str = "",
+    end: str = "",
+    location: str = "",
+    notes: str = "",
+    calendar_name: str = ""
+) -> str:
+    """Implementation for update_event tool."""
+    import asyncio
+    from .calendar import get_calendar_service, CALDAV_AVAILABLE
+
+    if not CALDAV_AVAILABLE:
+        return "Error: Calendar functionality not available. Install caldav: pip install caldav"
+
+    service = get_calendar_service()
+    if not service.is_configured:
+        return "Error: Calendar not configured. Set calendar credentials in settings."
+
+    try:
+        # Parse optional dates
+        start_dt = None
+        end_dt = None
+        if start:
+            start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
+            if start_dt.tzinfo:
+                start_dt = start_dt.replace(tzinfo=None)
+        if end:
+            end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
+            if end_dt.tzinfo:
+                end_dt = end_dt.replace(tzinfo=None)
+
+        # Run async function
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(
+                service.update_event(
+                    event_id=event_id,
+                    title=title or None,
+                    start=start_dt,
+                    end=end_dt,
+                    location=location or None,
+                    notes=notes or None,
+                    calendar_name=calendar_name or None
+                )
+            )
+        finally:
+            loop.close()
+
+        if result["success"]:
+            response = f"Event updated successfully! ID: {event_id}"
+            if result.get("conflicts"):
+                response += f"\n\nWarning: Now conflicts with {len(result['conflicts'])} event(s):"
+                for conflict in result["conflicts"]:
+                    response += f"\n- {conflict['title']} ({conflict['start']} - {conflict['end']})"
+            return response
+        else:
+            return f"Error updating event: {result.get('error')}"
+
+    except ValueError as e:
+        return f"Error: Invalid date format. Use ISO format. {str(e)}"
+    except Exception as e:
+        logger.error(f"update_event error: {e}")
+        return f"Error updating event: {str(e)}"
+
+
+# Register update_event tool
+registry.register_tool(ToolSpec(
+    name="update_event",
+    description="Update an existing calendar event. Change the title, time, location, or notes of an event.",
+    parameters=[
+        ToolParameter(
+            name="event_id",
+            type="string",
+            description="ID of the event to update (from list_events)",
+            required=True,
+        ),
+        ToolParameter(
+            name="title",
+            type="string",
+            description="New event title (optional)",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="start",
+            type="string",
+            description="New start time in ISO format (optional)",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="end",
+            type="string",
+            description="New end time in ISO format (optional)",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="location",
+            type="string",
+            description="New location (optional)",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="notes",
+            type="string",
+            description="New notes/description (optional)",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="calendar_name",
+            type="string",
+            description="Calendar containing the event (optional)",
+            required=False,
+            default="",
+        ),
+    ],
+    handler=_update_event_impl,
+    required_permission=PermissionLevel.SYSTEM,
+))
+
+
+def _delete_event_impl(event_id: str, calendar_name: str = "") -> str:
+    """Implementation for delete_event tool."""
+    import asyncio
+    from .calendar import get_calendar_service, CALDAV_AVAILABLE
+
+    if not CALDAV_AVAILABLE:
+        return "Error: Calendar functionality not available. Install caldav: pip install caldav"
+
+    service = get_calendar_service()
+    if not service.is_configured:
+        return "Error: Calendar not configured. Set calendar credentials in settings."
+
+    try:
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(
+                service.delete_event(
+                    event_id=event_id,
+                    calendar_name=calendar_name or None
+                )
+            )
+        finally:
+            loop.close()
+
+        if result["success"]:
+            return f"Event deleted successfully. ID: {event_id}"
+        else:
+            return f"Error deleting event: {result.get('error')}"
+
+    except Exception as e:
+        logger.error(f"delete_event error: {e}")
+        return f"Error deleting event: {str(e)}"
+
+
+# Register delete_event tool
+registry.register_tool(ToolSpec(
+    name="delete_event",
+    description="Delete a calendar event. Permanently removes an event from the calendar.",
+    parameters=[
+        ToolParameter(
+            name="event_id",
+            type="string",
+            description="ID of the event to delete (from list_events)",
+            required=True,
+        ),
+        ToolParameter(
+            name="calendar_name",
+            type="string",
+            description="Calendar containing the event (optional)",
+            required=False,
+            default="",
+        ),
+    ],
+    handler=_delete_event_impl,
+    required_permission=PermissionLevel.SYSTEM,
+))
+
+
+def _find_free_time_impl(
+    duration_minutes: int,
+    start_date: str = "",
+    end_date: str = "",
+    calendar_name: str = "",
+    work_hours_start: int = 9,
+    work_hours_end: int = 17,
+    include_weekends: bool = False
+) -> str:
+    """Implementation for find_free_time tool."""
+    import asyncio
+    from .calendar import get_calendar_service, CALDAV_AVAILABLE
+
+    if not CALDAV_AVAILABLE:
+        return "Error: Calendar functionality not available. Install caldav: pip install caldav"
+
+    service = get_calendar_service()
+    if not service.is_configured:
+        return "Error: Calendar not configured. Set calendar credentials in settings."
+
+    try:
+        # Parse dates
+        start = None
+        end = None
+        if start_date:
+            start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            if start.tzinfo:
+                start = start.replace(tzinfo=None)
+        if end_date:
+            end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            if end.tzinfo:
+                end = end.replace(tzinfo=None)
+
+        # Run async function
+        loop = asyncio.new_event_loop()
+        try:
+            slots = loop.run_until_complete(
+                service.find_free_time(
+                    duration_minutes=duration_minutes,
+                    start=start,
+                    end=end,
+                    calendar_name=calendar_name or None,
+                    work_hours_start=work_hours_start,
+                    work_hours_end=work_hours_end,
+                    include_weekends=include_weekends
+                )
+            )
+        finally:
+            loop.close()
+
+        if not slots:
+            return f"No free slots of {duration_minutes} minutes found in the specified range."
+
+        # Format output
+        lines = [f"Found {len(slots)} free time slot(s) of at least {duration_minutes} minutes:\n"]
+        for i, slot in enumerate(slots, 1):
+            day_name = slot.start.strftime('%A')
+            date_str = slot.start.strftime('%Y-%m-%d')
+            time_str = f"{slot.start.strftime('%H:%M')} - {slot.end.strftime('%H:%M')}"
+            lines.append(f"{i}. {day_name}, {date_str}: {time_str}")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"find_free_time error: {e}")
+        return f"Error finding free time: {str(e)}"
+
+
+# Register find_free_time tool
+registry.register_tool(ToolSpec(
+    name="find_free_time",
+    description="Find available time slots in the calendar. Useful for scheduling meetings by finding when the user is free.",
+    parameters=[
+        ToolParameter(
+            name="duration_minutes",
+            type="integer",
+            description="Minimum duration needed in minutes (e.g., 30, 60)",
+            required=True,
+        ),
+        ToolParameter(
+            name="start_date",
+            type="string",
+            description="Start of search range in ISO format. Default: now",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="end_date",
+            type="string",
+            description="End of search range in ISO format. Default: 7 days from start",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="calendar_name",
+            type="string",
+            description="Calendar to check (optional, checks all)",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="work_hours_start",
+            type="integer",
+            description="Start of work hours (0-23). Default: 9",
+            required=False,
+            default=9,
+        ),
+        ToolParameter(
+            name="work_hours_end",
+            type="integer",
+            description="End of work hours (0-23). Default: 17",
+            required=False,
+            default=17,
+        ),
+        ToolParameter(
+            name="include_weekends",
+            type="boolean",
+            description="Include Saturday/Sunday in search. Default: false",
+            required=False,
+            default=False,
+        ),
+    ],
+    handler=_find_free_time_impl,
+    required_permission=PermissionLevel.SYSTEM,
+))

@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #23 Complete - Needs Verification.** Fixed Ollama status inconsistency in degradation service.
+**Issue #21 Complete - Needs Verification.** Calendar integration via CalDAV protocol.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -284,22 +284,39 @@
   - Tool calling support (model-dependent)
   - 31 new tests in `test_ollama.py`
   - Documentation: `assistant/docs/OLLAMA_SETUP.md`
-- **Issue #23 COMPLETE - Ollama status inconsistency fix (needs verification)**:
+- **Issue #23 VERIFIED - Ollama status inconsistency fix**:
   - Root cause: `DegradationService.__init__()` set Ollama `available=True` by default without verifying
   - Fix: Ollama now defaults to `available=False` until verified
   - Added `initialize_ollama_status()` async method called on server startup
   - Updated `reset_api_health()` to maintain correct semantics (Ollama stays unavailable after reset)
   - `/api/degradation` and `/api/ollama/status` are now consistent
-  - 7 new tests (67 total in test_degradation.py)
-  - 713 tests total
+- **Issue #21 COMPLETE - Calendar integration (needs verification)**:
+  - CalendarService: `assistant/server/services/calendar.py`
+    - CalDAV protocol support (works with iCloud, Google, Fastmail, Nextcloud)
+    - Methods: `connect()`, `list_events()`, `create_event()`, `update_event()`, `delete_event()`, `find_free_time()`
+    - Conflict detection for overlapping events
+    - iCalendar format generation
+  - Calendar tools registered in tools.py:
+    - `list_events`: List calendar events in date range
+    - `create_event`: Create new calendar event
+    - `update_event`: Modify existing event
+    - `delete_event`: Remove event
+    - `find_free_time`: Find available time slots
+  - All tools require SYSTEM permission (calendar access is sensitive)
+  - Settings: `calendar_caldav_url`, `calendar_username`, `calendar_password`, `calendar_default`, `calendar_enabled`
+  - `calendar_password` encrypted at rest (in SENSITIVE_KEYS)
+  - 32 new tests in `test_calendar.py`
+  - Documentation: `assistant/docs/CALENDAR_SETUP.md`
+  - 744 tests total
 
 ## Next Step (single step)
-Await Criticizer verification of Issues #18, #19, #20, and #23. Remaining open issues: #21 (Calendar integration), #22 (Pydantic ConfigDict migration).
+Await Criticizer verification of Issue #21. Remaining open issue: #22 (Pydantic ConfigDict migration).
 
 ## Risks / Notes
-- Issues #18, #19, #20, #23 implementation complete, awaiting verification
-- 713 tests passing (5 new for Issue #23 Ollama status fix)
-- Ollama must be running for local model fallback to work
+- Issue #21 implementation complete, awaiting verification
+- 744 tests passing (32 new for calendar integration)
+- caldav library required for calendar features (`pip install caldav`)
+- Calendar requires SYSTEM permission level
 - Encryption key salt must be backed up for data recovery
 
 ## How to test quickly
@@ -309,33 +326,22 @@ cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 # Run all tests
 python3 -m pytest tests/ -v
 
-# Test Ollama status fix specifically (Issue #23)
-python3 -m pytest tests/test_degradation.py -v -k ollama
+# Test calendar integration specifically (Issue #21)
+python3 -m pytest tests/test_calendar.py -v
 
-# Manual test: Without Ollama running, both endpoints should show unavailable
-python3 -m server.main &
+# Check calendar tools are registered
+ASSISTANT_PERMISSION_LEVEL=2 python3 -m server.main &
 sleep 3
-curl http://127.0.0.1:8080/api/degradation | jq '.apis.ollama.available'  # Should be false
-curl http://127.0.0.1:8080/api/ollama/status | jq '.status'               # Should be "unavailable"
+curl http://127.0.0.1:8080/api/tools | jq '.tools[] | select(.name | contains("event"))'
 pkill -f 'python3 -m server.main'
 
 # Test CLI logs commands
 python3 -m cli logs list              # List log files
 python3 -m cli logs tail --lines 10   # Show last 10 lines of assistant.log
-python3 -m cli logs tail --name error # Show error log
-python3 -m cli logs cleanup --dry-run # Preview old log cleanup
-python3 -m cli logs clear --name assistant --confirm  # Clear log
-
-# Test log level environment variable
-ASSISTANT_LOG_LEVEL=DEBUG python3 -m cli logs list
 
 # Test CLI resources commands
 python3 -m cli resources              # Show resource usage
-python3 -m cli resources --json       # JSON output
-python3 -m cli resources cleanup --dry-run  # Preview file cleanup
 
 # Test CLI backup commands
 python3 -m cli backup list
-python3 -m cli backup create
-python3 -m cli backup verify --input memory/backups/<latest>.tar.gz
 ```

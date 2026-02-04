@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 # Keys that contain sensitive data and should be encrypted
-SENSITIVE_KEYS = {"openai_api_key", "anthropic_api_key"}
+SENSITIVE_KEYS = {"openai_api_key", "anthropic_api_key", "calendar_password"}
 
 
 class SettingsService:
@@ -38,6 +38,12 @@ class SettingsService:
         "ollama_model": "llama3.2:3b",  # Default local model
         "ollama_enabled": True,  # Enable Ollama fallback by default
         "local_only_mode": False,  # Force local-only (no cloud APIs)
+        # Calendar settings (CalDAV)
+        "calendar_caldav_url": "",  # e.g., https://caldav.icloud.com
+        "calendar_username": "",
+        "calendar_password": "",  # App-specific password (encrypted)
+        "calendar_default": "",  # Default calendar name
+        "calendar_enabled": False,  # Calendar integration enabled
     }
 
     # Available models
@@ -244,6 +250,13 @@ class SettingsService:
             "ollama_model": settings.get("ollama_model", "llama3.2:3b"),
             "ollama_enabled": self._parse_bool(settings.get("ollama_enabled", True)),
             "local_only_mode": self._parse_bool(settings.get("local_only_mode", False)),
+            # Calendar settings
+            "calendar_caldav_url": settings.get("calendar_caldav_url", ""),
+            "calendar_username": settings.get("calendar_username", ""),
+            "calendar_password_masked": self.mask_api_key(settings.get("calendar_password", "")),
+            "calendar_password_set": bool(settings.get("calendar_password")),
+            "calendar_default": settings.get("calendar_default", ""),
+            "calendar_enabled": self._parse_bool(settings.get("calendar_enabled", False)),
         }
 
     def _parse_bool(self, value) -> bool:
