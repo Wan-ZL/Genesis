@@ -260,6 +260,9 @@ class SettingsService:
             "calendar_password_set": bool(settings.get("calendar_password")),
             "calendar_default": settings.get("calendar_default", ""),
             "calendar_enabled": self._parse_bool(settings.get("calendar_enabled", False)),
+            # Repository analysis settings
+            "repository_paths": settings.get("repository_paths", ""),
+            "repository_max_file_size": int(settings.get("repository_max_file_size", 1048576)),
         }
 
     def _parse_bool(self, value) -> bool:

@@ -31,6 +31,9 @@ class SettingsUpdate(BaseModel):
     ollama_model: Optional[str] = None
     ollama_enabled: Optional[bool] = None
     local_only_mode: Optional[bool] = None
+    # Repository analysis settings
+    repository_paths: Optional[str] = None
+    repository_max_file_size: Optional[int] = None
 
 
 @router.get("/settings")
@@ -84,6 +87,23 @@ async def update_settings(update: SettingsUpdate):
         # Update degradation service immediately
         degradation = get_degradation_service()
         degradation.set_local_only_mode(update.local_only_mode)
+
+    # Repository analysis settings
+    if update.repository_paths is not None:
+        updates["repository_paths"] = update.repository_paths
+
+    if update.repository_max_file_size is not None:
+        if update.repository_max_file_size < 1024:
+            raise HTTPException(
+                status_code=400,
+                detail="repository_max_file_size must be at least 1024 bytes"
+            )
+        if update.repository_max_file_size > 100 * 1024 * 1024:
+            raise HTTPException(
+                status_code=400,
+                detail="repository_max_file_size cannot exceed 100MB"
+            )
+        updates["repository_max_file_size"] = update.repository_max_file_size
 
     if updates:
         await settings_service.set_multiple(updates)

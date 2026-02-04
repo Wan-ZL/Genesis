@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #24 Complete - Needs Verification.** Code repository analysis tools.
+**Issue #25 Complete - Needs Verification.** Repository settings not exposed in settings API (bug fix).
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -307,6 +307,11 @@
   - `calendar_password` encrypted at rest (in SENSITIVE_KEYS)
   - 32 new tests in `test_calendar.py`
   - Documentation: `assistant/docs/CALENDAR_SETUP.md`
+- **Issue #25 COMPLETE - Repository settings API fix (needs verification)**:
+  - Fixed `get_display_settings()` to include `repository_paths` and `repository_max_file_size`
+  - Added fields to `SettingsUpdate` model for POST endpoint
+  - Added validation (1KB min, 100MB max for file size)
+  - 11 new tests (830 total)
 - **Issue #24 COMPLETE - Code repository analysis tools (needs verification)**:
   - RepositoryService: `assistant/server/services/repository.py`
     - `read_file()`: Read file contents with line ranges and size limits
@@ -327,11 +332,12 @@
   - 821 tests total
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #24. Remaining open issue: #22 (Pydantic ConfigDict migration).
+Await Criticizer verification of Issues #24 and #25. Remaining open issue: #22 (Pydantic ConfigDict migration - priority-low).
 
 ## Risks / Notes
+- Issue #25 fix complete, awaiting verification
 - Issue #24 implementation complete, awaiting verification
-- 821 tests passing (77 new for repository analysis)
+- 830 tests passing (11 new for settings API)
 - Repository tools require LOCAL permission level
 - Encryption key salt must be backed up for data recovery
 

@@ -98,6 +98,39 @@ class TestSettingsService:
         assert "gpt-4o" in model_ids
         assert "claude-sonnet-4-20250514" in model_ids
 
+    @pytest.mark.asyncio
+    async def test_get_display_settings_includes_repository_settings(self, settings_service):
+        """Test that display settings includes repository settings."""
+        display = await settings_service.get_display_settings()
+
+        assert "repository_paths" in display
+        assert "repository_max_file_size" in display
+        # Check defaults
+        assert display["repository_paths"] == ""
+        assert display["repository_max_file_size"] == 1048576  # 1MB default
+
+    @pytest.mark.asyncio
+    async def test_set_and_get_repository_paths(self, settings_service):
+        """Test setting and getting repository_paths."""
+        await settings_service.set("repository_paths", "/path/one:/path/two")
+        value = await settings_service.get("repository_paths")
+        assert value == "/path/one:/path/two"
+
+    @pytest.mark.asyncio
+    async def test_set_and_get_repository_max_file_size(self, settings_service):
+        """Test setting and getting repository_max_file_size."""
+        await settings_service.set("repository_max_file_size", "2097152")
+        value = await settings_service.get("repository_max_file_size")
+        assert value == "2097152"
+
+    @pytest.mark.asyncio
+    async def test_display_settings_repository_max_file_size_as_int(self, settings_service):
+        """Test that display settings returns repository_max_file_size as integer."""
+        await settings_service.set("repository_max_file_size", "5242880")
+        display = await settings_service.get_display_settings()
+        assert display["repository_max_file_size"] == 5242880
+        assert isinstance(display["repository_max_file_size"], int)
+
 
 class TestSettingsAPI:
     """Tests for settings API endpoints."""
@@ -235,6 +268,87 @@ class TestSettingsAPI:
         assert "model" in data["updated_keys"]
         assert "permission_level" in data["updated_keys"]
         assert "openai_api_key" in data["updated_keys"]
+
+    @pytest.mark.asyncio
+    async def test_get_settings_includes_repository_settings(self, app):
+        """Test GET /api/settings includes repository settings."""
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test"
+        ) as client:
+            response = await client.get("/api/settings")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "repository_paths" in data
+        assert "repository_max_file_size" in data
+        # Check defaults
+        assert data["repository_paths"] == ""
+        assert data["repository_max_file_size"] == 1048576
+
+    @pytest.mark.asyncio
+    async def test_update_repository_paths(self, app):
+        """Test updating repository_paths."""
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/settings",
+                json={"repository_paths": "/home/user/projects:/opt/code"}
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "repository_paths" in data["updated_keys"]
+        assert data["settings"]["repository_paths"] == "/home/user/projects:/opt/code"
+
+    @pytest.mark.asyncio
+    async def test_update_repository_max_file_size(self, app):
+        """Test updating repository_max_file_size."""
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/settings",
+                json={"repository_max_file_size": 5242880}  # 5MB
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "repository_max_file_size" in data["updated_keys"]
+        assert data["settings"]["repository_max_file_size"] == 5242880
+
+    @pytest.mark.asyncio
+    async def test_update_repository_max_file_size_too_small(self, app):
+        """Test that repository_max_file_size below 1KB is rejected."""
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/settings",
+                json={"repository_max_file_size": 512}  # Less than 1KB
+            )
+
+        assert response.status_code == 400
+        assert "at least 1024 bytes" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_update_repository_max_file_size_too_large(self, app):
+        """Test that repository_max_file_size above 100MB is rejected."""
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/settings",
+                json={"repository_max_file_size": 200 * 1024 * 1024}  # 200MB
+            )
+
+        assert response.status_code == 400
+        assert "cannot exceed 100MB" in response.json()["detail"]
 
 
 class TestSettingsStartup:
