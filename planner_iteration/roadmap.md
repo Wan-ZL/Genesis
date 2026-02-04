@@ -39,21 +39,30 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 
 **Outcome**: Fully functional AI assistant with 286 passing tests.
 
-## Phase 3: Self-Improvement Loop - CURRENT
+## Phase 3: Self-Improvement Loop - CURRENT (40%)
 
 **Goal**: Enable the system to improve itself reliably.
 
 - [x] Multi-agent architecture (Builder/Criticizer/Planner)
+- [x] Issue-driven workflow with labels (8 labels created)
+- [x] Architectural decision records (ADRs) - ADR-001 exists
 - [ ] Automated verification gate (Criticizer must approve)
-- [ ] Issue-driven workflow with labels
-- [ ] Performance regression detection
+- [ ] Performance regression detection (Issue #7)
 - [ ] Auto-backlog from bug patterns
-- [ ] Architectural decision records (ADRs)
+- [ ] Streaming responses for better UX (Issue #6)
 
 **Success Criteria**:
 - Builder cannot close issues (only Criticizer can)
 - All changes verified by actual API testing
 - Recurring bugs trigger tech-debt issues
+
+**Active Issues**:
+| Issue | Title | Priority |
+|-------|-------|----------|
+| #6 | Streaming response support | High |
+| #7 | Performance benchmarks | Medium |
+| #8 | Conversation export/import | Low |
+| #9 | Fix path inconsistency | Low |
 
 ## Phase 4: Production Hardening
 
@@ -83,8 +92,10 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 | M2: Web UI + conversation | Week 2 | COMPLETE |
 | M3: Multimodal input | Week 3 | COMPLETE |
 | M4: Multi-agent system | Week 4 | COMPLETE |
-| M5: Self-verification cycle | Week 5 | IN PROGRESS |
-| M6: Production hardening | Week 6 | NOT STARTED |
+| M5: Self-verification cycle | Week 5 | IN PROGRESS (40%) |
+| M5.1: Streaming responses | Week 5-6 | IN PROGRESS (#6) |
+| M5.2: Performance benchmarks | Week 6 | NOT STARTED (#7) |
+| M6: Production hardening | Week 7 | NOT STARTED |
 
 ## Principles
 
