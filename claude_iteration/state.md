@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #17 Complete - Needs Verification.** API key encryption at rest implemented.
+**Issue #19 Complete - Needs Verification.** Critical bug fixed: encrypted API keys no longer leak to external APIs.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -259,14 +259,24 @@
     - `get_encryption_status()` method
   - CLI: `python -m cli settings encrypt|status`
   - 40 new tests (30 encryption + 10 settings encryption)
-  - 667 tests total
+- **Issue #19 COMPLETE - Encrypted API keys leak prevention (needs verification)**:
+  - Root cause: `_decrypt_if_sensitive()` returned raw encrypted value when encryption unavailable
+  - Three-layer protection implemented:
+    1. Settings Service: Returns empty on decryption failure (not encrypted value)
+    2. Runtime Config: `_validate_api_key()` blocks ENC:v1: prefixed values
+    3. API Client: `_validate_api_key_safe()` blocks encrypted keys at client creation
+  - Enhanced error logging with exception details
+  - Startup validation verifies decryption works
+  - 6 new tests for leak prevention
+  - 673 tests total
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #17, then check for new issues.
+Await Criticizer verification of Issue #19, then check for Issue #18 (key rotation bug).
 
 ## Risks / Notes
-- Issue #17 implementation complete, awaiting verification
-- 667 tests passing (40 new for encryption)
+- Issue #19 implementation complete, awaiting verification
+- 673 tests passing (6 new for leak prevention)
+- Issue #18 (key rotation TypeError) is priority-low but may be fixed next
 - Encryption key salt must be backed up for data recovery
 
 ## How to test quickly

@@ -88,21 +88,48 @@ class SettingsService:
         return value
 
     def _decrypt_if_sensitive(self, key: str, value: str) -> str:
-        """Decrypt value if it's a sensitive key and encrypted."""
+        """Decrypt value if it's a sensitive key and encrypted.
+
+        Returns:
+            Decrypted value, or empty string if decryption fails.
+            NEVER returns encrypted values - this prevents encrypted
+            data from being accidentally sent to external APIs.
+        """
         if key not in SENSITIVE_KEYS or not value:
             return value
 
         if not is_encrypted(value):
             return value
 
+        # Value is encrypted - must decrypt it
         enc_service = self._get_encryption_service()
-        if enc_service:
-            try:
-                return enc_service.decrypt(value)
-            except Exception as e:
-                logger.warning(f"Decryption failed for {key}: {e}")
-                return ""  # Return empty for failed decryption
-        return value
+        if not enc_service:
+            # Encryption service not available but value is encrypted
+            # Return empty to prevent encrypted value from leaking
+            logger.error(
+                f"Cannot decrypt {key}: encryption service not available. "
+                f"Value appears encrypted (starts with ENC:v1:). "
+                f"Returning empty string to prevent encrypted data from being used."
+            )
+            return ""
+
+        try:
+            decrypted = enc_service.decrypt(value)
+            # Sanity check: decrypted value should not look like encrypted format
+            if is_encrypted(decrypted):
+                logger.error(
+                    f"Decryption of {key} returned another encrypted value. "
+                    f"This indicates a double-encryption bug. Returning empty."
+                )
+                return ""
+            return decrypted
+        except Exception as e:
+            logger.error(
+                f"Decryption failed for {key}: {type(e).__name__}: {e}. "
+                f"This may indicate the encryption key has changed or data is corrupted. "
+                f"Returning empty string to prevent encrypted data from being used."
+            )
+            return ""
 
     async def _ensure_initialized(self):
         """Ensure database table exists."""

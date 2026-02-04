@@ -4,9 +4,13 @@ from pydantic import BaseModel
 from typing import Optional
 from pathlib import Path
 import os
+import logging
 
 import config
 from server.services.settings import SettingsService
+from server.services.encryption import is_encrypted, ENCRYPTED_PREFIX
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -71,21 +75,72 @@ async def update_settings(update: SettingsUpdate):
     }
 
 
+def _validate_api_key(key_name: str, value: str) -> tuple[bool, str]:
+    """Validate an API key is safe to use.
+
+    Args:
+        key_name: Name of the key (for logging)
+        value: The API key value
+
+    Returns:
+        Tuple of (is_valid, reason)
+    """
+    if not value:
+        return False, "empty"
+
+    # Critical check: ensure we never use encrypted values
+    if is_encrypted(value):
+        logger.error(
+            f"SECURITY: Attempted to use encrypted value as {key_name}. "
+            f"Value starts with '{ENCRYPTED_PREFIX}'. This would leak encrypted data to external APIs. "
+            f"Check that decryption is working correctly."
+        )
+        return False, "encrypted_value"
+
+    # Basic format validation for API keys
+    if key_name == "openai_api_key":
+        # OpenAI keys start with sk-
+        if not value.startswith("sk-"):
+            logger.warning(f"OpenAI API key has unexpected format (doesn't start with sk-)")
+            # Still allow it, just warn
+
+    if key_name == "anthropic_api_key":
+        # Anthropic keys start with sk-ant-
+        if not value.startswith("sk-ant-"):
+            logger.warning(f"Anthropic API key has unexpected format (doesn't start with sk-ant-)")
+            # Still allow it, just warn
+
+    return True, "valid"
+
+
 async def _apply_runtime_settings():
     """Apply settings to runtime configuration.
 
     Note: Some settings (like API keys) are loaded from env at startup.
     Full effect may require restart for some settings.
+
+    IMPORTANT: This function validates API keys before applying them to
+    prevent encrypted values from being sent to external APIs.
     """
     settings = await settings_service.get_all()
 
     # Update config module values (for new requests)
-    if settings.get("openai_api_key"):
-        config.OPENAI_API_KEY = settings["openai_api_key"]
+    openai_key = settings.get("openai_api_key", "")
+    if openai_key:
+        is_valid, reason = _validate_api_key("openai_api_key", openai_key)
+        if is_valid:
+            config.OPENAI_API_KEY = openai_key
+        else:
+            logger.error(f"Not applying OpenAI API key: {reason}")
 
-    if settings.get("anthropic_api_key"):
-        config.ANTHROPIC_API_KEY = settings["anthropic_api_key"]
-        config.USE_CLAUDE = True
+    anthropic_key = settings.get("anthropic_api_key", "")
+    if anthropic_key:
+        is_valid, reason = _validate_api_key("anthropic_api_key", anthropic_key)
+        if is_valid:
+            config.ANTHROPIC_API_KEY = anthropic_key
+            config.USE_CLAUDE = True
+        else:
+            logger.error(f"Not applying Anthropic API key: {reason}")
 
     # Update model selection
     if settings.get("model"):
@@ -121,13 +176,35 @@ async def load_settings_on_startup():
 
     Called during server startup to restore user-configured settings
     (API keys, model selection) that were saved in previous sessions.
+
+    Also validates that encrypted keys can be decrypted. If decryption
+    fails, logs an error but continues (falling back to env vars).
     """
     try:
+        # First, validate encryption status
+        encryption_status = await settings_service.get_encryption_status()
+
+        for key_name, key_status in encryption_status.get("keys", {}).items():
+            if key_status.get("has_value") and key_status.get("is_encrypted"):
+                # Key exists and is encrypted - verify it can be decrypted
+                value = await settings_service.get(key_name)
+                if not value:
+                    logger.error(
+                        f"Startup validation failed: {key_name} is encrypted but "
+                        f"decryption returned empty. Check encryption key file."
+                    )
+                elif is_encrypted(value):
+                    # This should never happen - get() should decrypt
+                    logger.error(
+                        f"Startup validation failed: {key_name} returned encrypted value. "
+                        f"Decryption is not working correctly."
+                    )
+                else:
+                    logger.info(f"Startup validation: {key_name} decrypted successfully")
+
+        # Apply settings to runtime config
         await _apply_runtime_settings()
-        import logging
-        logger = logging.getLogger(__name__)
         logger.info("Settings loaded from database")
+
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"Failed to load settings from database: {e}")
+        logger.error(f"Failed to load settings from database: {type(e).__name__}: {e}")

@@ -24,6 +24,7 @@ from server.services.retry import api_retry
 from server.services.metrics import metrics
 from server.services.tool_suggestions import get_suggestion_service
 from server.services.degradation import get_degradation_service
+from server.services.encryption import is_encrypted, ENCRYPTED_PREFIX
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -73,18 +74,66 @@ class ChatResponse(BaseModel):
     suggested_tools: Optional[List[SuggestedTool]] = None
 
 
+def _validate_api_key_safe(key: str, provider: str) -> bool:
+    """Validate that an API key is safe to send to external APIs.
+
+    CRITICAL SECURITY CHECK: This prevents encrypted values from being
+    accidentally sent to external APIs, which would:
+    1. Fail authentication (useless request)
+    2. Leak encrypted data in error messages
+    3. Potentially expose encryption format to external services
+
+    Args:
+        key: The API key to validate
+        provider: Provider name for logging (e.g., "Anthropic", "OpenAI")
+
+    Returns:
+        True if the key is safe to use, False otherwise
+    """
+    if not key:
+        return False
+
+    if is_encrypted(key):
+        logger.error(
+            f"SECURITY BLOCK: Refusing to send encrypted API key to {provider}. "
+            f"Key starts with '{ENCRYPTED_PREFIX}'. This indicates a decryption failure. "
+            f"Check encryption key file and settings."
+        )
+        return False
+
+    return True
+
+
 def get_anthropic_client():
-    """Get Anthropic client instance."""
+    """Get Anthropic client instance.
+
+    Returns None if:
+    - No API key is configured
+    - API key appears to be encrypted (safety check)
+    """
     if not config.ANTHROPIC_API_KEY:
         return None
+
+    if not _validate_api_key_safe(config.ANTHROPIC_API_KEY, "Anthropic"):
+        return None
+
     from anthropic import Anthropic
     return Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
 
 def get_openai_client():
-    """Get OpenAI client instance."""
+    """Get OpenAI client instance.
+
+    Returns None if:
+    - No API key is configured
+    - API key appears to be encrypted (safety check)
+    """
     if not config.OPENAI_API_KEY:
         return None
+
+    if not _validate_api_key_safe(config.OPENAI_API_KEY, "OpenAI"):
+        return None
+
     from openai import OpenAI
     return OpenAI(api_key=config.OPENAI_API_KEY)
 

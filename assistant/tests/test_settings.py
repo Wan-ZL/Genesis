@@ -491,3 +491,164 @@ class TestSettingsEncryption:
         assert status["keys"]["openai_api_key"]["has_value"] is True
         assert status["keys"]["openai_api_key"]["is_encrypted"] is False
         assert status["all_encrypted"] is False
+
+
+@pytest.mark.skipif(not CRYPTOGRAPHY_AVAILABLE, reason="cryptography not installed")
+class TestEncryptedValueLeakPrevention:
+    """Tests for Issue #19: Ensure encrypted values never leak to external APIs.
+
+    These tests verify that when decryption fails (e.g., encryption service
+    unavailable, wrong key, corrupted data), the code returns empty strings
+    instead of leaking the encrypted ENC:v1:... values.
+    """
+
+    @pytest.fixture
+    def temp_db(self):
+        """Create a temp database path."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir) / "test.db"
+
+    @pytest.mark.asyncio
+    async def test_encrypted_value_not_leaked_when_encryption_unavailable(self, temp_db):
+        """Test that encrypted values are not leaked when encryption service fails."""
+        from server.services.settings import SettingsService
+        from server.services.encryption import ENCRYPTED_PREFIX
+        import aiosqlite
+        from datetime import datetime
+
+        # Create settings service and store encrypted value
+        svc1 = SettingsService(temp_db)
+        await svc1.set("openai_api_key", "sk-test-key-12345")
+
+        # Verify it's encrypted in DB
+        async with aiosqlite.connect(temp_db) as db:
+            cursor = await db.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                ("openai_api_key",)
+            )
+            row = await cursor.fetchone()
+            assert row[0].startswith(ENCRYPTED_PREFIX)
+
+        # Create a new service WITHOUT encryption (simulating encryption unavailable)
+        svc2 = SettingsService(temp_db)
+        svc2._encryption_available = False  # Force disable encryption
+
+        # Get should return empty string, NOT the encrypted value
+        value = await svc2.get("openai_api_key")
+        assert value == "", "Should return empty when decryption unavailable"
+        assert not value.startswith(ENCRYPTED_PREFIX), "Should never return encrypted value"
+
+    @pytest.mark.asyncio
+    async def test_encrypted_value_not_leaked_in_get_all(self, temp_db):
+        """Test that get_all doesn't leak encrypted values when decryption fails."""
+        from server.services.settings import SettingsService
+        from server.services.encryption import ENCRYPTED_PREFIX
+        import aiosqlite
+        from datetime import datetime
+
+        # Create and encrypt
+        svc1 = SettingsService(temp_db)
+        await svc1.set("openai_api_key", "sk-openai-secret")
+        await svc1.set("anthropic_api_key", "sk-ant-secret")
+
+        # Create service without encryption
+        svc2 = SettingsService(temp_db)
+        svc2._encryption_available = False
+
+        settings = await svc2.get_all()
+
+        # Both keys should be empty, not encrypted values
+        assert settings["openai_api_key"] == ""
+        assert settings["anthropic_api_key"] == ""
+        assert not any(
+            v.startswith(ENCRYPTED_PREFIX) if isinstance(v, str) else False
+            for v in settings.values()
+        ), "No encrypted values should leak through get_all()"
+
+    @pytest.mark.asyncio
+    async def test_api_key_validation_rejects_encrypted_values(self):
+        """Test that _validate_api_key rejects encrypted-looking values."""
+        from server.routes.settings import _validate_api_key
+        from server.services.encryption import ENCRYPTED_PREFIX
+
+        # Valid keys should pass
+        is_valid, reason = _validate_api_key("openai_api_key", "sk-test123")
+        assert is_valid is True
+
+        # Encrypted values must be rejected
+        encrypted_value = f"{ENCRYPTED_PREFIX}abc123:def456:ghi789"
+        is_valid, reason = _validate_api_key("openai_api_key", encrypted_value)
+        assert is_valid is False
+        assert reason == "encrypted_value"
+
+    @pytest.mark.asyncio
+    async def test_startup_validation_detects_decryption_failure(self, temp_db, caplog):
+        """Test that startup validation logs error when decryption fails."""
+        from server.services.settings import SettingsService
+        from server.routes import settings as settings_routes
+        from server.services.encryption import ENCRYPTED_PREFIX
+        import aiosqlite
+        from datetime import datetime
+        import logging
+
+        # Create encrypted key with one service
+        svc1 = SettingsService(temp_db)
+        await svc1.set("openai_api_key", "sk-test-key")
+
+        # Verify it's encrypted
+        async with aiosqlite.connect(temp_db) as db:
+            cursor = await db.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                ("openai_api_key",)
+            )
+            row = await cursor.fetchone()
+            assert row[0].startswith(ENCRYPTED_PREFIX)
+
+        # Create new service and disable encryption
+        svc2 = SettingsService(temp_db)
+        svc2._encryption_available = False
+        settings_routes.settings_service = svc2
+
+        # Run startup validation with logging capture
+        with caplog.at_level(logging.ERROR):
+            await settings_routes.load_settings_on_startup()
+
+        # Should have logged error about decryption failure
+        assert any("decrypt" in record.message.lower() for record in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_chat_api_rejects_encrypted_api_key(self):
+        """Test that chat API client creation rejects encrypted API keys."""
+        from server.routes.chat import _validate_api_key_safe
+        from server.services.encryption import ENCRYPTED_PREFIX
+
+        # Valid key should pass
+        assert _validate_api_key_safe("sk-valid-key", "OpenAI") is True
+
+        # Empty key should fail
+        assert _validate_api_key_safe("", "OpenAI") is False
+        assert _validate_api_key_safe(None, "OpenAI") is False
+
+        # Encrypted key must be blocked
+        encrypted = f"{ENCRYPTED_PREFIX}salt:nonce:ciphertext"
+        assert _validate_api_key_safe(encrypted, "OpenAI") is False
+
+    @pytest.mark.asyncio
+    async def test_chat_client_returns_none_for_encrypted_key(self):
+        """Test that get_anthropic_client and get_openai_client return None for encrypted keys."""
+        from server.routes.chat import get_anthropic_client, get_openai_client
+        from server.services.encryption import ENCRYPTED_PREFIX
+        from unittest.mock import patch
+        import config
+
+        encrypted_key = f"{ENCRYPTED_PREFIX}salt:nonce:cipher"
+
+        # Test with encrypted OpenAI key
+        with patch.object(config, 'OPENAI_API_KEY', encrypted_key):
+            client = get_openai_client()
+            assert client is None, "Should return None for encrypted API key"
+
+        # Test with encrypted Anthropic key
+        with patch.object(config, 'ANTHROPIC_API_KEY', encrypted_key):
+            client = get_anthropic_client()
+            assert client is None, "Should return None for encrypted API key"
