@@ -2,174 +2,218 @@
 
 ## Repeated Bug Patterns
 
-### 1. Concurrency Issues (Critical Pattern)
-**Modules Affected**: Memory service, Settings service, ConnectionPool
-**Frequency**: 2 bugs in past 2 days (Issues #26, #31)
-**Pattern**: asyncio and SQLite concurrency not properly handled
+### 1. SQLite Concurrency Issues (High Priority)
+**Pattern**: Database locking errors under concurrent load
+**Occurrences**: 
+- Issue #26 (current): Concurrent chat requests fail at 15-20+ concurrency
+- Issue #31 (resolved): Event loop attachment bug in connection pool
+- Previous testing: Multiple instances of "database is locked" errors
 
-**Issues**:
-- Issue #31: asyncio primitives created at import time (event loop attachment)
-- Issue #26: Database connection pool exhaustion under load (10+ concurrent)
+**Root Cause**: SQLite architectural limitations:
+- Single write lock per database
+- Even with WAL mode, heavy concurrent writes cause contention
+- Connection pooling + retry logic helps but doesn't eliminate the issue
 
-**Root Cause**: Python asyncio + SQLite is challenging for concurrent workloads
-- SQLite has write serialization (one writer at a time)
-- asyncio event loops attach at object creation time
-- Connection pools can be exhausted under burst traffic
+**Impact**: 
+- Current state: Reliably handles ≤10 concurrent requests (100% success)
+- Fails at: 15-20+ concurrent (50-93% success, inconsistent)
 
-**Recommendations**:
-1. **Immediate**: Add concurrent load tests to CI (15-20 concurrent requests)
-2. **Short-term**: Document concurrency limits (currently reliable up to 10 concurrent)
-3. **Medium-term**: Consider PostgreSQL for production (better concurrency)
-4. **Long-term**: Implement request queuing at API layer to prevent pool exhaustion
+**Recommendations for Planner**:
+1. **Short-term**: Document the 10-request concurrency limit, add rate limiting
+2. **Medium-term**: Optimize transaction scope, increase pool size to 20-30
+3. **Long-term**: Migrate to PostgreSQL for production deployments
 
-### 2. Testing Gaps
-**Pattern**: Unit tests pass, but real-world usage fails
-**Examples**:
-- Issue #26: All unit tests passed, but 15+ concurrent requests failed
-- Issue #31: Tests passed in isolation, failed when service restarted
+### 2. Configuration Management Complexity (Medium Priority)
+**Pattern**: Users confused about where configuration is stored
+**Occurrences**:
+- Issue #27: API keys in both .env files and SQLite, UI showed "Not set"
+- Related: Multiple configuration sources (.env, SQLite, config.py)
 
-**Recommendation**: Add integration tests that:
-- Test concurrent scenarios (10, 15, 20 simultaneous requests)
-- Test service restart and recovery
-- Test sustained load (not just single requests)
+**Root Cause**: No single source of truth for configuration
+- .env files for initial setup
+- SQLite for runtime user preferences
+- config.py as code-level defaults
+
+**Impact**: 
+- User confusion about configuration status
+- Potential security issues (keys in multiple places)
+
+**Recommendations for Planner**:
+1. Document configuration precedence clearly
+2. Consider migrating all user-facing settings to SQLite only
+3. Use .env only for developer/deployment environment variables
+
+---
 
 ## Test Coverage Blind Spots
 
-### 1. Concurrent Request Testing
-**Current State**: No CI tests for concurrent requests
-**Impact**: High-severity bugs slip through (Issues #26, #31)
-**Recommendation**: Add to CI:
-```bash
-# Example concurrent test
-for i in {1..20}; do
-  curl -s -X POST .../api/chat -d '{"message":"test"}' &
-done
-wait
-# Verify all succeeded
+### 1. Concurrency Stress Testing
+**Gap**: No CI/CD tests for concurrent request handling
+**Risk**: Regressions in concurrency handling won't be caught
+
+**Recommendation**: Add concurrency stress tests to CI pipeline
+```python
+# Example test
+def test_concurrent_load_10_requests():
+    """Verify service handles 10 concurrent requests reliably"""
+    # Run 10 concurrent requests
+    # Assert 100% success rate
 ```
 
-### 2. Service Lifecycle Testing
-**Current State**: No tests for restart, recovery, state persistence
-**Impact**: Event loop bugs (Issue #31) only appear after restart
-**Recommendation**: Add tests that:
-- Start service → make requests → restart → verify state persisted
-- Test graceful shutdown and cleanup
+### 2. Error Response Format Consistency
+**Gap**: Some errors return "Internal Server Error" plain text instead of JSON
+**Observed**: Issue #26 - concurrent failures sometimes return plain text
 
-### 3. Error Response Consistency
-**Current State**: Some 500 errors return plain text "Internal Server Error"
-**Impact**: Frontend can't parse errors properly
-**Recommendation**: Ensure all errors return JSON (even 500s)
+**Recommendation**: Add test to verify all error responses are valid JSON
+```python
+def test_all_errors_return_json():
+    """Verify error responses are always valid JSON"""
+    # Test various error scenarios
+    # Assert all responses parse as JSON
+```
+
+### 3. Database Migration Testing
+**Gap**: No tests for upgrading database schema with existing data
+**Risk**: Schema changes could break existing deployments
+
+**Recommendation**: Add migration tests before implementing schema changes
+
+---
 
 ## User Experience Issues
 
-### 1. API Error Responses
-**Issue**: Some errors return plain text instead of JSON
-**Example**: "Internal Server Error" (plain text) vs `{"detail": "..."}`
-**Impact**: Frontend error handling breaks
-**Recommendation**: Add global exception handler to ensure all responses are JSON
+### 1. Inconsistent Error Messages
+**Observation**: 
+- Some errors: `{"detail": "database is locked"}` (good, JSON)
+- Other errors: `Internal Server Error` (bad, plain text)
 
-### 2. No Concurrency Limit Communication
-**Issue**: API accepts unlimited concurrent requests but fails silently at 15+
-**Impact**: Users don't know why some requests fail
-**Recommendation**: Either:
-- Add rate limiting with clear error messages (429 Too Many Requests)
-- Document concurrency limits in API docs
-- Implement request queuing to handle bursts gracefully
+**Impact**: Frontend can't reliably parse errors
 
-### 3. Database File Naming Confusion
-**Issue**: `conversations.db` vs `memory.db` (documentation uses old name)
-**Impact**: Minor - causes confusion when debugging
-**Recommendation**: Update docs to use correct database names
+**Recommendation**: Standardize error response format across all endpoints
 
-## Potent Issues (Not Yet Confirmed)
+### 2. No User-Facing Concurrency Limits
+**Observation**: Service silently fails at high concurrency
+**Expected**: HTTP 429 (Too Many Requests) with Retry-After header
 
-### 1. AI Behavior Anomaly
-**Observation**: During testing, AI consistently talked about git commits regardless of input
-**Example**: Input "My name is Alice" → Response "It seems you want to commit with Git..."
-**Possible Causes**:
-- System prompt leaked or corrupted
-- Context pollution from test messages
-- Tool suggestion over-triggering
+**Recommendation**: Implement rate limiting at API layer with proper HTTP status codes
 
-**Status**: Needs clean environment test to confirm
-**Priority**: Medium (may just be test artifact)
+### 3. Settings UI Confusion (Resolved in #27)
+**Observation**: Users didn't know if API keys were configured
+**Resolution**: UI now shows combined status from .env + SQLite
 
-### 2. Context Retention (Untested)
-**Status**: Unable to test due to database pollution
-**Recommendation**: Add clean environment context retention test to discovery testing
-
-## Architectural Recommendations
-
-### 1. Database Layer
-**Current**: SQLite with connection pooling
-**Limitation**: 10 concurrent requests max (reliable)
-**Recommendation**:
-- **Short-term**: Document limit, add request queuing
-- **Medium-term**: Optimize pool size and retry logic
-- **Long-term**: Consider PostgreSQL for production deployments
-
-### 2. Error Handling
-**Current**: Mix of JSON and plain text errors
-**Recommendation**: Implement global exception middleware:
-```python
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    return JSONResponse({"detail": str(exc)}, status_code=500)
-```
-
-### 3. Testing Strategy
-**Current**: Mostly unit tests, few integration tests
-**Recommendation**: Expand test pyramid:
-- Unit tests (current: 835) ✓
-- Integration tests (current: minimal) ← **Add more**
-- Load tests (current: none) ← **Add to CI**
-- E2E tests (current: manual) ← **Automate**
-
-## Quality Metrics
-
-### Verification Success Rate
-**Current**: 86% (6 passed / 7 attempted)
-**Breakdown**:
-- Full passes: 6 (Issues #21, #22, #23, #24, #25, #31)
-- Partial passes: 1 (Issue #26 - improved but not fully resolved)
-
-### Bug Discovery Rate
-**2 bugs created**, 1 resolved (Issue #31), 1 open (Issue #26)
-
-### Multi-Agent System Effectiveness
-**Working well**: Builder follows Issue Completion Protocol
-- Adds `needs-verification` label ✓
-- Provides detailed test instructions ✓
-- Doesn't self-verify ✓
-
-**Quality gate working**: Criticizer catches incomplete fixes
-- Issue #26: Builder claimed 100% success, Criticizer found 60-73% at high load
-- Prevented false positive closure
-
-## Recommendations for Planner
-
-### Priority 1: Concurrency Strategy
-**Decision needed**: How to handle concurrent requests?
-- Option A: Document 10-request limit (simple, short-term)
-- Option B: Implement request queuing (medium effort, better UX)
-- Option C: Switch to PostgreSQL (high effort, best long-term)
-
-Recommendation: Start with A, plan for B, consider C for v1.0
-
-### Priority 2: Testing Investment
-**Recommendation**: Allocate next 2-3 issues to testing infrastructure:
-- Issue: Add concurrent load tests to CI
-- Issue: Add service restart/recovery tests
-- Issue: Add E2E test automation
-
-This will prevent regressions and catch issues earlier.
-
-### Priority 3: Error Handling Polish
-**Recommendation**: Create issue for consistent error response format
-- All errors return JSON (no plain text)
-- Include error codes and helpful messages
-- Document error response schema
+**Lesson Learned**: Always provide clear status visibility to users
 
 ---
-*Last updated: 2026-02-04 14:22*
-*Next review: After next Builder iteration*
+
+## Potential Feature Requests (Based on Testing Observations)
+
+### 1. Health Check Endpoint Enhancement
+**Current**: `/api/health` returns basic status
+**Suggestion**: Add more metrics:
+- Current concurrent request count
+- Database connection pool utilization
+- Error rate (last 1 min, 5 min, 15 min)
+- Queue depth (if rate limiting implemented)
+
+### 2. Request Queuing
+**Observation**: Concurrent requests beyond pool capacity fail immediately
+**Suggestion**: Queue requests when pool is exhausted, with configurable timeout
+
+### 3. Database Connection Pool Monitoring
+**Observation**: No visibility into pool exhaustion
+**Suggestion**: Expose pool metrics via `/api/metrics` endpoint
+
+---
+
+## Architectural Concerns
+
+### 1. SQLite for Production Use
+**Concern**: SQLite has well-known concurrency limitations
+**Current Impact**: Handles ≤10 concurrent requests reliably
+**Future Risk**: If user load increases, will hit limits
+
+**Recommendation for Planner**: 
+- Document SQLite as suitable for single-user or low-concurrency deployments
+- Plan PostgreSQL migration path for multi-user or high-traffic deployments
+- Consider offering both: SQLite for simplicity, PostgreSQL for scale
+
+### 2. Error Handling Consistency
+**Concern**: Mixed error response formats (JSON vs plain text)
+**Impact**: Frontend error handling is fragile
+
+**Recommendation**: Implement consistent error middleware in FastAPI
+
+### 3. Testing Strategy
+**Concern**: Manual verification catches issues that automated tests miss
+**Impact**: Slow feedback loop, regressions possible
+
+**Recommendation**: 
+- Expand test coverage for concurrency scenarios
+- Add integration tests that actually start the server
+- Consider load testing in CI for critical endpoints
+
+---
+
+## Success Stories (What's Working Well)
+
+### 1. Connection Pool + Retry Logic
+- Significantly improved concurrency handling (from 20-40% to 100% at ≤10 concurrent)
+- Retry with exponential backoff elegantly handles transient lock errors
+- Unit tests for concurrency are comprehensive
+
+### 2. Configuration Fallback Logic (Issue #27)
+- Clean implementation: `settings.get("key") or config.KEY or ""`
+- Good test coverage with edge cases
+- User-friendly (shows status from multiple sources)
+
+### 3. Test Infrastructure
+- Comprehensive unit tests for core functionality
+- Good use of pytest fixtures
+- Tests are fast and reliable
+
+---
+
+## Metrics Summary
+
+### Verification Session: 2026-02-04
+
+| Metric | Count |
+|--------|-------|
+| Issues verified | 2 |
+| Issues closed | 1 (#27) |
+| Issues failed verification | 1 (#26) |
+| Bugs created | 0 |
+| Test scenarios run | 15+ |
+| Unit tests run | 50+ |
+
+### Historical Pattern (Last 5 Verifications)
+
+| Pattern | Frequency |
+|---------|-----------|
+| SQLite concurrency issues | 3/5 issues |
+| Configuration management | 2/5 issues |
+| Asyncio event loop bugs | 1/5 issues |
+
+---
+
+## Recommendations for Next Sprint
+
+1. **Resolve Issue #26**: Choose one of:
+   - Option A: Document 10-request limit + add rate limiting (1-2 hours)
+   - Option B: Implement additional scaling fixes (4-8 hours)
+   - Option C: Plan PostgreSQL migration (1-2 weeks)
+
+2. **Add Concurrency Tests to CI**: Prevent regressions
+
+3. **Standardize Error Responses**: All endpoints return JSON
+
+4. **Enhance Monitoring**: Add `/api/metrics` endpoint with pool utilization
+
+5. **Documentation**: Add "Deployment Considerations" section covering:
+   - Concurrency limits
+   - When to use PostgreSQL vs SQLite
+   - Rate limiting recommendations
+
+---
+
+*Last updated: 2026-02-04 15:15 by Criticizer agent*
