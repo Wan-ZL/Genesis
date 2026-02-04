@@ -124,7 +124,8 @@ class DegradationService:
         self._api_health: Dict[str, APIHealth] = {
             "claude": APIHealth(name="claude"),
             "openai": APIHealth(name="openai"),
-            "ollama": APIHealth(name="ollama"),
+            # Ollama starts as unavailable until we verify it's actually running
+            "ollama": APIHealth(name="ollama", available=False),
         }
         self._local_only_mode: bool = False
         self._request_queue: deque[QueuedRequest] = deque(maxlen=self.MAX_QUEUE_SIZE)
@@ -138,6 +139,27 @@ class DegradationService:
         # Cache for tool results (especially web_fetch)
         self._tool_cache: Dict[str, dict] = {}
         self._cache_max_age = timedelta(hours=24)
+
+    async def initialize_ollama_status(self):
+        """Check actual Ollama availability on startup.
+
+        This should be called during server startup to ensure the Ollama
+        health status reflects reality rather than defaulting to unavailable.
+        """
+        try:
+            # Import here to avoid circular import
+            from server.services.ollama import check_ollama_available
+            is_available = await check_ollama_available()
+            self._api_health["ollama"].available = is_available
+            if is_available:
+                logger.info("Ollama is available and ready")
+            else:
+                logger.info("Ollama is not available (not running or disabled)")
+            self._update_mode()
+        except Exception as e:
+            logger.warning(f"Failed to check Ollama status on init: {e}")
+            self._api_health["ollama"].available = False
+            self._update_mode()
 
     @property
     def mode(self) -> DegradationMode:
@@ -592,15 +614,25 @@ class DegradationService:
         }
 
     def reset_api_health(self, api_name: Optional[str] = None):
-        """Reset API health status (useful for manual recovery)."""
+        """Reset API health status (useful for manual recovery).
+
+        Note: Ollama is reset to unavailable by default (requires actual check),
+        while cloud APIs are reset to available (assumed reachable).
+        """
         if api_name:
             if api_name in self._api_health:
-                self._api_health[api_name] = APIHealth(name=api_name)
+                # Ollama should be reset to unavailable until verified
+                is_ollama = api_name == "ollama"
+                self._api_health[api_name] = APIHealth(
+                    name=api_name,
+                    available=not is_ollama
+                )
         else:
             self._api_health = {
                 "claude": APIHealth(name="claude"),
                 "openai": APIHealth(name="openai"),
-                "ollama": APIHealth(name="ollama"),
+                # Ollama starts as unavailable until we verify it's actually running
+                "ollama": APIHealth(name="ollama", available=False),
             }
         self._update_mode()
 

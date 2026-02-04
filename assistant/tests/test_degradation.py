@@ -121,6 +121,49 @@ class TestDegradationService:
         assert "openai" in service._api_health
         assert "ollama" in service._api_health
 
+    def test_init_ollama_unavailable_by_default(self):
+        """Test that Ollama starts as unavailable until verified (Issue #23)."""
+        service = DegradationService()
+        # Cloud APIs should default to available
+        assert service._api_health["claude"].available is True
+        assert service._api_health["openai"].available is True
+        # Ollama should default to unavailable until initialize_ollama_status() is called
+        assert service._api_health["ollama"].available is False
+
+    @pytest.mark.asyncio
+    async def test_initialize_ollama_status_available(self):
+        """Test initialize_ollama_status sets Ollama available when running."""
+        service = DegradationService()
+        assert service._api_health["ollama"].available is False
+
+        with patch('server.services.ollama.check_ollama_available', new=AsyncMock(return_value=True)):
+            await service.initialize_ollama_status()
+
+        assert service._api_health["ollama"].available is True
+
+    @pytest.mark.asyncio
+    async def test_initialize_ollama_status_unavailable(self):
+        """Test initialize_ollama_status keeps Ollama unavailable when not running."""
+        service = DegradationService()
+        assert service._api_health["ollama"].available is False
+
+        with patch('server.services.ollama.check_ollama_available', new=AsyncMock(return_value=False)):
+            await service.initialize_ollama_status()
+
+        assert service._api_health["ollama"].available is False
+
+    @pytest.mark.asyncio
+    async def test_initialize_ollama_status_handles_exception(self):
+        """Test initialize_ollama_status handles errors gracefully."""
+        service = DegradationService()
+
+        with patch('server.services.ollama.check_ollama_available', new=AsyncMock(side_effect=Exception("Connection error"))):
+            # Should not raise
+            await service.initialize_ollama_status()
+
+        # Should remain unavailable
+        assert service._api_health["ollama"].available is False
+
     def test_get_api_health(self):
         """Test getting API health."""
         service = DegradationService()
@@ -366,8 +409,22 @@ class TestDegradationService:
         assert service.mode == DegradationMode.OFFLINE
         service.reset_api_health()
         assert service.mode == DegradationMode.NORMAL
-        # Verify Ollama is also reset
+        # Verify Ollama is also reset (but to unavailable, per Issue #23 fix)
         assert "ollama" in service._api_health
+        assert service._api_health["ollama"].available is False
+        # Cloud APIs should be reset to available
+        assert service._api_health["claude"].available is True
+        assert service._api_health["openai"].available is True
+
+    def test_reset_ollama_specific_stays_unavailable(self):
+        """Test resetting Ollama specifically keeps it unavailable (Issue #23)."""
+        service = DegradationService()
+        # First make Ollama available (as if it was detected)
+        service._api_health["ollama"].available = True
+        # Then reset it
+        service.reset_api_health("ollama")
+        # Should be unavailable after reset (needs re-verification)
+        assert service._api_health["ollama"].available is False
 
 
 class TestGlobalService:

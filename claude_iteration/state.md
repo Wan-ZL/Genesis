@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #20 Complete - Needs Verification.** Added local model fallback with Ollama integration.
+**Issue #23 Complete - Needs Verification.** Fixed Ollama status inconsistency in degradation service.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -277,21 +277,28 @@
   - Ollama API client: `assistant/server/services/ollama.py`
   - Config: `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_ENABLED`, `OLLAMA_TIMEOUT`
   - Degradation modes: `CLOUD_UNAVAILABLE`, `LOCAL_ONLY`
-  - Fallback chain: Claude → OpenAI → Ollama
+  - Fallback chain: Claude -> OpenAI -> Ollama
   - API endpoints: `/api/ollama/status`, `/api/ollama/models`, `/api/ollama/model`, `/api/ollama/local-only`
   - Health check includes Ollama availability
   - Streaming support for Ollama responses
   - Tool calling support (model-dependent)
   - 31 new tests in `test_ollama.py`
   - Documentation: `assistant/docs/OLLAMA_SETUP.md`
-  - 708 tests total
+- **Issue #23 COMPLETE - Ollama status inconsistency fix (needs verification)**:
+  - Root cause: `DegradationService.__init__()` set Ollama `available=True` by default without verifying
+  - Fix: Ollama now defaults to `available=False` until verified
+  - Added `initialize_ollama_status()` async method called on server startup
+  - Updated `reset_api_health()` to maintain correct semantics (Ollama stays unavailable after reset)
+  - `/api/degradation` and `/api/ollama/status` are now consistent
+  - 7 new tests (67 total in test_degradation.py)
+  - 713 tests total
 
 ## Next Step (single step)
-Await Criticizer verification of Issues #18, #19, and #20. Remaining open issues: #21 (Calendar integration), #22 (Pydantic ConfigDict migration).
+Await Criticizer verification of Issues #18, #19, #20, and #23. Remaining open issues: #21 (Calendar integration), #22 (Pydantic ConfigDict migration).
 
 ## Risks / Notes
-- Issues #18, #19, #20 implementation complete, awaiting verification
-- 708 tests passing (31 new for Ollama)
+- Issues #18, #19, #20, #23 implementation complete, awaiting verification
+- 713 tests passing (5 new for Issue #23 Ollama status fix)
 - Ollama must be running for local model fallback to work
 - Encryption key salt must be backed up for data recovery
 
@@ -301,6 +308,16 @@ cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 
 # Run all tests
 python3 -m pytest tests/ -v
+
+# Test Ollama status fix specifically (Issue #23)
+python3 -m pytest tests/test_degradation.py -v -k ollama
+
+# Manual test: Without Ollama running, both endpoints should show unavailable
+python3 -m server.main &
+sleep 3
+curl http://127.0.0.1:8080/api/degradation | jq '.apis.ollama.available'  # Should be false
+curl http://127.0.0.1:8080/api/ollama/status | jq '.status'               # Should be "unavailable"
+pkill -f 'python3 -m server.main'
 
 # Test CLI logs commands
 python3 -m cli logs list              # List log files

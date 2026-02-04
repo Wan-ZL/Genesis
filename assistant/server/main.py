@@ -56,6 +56,12 @@ async def lifespan(app: FastAPI):
     await init_scheduler()
     logger.info("Scheduler service started")
 
+    # Initialize degradation service and check actual Ollama availability
+    from server.services.degradation import get_degradation_service
+    degradation_svc = get_degradation_service()
+    await degradation_svc.initialize_ollama_status()
+    logger.info("Degradation service initialized with actual Ollama status")
+
     logger.info(f"Using model: {config.MODEL}")
     if not config.OPENAI_API_KEY and not config.ANTHROPIC_API_KEY:
         logger.warning("No API key set - configure via Settings page or .env files")
