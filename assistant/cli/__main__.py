@@ -15,6 +15,11 @@ Usage:
     python -m assistant.cli resources --json
     python -m assistant.cli resources cleanup --dry-run
     python -m assistant.cli resources cleanup memory
+    python -m assistant.cli logs tail
+    python -m assistant.cli logs tail --name error --lines 100
+    python -m assistant.cli logs clear --name assistant --confirm
+    python -m assistant.cli logs list
+    python -m assistant.cli logs cleanup --dry-run
 """
 import argparse
 import asyncio
@@ -30,6 +35,7 @@ from assistant.server.services.memory import MemoryService
 from assistant.server.services.alerts import AlertService, AlertSeverity, AlertType
 from assistant.server.services.backup import BackupService, BackupStatus
 from assistant.server.services.resources import ResourceService, ResourceConfig
+from assistant.server.services.logging_service import LogConfig, LoggingService, get_logging_service
 import assistant.config as config
 
 
@@ -446,6 +452,120 @@ async def resources_cleanup_memory_command(args):
     print(f"Freed:  {result['freed_mb']:.1f} MB")
 
 
+def logs_tail_command(args):
+    """Show last N lines of a log file (like tail -f)."""
+    log_dir = config.BASE_DIR / "logs"
+    log_config = LogConfig(log_dir=log_dir)
+    service = LoggingService(log_config)
+
+    lines = service.tail_log(log_name=args.name, lines=args.lines)
+
+    if args.json:
+        print(json.dumps({"lines": lines, "log_name": args.name}, indent=2))
+        return
+
+    if not lines:
+        print(f"No log entries in {args.name}.log")
+        return
+
+    for line in lines:
+        print(line)
+
+
+def logs_list_command(args):
+    """List all log files with metadata."""
+    log_dir = config.BASE_DIR / "logs"
+    log_config = LogConfig(log_dir=log_dir)
+    service = LoggingService(log_config)
+
+    stats = service.get_stats()
+
+    if args.json:
+        print(json.dumps(stats, indent=2))
+        return
+
+    print("Log Files")
+    print("=" * 60)
+    print(f"Directory: {stats['log_dir']}")
+    print(f"Log level: {stats['log_level']}")
+    print(f"Max file size: {stats['max_bytes'] / (1024*1024):.1f} MB")
+    print(f"Backup count: {stats['backup_count']}")
+    print()
+
+    if not stats['files']:
+        print("No log files found.")
+        return
+
+    print(f"Files ({stats['total_files']} total, {stats['total_size_bytes'] / 1024:.1f} KB):")
+    for f in stats['files']:
+        size_kb = f['size_bytes'] / 1024
+        modified = f['modified_at'][:16] if f['modified_at'] else 'Unknown'
+        print(f"  {f['name']:<30} {size_kb:>8.1f} KB  {modified}")
+
+
+def logs_clear_command(args):
+    """Clear a log file."""
+    log_dir = config.BASE_DIR / "logs"
+    log_config = LogConfig(log_dir=log_dir)
+    service = LoggingService(log_config)
+
+    # Confirmation check
+    if not args.confirm:
+        print(f"This will clear all content from {args.name}.log")
+        print("Run with --confirm to proceed.")
+        sys.exit(1)
+
+    result = service.clear_log(log_name=args.name, confirm=True)
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+
+    if result['success']:
+        print(result['message'])
+    else:
+        print(f"Error: {result['message']}", file=sys.stderr)
+        sys.exit(1)
+
+
+def logs_cleanup_command(args):
+    """Clean up old log files."""
+    log_dir = config.BASE_DIR / "logs"
+    log_config = LogConfig(log_dir=log_dir, max_age_days=args.days)
+    service = LoggingService(log_config)
+
+    result = service.cleanup_old_logs(dry_run=args.dry_run)
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+
+    action = "Would delete" if args.dry_run else "Deleted"
+
+    if not result["deleted"]:
+        print(f"No log files older than {args.days} days found.")
+        return
+
+    print(f"Log Cleanup {'(DRY RUN)' if args.dry_run else ''}")
+    print("=" * 50)
+    print(f"Cutoff date: {result['cutoff_date'][:10]}")
+    print()
+
+    for file_info in result["deleted"]:
+        size_kb = file_info["size_bytes"] / 1024
+        print(f"  {action}: {file_info['name']} ({size_kb:.1f} KB)")
+
+    total_kb = result["total_bytes_freed"] / 1024
+    print()
+    print(f"Total: {len(result['deleted'])} files, {total_kb:.1f} KB")
+
+    if result["errors"]:
+        print()
+        print("Errors:")
+        for error in result["errors"]:
+            print(f"  {error['path']}: {error['error']}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="assistant.cli",
@@ -637,6 +757,74 @@ def main():
         help="Output in JSON format"
     )
 
+    # Logs command with subcommands
+    logs_parser = subparsers.add_parser("logs", help="Manage log files")
+    logs_subparsers = logs_parser.add_subparsers(dest="logs_command", help="Logs commands")
+
+    # logs tail
+    logs_tail_parser = logs_subparsers.add_parser("tail", help="Show last N lines of a log file")
+    logs_tail_parser.add_argument(
+        "--name", "-n",
+        default="assistant",
+        choices=["assistant", "error", "access"],
+        help="Log file name (default: assistant)"
+    )
+    logs_tail_parser.add_argument(
+        "--lines", "-l",
+        type=int, default=50,
+        help="Number of lines to show (default: 50)"
+    )
+    logs_tail_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
+    # logs list
+    logs_list_parser = logs_subparsers.add_parser("list", help="List all log files")
+    logs_list_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
+    # logs clear
+    logs_clear_parser = logs_subparsers.add_parser("clear", help="Clear a log file")
+    logs_clear_parser.add_argument(
+        "--name", "-n",
+        default="assistant",
+        choices=["assistant", "error", "access"],
+        help="Log file name (default: assistant)"
+    )
+    logs_clear_parser.add_argument(
+        "--confirm", "-y",
+        action="store_true",
+        help="Confirm clearing the log file"
+    )
+    logs_clear_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
+    # logs cleanup
+    logs_cleanup_parser = logs_subparsers.add_parser("cleanup", help="Delete old log files")
+    logs_cleanup_parser.add_argument(
+        "--days", "-d",
+        type=int, default=30,
+        help="Delete logs older than N days (default: 30)"
+    )
+    logs_cleanup_parser.add_argument(
+        "--dry-run", "-n",
+        action="store_true",
+        help="Show what would be deleted without actually deleting"
+    )
+    logs_cleanup_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
     args = parser.parse_args()
 
     if args.command == "export":
@@ -679,6 +867,18 @@ def main():
             asyncio.run(resources_command(args))
         else:
             resources_parser.print_help()
+            sys.exit(1)
+    elif args.command == "logs":
+        if args.logs_command == "tail":
+            logs_tail_command(args)
+        elif args.logs_command == "list":
+            logs_list_command(args)
+        elif args.logs_command == "clear":
+            logs_clear_command(args)
+        elif args.logs_command == "cleanup":
+            logs_cleanup_command(args)
+        else:
+            logs_parser.print_help()
             sys.exit(1)
     else:
         parser.print_help()

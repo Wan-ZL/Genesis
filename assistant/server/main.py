@@ -2,20 +2,23 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
+import time
 
 import config
+from server.services.logging_service import configure_logging, get_logging_service
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Configure logging with rotation
+log_dir = config.BASE_DIR / "logs"
+logging_service = configure_logging(log_dir)
 logger = logging.getLogger(__name__)
+
+# Get access logger for HTTP request logging
+access_logger = logging_service.get_access_logger()
 
 
 @asynccontextmanager
@@ -70,6 +73,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def access_log_middleware(request: Request, call_next):
+    """Log all HTTP requests to access.log."""
+    start_time = time.time()
+    response = await call_next(request)
+    duration_ms = (time.time() - start_time) * 1000
+
+    # Log format: IP METHOD PATH STATUS DURATION_MS
+    access_logger.info(
+        f'{request.client.host if request.client else "-"} '
+        f'{request.method} {request.url.path} '
+        f'{response.status_code} {duration_ms:.1f}ms'
+    )
+    return response
+
 
 # Import and include routers
 from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources

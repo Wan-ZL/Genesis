@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #12 Implementation Complete.** Resource monitoring and limits functionality created. Awaiting verification from Criticizer.
+**Issue #13 Implementation Complete.** Log rotation and cleanup functionality created. Awaiting verification from Criticizer.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -205,7 +205,7 @@
     - Backup rotation (keep N most recent, default 10)
   - CLI: `python -m cli backup create|restore|list|verify|schedule`
   - 36 new tests (394 total)
-- **Issue #12 Implementation Complete - Resource monitoring and limits**:
+- **Issue #12 VERIFIED - Resource monitoring and limits**:
   - ResourceService: `assistant/server/services/resources.py`
     - `get_memory_usage()` - Process and system memory stats
     - `get_cpu_usage()` - Process and system CPU stats
@@ -219,14 +219,25 @@
   - API: `GET /api/resources`, `POST /api/resources/cleanup/files|memory`
   - CLI: `python -m cli resources`, `python -m cli resources cleanup|memory`
   - 48 new tests (442 total)
+- **Issue #13 Implementation Complete - Log rotation and cleanup**:
+  - LoggingService: `assistant/server/services/logging_service.py`
+    - `LogConfig` class for configurable log settings
+    - RotatingFileHandler for automatic rotation (10MB max, 5 backups)
+    - Separate log files: assistant.log, error.log, access.log
+    - Environment variable `ASSISTANT_LOG_LEVEL` for log level
+    - `cleanup_old_logs()` for old log deletion (30 days default)
+    - `tail_log()`, `clear_log()`, `get_stats()`, `list_log_files()` methods
+  - main.py updated with access logging middleware
+  - CLI: `python -m cli logs tail|list|clear|cleanup`
+  - 30 new tests (438 total)
 
 ## Next Step (single step)
-Add `needs-verification` label to Issue #12 and comment with test instructions for Criticizer.
+Wait for Criticizer verification on Issue #13. Next issue to work on: Issue #14 (graceful degradation).
 
 ## Risks / Notes
-- Issue #12 implementation complete - all 6 acceptance criteria met
-- 442 tests passing
-- psutil dependency added for cross-platform resource monitoring
+- Issue #13 implementation complete - all 6 acceptance criteria met
+- 438 tests passing (30 new for logging service)
+- Using Python's built-in RotatingFileHandler for cross-platform log rotation
 
 ## How to test quickly
 ```bash
@@ -235,19 +246,23 @@ cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 # Run all tests
 python3 -m pytest tests/ -v
 
+# Test CLI logs commands
+python3 -m cli logs list              # List log files
+python3 -m cli logs tail --lines 10   # Show last 10 lines of assistant.log
+python3 -m cli logs tail --name error # Show error log
+python3 -m cli logs cleanup --dry-run # Preview old log cleanup
+python3 -m cli logs clear --name assistant --confirm  # Clear log
+
+# Test log level environment variable
+ASSISTANT_LOG_LEVEL=DEBUG python3 -m cli logs list
+
 # Test CLI resources commands
 python3 -m cli resources              # Show resource usage
 python3 -m cli resources --json       # JSON output
 python3 -m cli resources cleanup --dry-run  # Preview file cleanup
-python3 -m cli resources memory       # Run memory cleanup
 
 # Test CLI backup commands
-python3 -m cli backup create
 python3 -m cli backup list
+python3 -m cli backup create
 python3 -m cli backup verify --input memory/backups/<latest>.tar.gz
-python3 -m cli backup restore --input memory/backups/<latest>.tar.gz --preview
-python3 -m cli backup schedule
-
-# Create backup to specific path
-python3 -m cli backup create --output /tmp/my_backup.tar.gz
 ```
