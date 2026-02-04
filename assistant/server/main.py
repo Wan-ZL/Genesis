@@ -43,6 +43,11 @@ async def lifespan(app: FastAPI):
     suggestion_service = get_suggestion_service(scanner.capabilities)
     logger.info("Tool suggestion service initialized")
 
+    # Initialize alert service for error monitoring
+    from server.routes.alerts import init_alert_service
+    init_alert_service()
+    logger.info("Alert service initialized")
+
     logger.info(f"Using model: {config.MODEL}")
     if not config.OPENAI_API_KEY and not config.ANTHROPIC_API_KEY:
         logger.warning("No API key set - configure via Settings page or .env files")
@@ -67,7 +72,7 @@ app.add_middleware(
 )
 
 # Import and include routers
-from server.routes import chat, status, upload, metrics, settings, capabilities
+from server.routes import chat, status, upload, metrics, settings, capabilities, alerts
 
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(status.router, prefix="/api", tags=["status"])
@@ -75,6 +80,7 @@ app.include_router(upload.router, prefix="/api", tags=["upload"])
 app.include_router(metrics.router, prefix="/api", tags=["metrics"])
 app.include_router(settings.router, prefix="/api", tags=["settings"])
 app.include_router(capabilities.router, prefix="/api", tags=["capabilities"])
+app.include_router(alerts.router, prefix="/api", tags=["alerts"])
 
 # Serve static UI files (when they exist)
 UI_PATH = Path(__file__).parent.parent / "ui"

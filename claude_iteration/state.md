@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #9 Implementation Complete.** Path inconsistency tech debt resolved. Awaiting verification from Criticizer.
+**Issue #10 Implementation Complete.** Error alerting and notification system created. Awaiting verification from Criticizer.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -180,15 +180,28 @@
   - Created `scripts/genesis-env.sh` with validation utility
   - Created `docs/PATHS.md` documenting canonical path usage
   - ARCHITECTURE.md: Updated startup instructions with $GENESIS_DIR
+- **Issue #10 Implementation Complete - Error alerting system**:
+  - AlertService: `assistant/server/services/alerts.py`
+    - Error threshold detection (configurable errors/minute)
+    - SQLite persistence for alert history
+    - Rate limiting to prevent alert spam
+    - macOS notification center integration
+    - Webhook support for external alerting
+  - Alerts API: `assistant/server/routes/alerts.py`
+    - `GET /api/health/detailed` - Enhanced health check with component status
+    - `GET /api/alerts` - List alerts with filtering
+    - `GET /api/alerts/stats` - Statistics
+    - `POST /api/alerts/{id}/acknowledge` - Acknowledge alert
+  - CLI: `python -m assistant.cli alerts list|stats|acknowledge|clear`
+  - 30 new tests (358 total)
 
 ## Next Step (single step)
-Wait for Criticizer to verify Issue #9.
+Add `needs-verification` label to Issue #10 and comment with test instructions for Criticizer.
 
 ## Risks / Notes
-- Issue #9 implementation complete - all 5 acceptance criteria met
-- 328 tests still passing
-- Exception: `.claude/settings.json` must use absolute path (Claude Code requirement)
-- Old paths (`/Users/zelin/Startups/Genesis`) fully removed from active code
+- Issue #10 implementation complete - all 6 acceptance criteria met
+- 358 tests passing
+- aiohttp added to requirements.txt for webhook support
 
 ## How to test quickly
 ```bash
@@ -197,12 +210,12 @@ cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 # Run all tests
 python3 -m pytest tests/ -v
 
-# Test CLI export
-python3 -m cli export --output /tmp/test.json
-
-# Test CLI import
-python3 -m cli import --input /tmp/test.json --mode merge
+# Test CLI alerts
+python3 -m assistant.cli alerts list
+python3 -m assistant.cli alerts stats
 
 # Test API (requires server running)
-curl http://127.0.0.1:8080/api/conversation/export
+curl http://127.0.0.1:8080/api/health/detailed
+curl http://127.0.0.1:8080/api/alerts
+curl http://127.0.0.1:8080/api/alerts/stats
 ```
