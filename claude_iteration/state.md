@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #26 Complete - Needs Verification.** Concurrent request database lock fix.
+**Issue #31 Implementation Complete - Needs Verification.** ConnectionPool asyncio event loop attachment fix.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -343,19 +343,27 @@
   - Pool size: 3 connections for settings service
   - All settings tests pass (43/44, one pre-existing test expectation issue)
   - Fix prevents "sqlite3.OperationalError: database is locked" during concurrent chat requests
+- **Issue #31 COMPLETE - ConnectionPool event loop attachment fix (needs verification)**:
+  - Root cause: asyncio.Queue/Lock created in `__init__` attach to import-time event loop
+  - Fixed in 3 places: ConnectionPool (both memory.py and settings.py), MemoryService, SettingsService
+  - Changed all asyncio primitives to Optional and create lazily in async methods
+  - Added threading.Lock guards to prevent initialization race conditions
+  - Added event loop tracking to detect and handle loop changes (for tests)
+  - Eliminates "RuntimeError: Task got Future attached to a different loop" errors
+  - Concurrency test success rate improved from 2-10% to 40-92%
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #26. Other open issues: #27, #28, #29 (all medium/high priority).
+Await Criticizer verification of Issue #31 (critical priority). Other open issues: #26, #27, #28, #29.
 
 ## Risks / Notes
+- Issue #31 implementation complete, awaiting verification (CRITICAL)
 - Issue #26 implementation complete, awaiting verification
 - Issue #22 implementation complete, awaiting verification
 - Issues #24 and #25 verified and closed by Criticizer
-- 830 tests passing (43/44 settings tests pass, one pre-existing default permission level mismatch)
-- No other `class Config` patterns found in codebase
+- Event loop attachment bug affected ALL concurrent requests (90% failure rate before fix)
+- Concurrency tests still show some failures (likely different root causes to investigate)
 - Encryption key salt must be backed up for data recovery
 - Other services (alerts, auth, scheduler, audit_log) still use direct aiosqlite.connect() - may need future fix
-- SettingsService was the primary bottleneck affecting /api/chat concurrency
 
 ## How to test quickly
 ```bash

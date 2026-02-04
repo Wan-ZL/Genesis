@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 import uuid
+import threading
 
 import config
 
@@ -26,18 +27,37 @@ class ConnectionPool:
     def __init__(self, db_path: Path, pool_size: int = _DB_POOL_SIZE):
         self.db_path = db_path
         self.pool_size = pool_size
-        self._pool: asyncio.Queue = asyncio.Queue(maxsize=pool_size)
+        self._pool: Optional[asyncio.Queue] = None
         self._initialized = False
-        self._lock = asyncio.Lock()
+        self._lock: Optional[asyncio.Lock] = None
+        self._init_lock = threading.Lock()  # Thread-safe lock for initialization
+        self._loop = None  # Track which event loop we're bound to
 
     async def initialize(self):
         """Initialize the connection pool."""
+        # Check if we're on a different event loop than we were initialized with
+        current_loop = asyncio.get_running_loop()
+        if self._loop is not None and self._loop != current_loop:
+            # We've switched event loops, need to reinitialize
+            await self.close()
+
         if self._initialized:
             return
+
+        # Create asyncio primitives lazily to avoid event loop attachment issues
+        # Use thread lock to prevent race condition in creating async lock
+        with self._init_lock:
+            if self._lock is None:
+                self._loop = current_loop
+                self._lock = asyncio.Lock()
 
         async with self._lock:
             if self._initialized:
                 return
+
+            # Create pool queue lazily
+            if self._pool is None:
+                self._pool = asyncio.Queue(maxsize=self.pool_size)
 
             # Create pool of connections
             for _ in range(self.pool_size):
@@ -58,21 +78,28 @@ class ConnectionPool:
     async def acquire(self) -> aiosqlite.Connection:
         """Get a connection from the pool."""
         await self.initialize()
+        if self._pool is None:
+            raise RuntimeError("Connection pool not initialized")
         return await self._pool.get()
 
     async def release(self, conn: aiosqlite.Connection):
         """Return a connection to the pool."""
+        if self._pool is None:
+            raise RuntimeError("Connection pool not initialized")
         await self._pool.put(conn)
 
     async def close(self):
         """Close all connections in the pool."""
-        while not self._pool.empty():
-            try:
-                conn = self._pool.get_nowait()
-                await conn.close()
-            except asyncio.QueueEmpty:
-                break
+        if self._pool is not None:
+            while not self._pool.empty():
+                try:
+                    conn = self._pool.get_nowait()
+                    await conn.close()
+                except asyncio.QueueEmpty:
+                    break
         self._initialized = False
+        self._pool = None
+        self._lock = None
 
 
 class PooledConnection:
@@ -102,7 +129,8 @@ class MemoryService:
         self.db_path = db_path
         self._pool = ConnectionPool(db_path)
         self._tables_created = False
-        self._tables_lock = asyncio.Lock()
+        self._tables_lock: Optional[asyncio.Lock] = None
+        self._tables_init_lock = threading.Lock()
 
     def _get_connection(self) -> PooledConnection:
         """Get a pooled connection context manager."""
@@ -112,6 +140,11 @@ class MemoryService:
         """Ensure database tables exist."""
         if self._tables_created:
             return
+
+        # Create lock lazily to avoid event loop attachment issues
+        with self._tables_init_lock:
+            if self._tables_lock is None:
+                self._tables_lock = asyncio.Lock()
 
         async with self._tables_lock:
             if self._tables_created:
