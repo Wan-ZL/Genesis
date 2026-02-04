@@ -6,19 +6,74 @@ import aiosqlite
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Callable, TypeVar, Any
 import uuid
 import threading
+import random
+import logging
+import functools
 
 import config
+
+logger = logging.getLogger(__name__)
+
+T = TypeVar('T')
 
 
 # Single infinite conversation - all messages go to this conversation
 DEFAULT_CONVERSATION_ID = "main"
 
 # Connection pool settings
-_DB_BUSY_TIMEOUT_MS = 30000  # 30 seconds - wait for locks
-_DB_POOL_SIZE = 5  # Number of connections in pool
+_DB_BUSY_TIMEOUT_MS = 5000  # 5 seconds - shorter timeout, rely on retries
+_DB_POOL_SIZE = 10  # Number of connections in pool (increased for concurrent writes)
+_DB_MAX_RETRIES = 5  # Number of retries for database operations
+_DB_RETRY_BASE_DELAY = 0.05  # Base delay for exponential backoff (50ms)
+
+
+def with_db_retry(max_retries: int = _DB_MAX_RETRIES, base_delay: float = _DB_RETRY_BASE_DELAY):
+    """Decorator to retry database operations on lock errors.
+
+    Uses exponential backoff with jitter to avoid thundering herd.
+    Retries only on OperationalError (database locked).
+    """
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs) -> Any:
+            last_error = None
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+                except aiosqlite.OperationalError as e:
+                    last_error = e
+                    error_msg = str(e).lower()
+
+                    # Only retry on lock-related errors
+                    if "locked" not in error_msg and "busy" not in error_msg:
+                        raise
+
+                    # Don't retry on last attempt
+                    if attempt == max_retries - 1:
+                        logger.error(
+                            f"Database operation failed after {max_retries} retries: {func.__name__}"
+                        )
+                        raise
+
+                    # Exponential backoff with jitter
+                    delay = base_delay * (2 ** attempt)
+                    jitter = random.uniform(0, delay * 0.3)
+                    wait_time = delay + jitter
+
+                    logger.warning(
+                        f"Database locked in {func.__name__}, "
+                        f"retry {attempt + 1}/{max_retries} after {wait_time:.3f}s"
+                    )
+                    await asyncio.sleep(wait_time)
+
+            # Should not reach here, but just in case
+            raise last_error or RuntimeError(f"Retry logic failed for {func.__name__}")
+
+        return wrapper
+    return decorator
 
 
 class ConnectionPool:
@@ -197,21 +252,21 @@ class MemoryService:
                 await db.commit()
             self._tables_created = True
 
+    @with_db_retry()
     async def _ensure_default_conversation(self):
-        """Ensure the single default conversation exists."""
+        """Ensure the single default conversation exists.
+
+        Uses INSERT OR IGNORE to safely handle concurrent initialization.
+        """
+        now = datetime.now().isoformat()
         async with self._get_connection() as db:
-            cursor = await db.execute(
-                "SELECT 1 FROM conversations WHERE id = ?",
-                (DEFAULT_CONVERSATION_ID,)
+            # Use INSERT OR IGNORE to avoid race condition
+            # If conversation already exists, this is a no-op
+            await db.execute(
+                "INSERT OR IGNORE INTO conversations (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                (DEFAULT_CONVERSATION_ID, "Conversation", now, now)
             )
-            row = await cursor.fetchone()
-            if not row:
-                now = datetime.now().isoformat()
-                await db.execute(
-                    "INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                    (DEFAULT_CONVERSATION_ID, "Conversation", now, now)
-                )
-                await db.commit()
+            await db.commit()
 
     async def create_conversation(self, title: Optional[str] = None) -> str:
         """Create a new conversation and return its ID."""
@@ -241,6 +296,7 @@ class MemoryService:
             row = await cursor.fetchone()
             return row is not None
 
+    @with_db_retry()
     async def add_message(self, conversation_id: str, role: str, content: str) -> str:
         """Add a message to a conversation.
 
@@ -275,6 +331,7 @@ class MemoryService:
         await self._ensure_default_conversation()
         return await self.add_message(DEFAULT_CONVERSATION_ID, role, content)
 
+    @with_db_retry()
     async def remove_last_message(self, conversation_id: str):
         """Remove the last message from a conversation (for error recovery)."""
         await self._ensure_initialized()
@@ -453,19 +510,10 @@ class MemoryService:
                     summary = _create_text_summary(batch, config.MAX_SUMMARY_LENGTH)
                     summaries_to_add.append(summary)
 
-                    # Store the summary
-                    summary_id = f"sum_{uuid.uuid4().hex[:12]}"
-                    async with self._get_connection() as db:
-                        await db.execute(
-                            """INSERT INTO message_summaries
-                               (id, conversation_id, start_message_id, end_message_id,
-                                message_count, summary, created_at)
-                               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                            (summary_id, DEFAULT_CONVERSATION_ID,
-                             batch[0][0], batch[-1][0],
-                             len(batch), summary, datetime.now().isoformat())
-                        )
-                        await db.commit()
+                    # Store the summary with retry logic
+                    await self._store_summary(
+                        batch[0][0], batch[-1][0], len(batch), summary
+                    )
 
         # Add summaries as context
         if summaries_to_add:
@@ -485,6 +533,28 @@ class MemoryService:
             "verbatim_count": verbatim_count,
             "summaries_used": len(summaries_to_add)
         }
+
+    @with_db_retry()
+    async def _store_summary(
+        self, start_msg_id: str, end_msg_id: str, msg_count: int, summary: str
+    ):
+        """Store a message summary with retry logic.
+
+        Helper method for get_context_for_api() to handle database writes
+        with automatic retries on lock errors.
+        """
+        summary_id = f"sum_{uuid.uuid4().hex[:12]}"
+        async with self._get_connection() as db:
+            await db.execute(
+                """INSERT INTO message_summaries
+                   (id, conversation_id, start_message_id, end_message_id,
+                    message_count, summary, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (summary_id, DEFAULT_CONVERSATION_ID,
+                 start_msg_id, end_msg_id,
+                 msg_count, summary, datetime.now().isoformat())
+            )
+            await db.commit()
 
     async def get_summaries(self) -> list[dict]:
         """Get all stored summaries for the conversation.

@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 SENSITIVE_KEYS = {"openai_api_key", "anthropic_api_key", "calendar_password"}
 
 # Connection pool settings
-_DB_BUSY_TIMEOUT_MS = 30000  # 30 seconds - wait for locks
-_DB_POOL_SIZE = 3  # Number of connections in pool
+_DB_BUSY_TIMEOUT_MS = 5000  # 5 seconds - shorter timeout, rely on retries
+_DB_POOL_SIZE = 5  # Number of connections in pool (increased for concurrent access)
 
 
 class ConnectionPool:

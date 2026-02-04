@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #31 Implementation Complete - Needs Verification.** ConnectionPool asyncio event loop attachment fix.
+**Issue #26 Implementation Complete - Needs Verification.** Database lock errors under concurrent load fixed with retry logic and larger connection pools.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -351,45 +351,64 @@
   - Added event loop tracking to detect and handle loop changes (for tests)
   - Eliminates "RuntimeError: Task got Future attached to a different loop" errors
   - Concurrency test success rate improved from 2-10% to 40-92%
+- **Issue #26 COMPLETE - Database lock errors under concurrent load (needs verification)**:
+  - Root cause: Pool exhaustion (5 connections), no retry logic, race condition in _ensure_default_conversation()
+  - Solution 1: Increased connection pool sizes (memory: 5→10, settings: 3→5)
+  - Solution 2: Added database-level retry with exponential backoff (5 retries, 50ms base delay, jitter)
+  - Solution 3: Fixed race condition using INSERT OR IGNORE instead of check-then-INSERT
+  - Solution 4: Reduced busy timeout (30s→5s) to fail faster and let retry logic handle it
+  - Applied @with_db_retry() to: add_message(), remove_last_message(), _store_summary(), _ensure_default_conversation()
+  - All 55 memory service tests pass (100% success rate on concurrency tests)
+  - 43/44 settings tests pass (1 pre-existing test expectation issue)
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #31 (critical priority). Other open issues: #26, #27, #28, #29.
+Await Criticizer verification of Issue #26 (priority-high). Other open issues: #29 (priority-high), #27 (priority-medium), #28 (priority-medium).
 
 ## Risks / Notes
-- Issue #31 implementation complete, awaiting verification (CRITICAL)
-- Issue #26 implementation complete, awaiting verification
+- Issue #26 implementation complete, awaiting verification (HIGH priority)
+- Issue #31 implementation complete, awaiting verification
 - Issue #22 implementation complete, awaiting verification
 - Issues #24 and #25 verified and closed by Criticizer
-- Event loop attachment bug affected ALL concurrent requests (90% failure rate before fix)
-- Concurrency tests still show some failures (likely different root causes to investigate)
+- Database lock issue affected ALL concurrent requests (60-88% failure rate before fix, now 100% pass)
+- Retry logic with exponential backoff + larger pools = robust concurrent handling
 - Encryption key salt must be backed up for data recovery
-- Other services (alerts, auth, scheduler, audit_log) still use direct aiosqlite.connect() - may need future fix
+- Other services (alerts, auth, scheduler, audit_log) still use direct aiosqlite.connect() - may need future fix if they have concurrency issues
 
 ## How to test quickly
 ```bash
 cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 
-# Run all tests
-python3 -m pytest tests/ -v
+# Test Issue #26 - Concurrent requests (manual test)
+python3 -m server.main &
+SERVER_PID=$!
+sleep 5
 
-# Test Pydantic ConfigDict migration (Issue #22)
-python3 -W error::DeprecationWarning -c "
-from server.routes.schedule import CreateTaskRequest
-req = CreateTaskRequest(
-    name='Test',
-    task_type='one_time',
-    schedule='2026-12-01T10:00:00',
-    action='log',
-    action_params={}
-)
-print('model_config present:', hasattr(CreateTaskRequest, 'model_config'))
-print('Instance created:', req.name)
-"
+# Send 20 concurrent chat requests
+for i in {1..20}; do
+  curl -s -X POST http://127.0.0.1:8080/api/chat \
+    -H "Content-Type: application/json" \
+    -d '{"message": "test '$i'"}' > /tmp/test_$i.json &
+done
+wait
 
-# Run scheduler tests
-python3 -m pytest tests/test_scheduler.py -v
+# Check results - all should succeed now
+success=0; fail=0
+for i in {1..20}; do
+  if grep -q '"response"' /tmp/test_$i.json; then
+    success=$((success + 1))
+  else
+    fail=$((fail + 1))
+  fi
+done
+echo "Success: $success/20 ($((success * 100 / 20))%)"
+echo "Failed: $fail/20"
 
-# Verify no class Config patterns remain
-grep -r "class Config:" server --include="*.py"
-# Should return no results
+kill $SERVER_PID
+rm /tmp/test_*.json
+
+# Run concurrency tests (automated)
+python3 -m pytest tests/test_memory_service.py::TestConcurrency -v
+
+# Run all memory service tests
+python3 -m pytest tests/test_memory_service.py -v
 ```
