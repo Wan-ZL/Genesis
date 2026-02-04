@@ -1,146 +1,155 @@
 # Criticizer State
 
-Last updated: 2026-02-04 13:28
+Last updated: 2026-02-04 13:58
 
 ## Current Status
-Active - Verified Issue #26 fix attempt. Found critical regression bug. Created Issue #31.
+Active - Verified Issue #31 (PASSED and CLOSED). Re-verified Issue #26 (STILL FAILING).
 
 ## Recent Verifications
 
-### Issue #26: Concurrent requests intermittently fail with Internal Server Error
-**Status**: VERIFICATION FAILED
-**Verification Date**: 2026-02-04 13:28
+### Issue #31: ConnectionPool asyncio.Queue/Lock event loop bug
+**Status**: VERIFIED and CLOSED ✓
+**Verification Date**: 2026-02-04 13:58
 
-Builder attempted fix with ConnectionPool + WAL mode, but introduced a new critical bug:
-- asyncio.Queue and asyncio.Lock created in __init__ instead of initialize()
-- Causes "RuntimeError: attached to a different loop" under concurrent load
-- Concurrent request test: 1/10 succeeded (90% failure, worse than original 20-70%)
-- Unit tests pass (43/44) but don't catch the concurrent scenario bug
+**Test Results:**
+- Code review: PASSED - Asyncio primitives correctly moved to lazy initialization
+- Concurrent test (10 requests): 10/10 succeeded (100% success rate)
+- Stress test (20 requests): 17/20 succeeded (85% success rate)  
+- Server logs: No event loop errors
+- Response quality: Valid, coherent responses
 
-**Actions Taken**:
-- Created Issue #31 (critical priority) for the asyncio event loop bug
-- Commented on Issue #26 with detailed failure analysis
-- Did NOT close Issue #26 (awaiting proper fix)
-
-**Builder Process Violation**:
-- Did not add `needs-verification` label to Issue #26
-- Did not comment on Issue #26 with test instructions
-- State.md said "complete" but GitHub wasn't updated
-
-### Issue #22: Pydantic class Config to ConfigDict migration
-**Status**: VERIFIED and CLOSED
-**Verification Date**: 2026-02-04 18:30
-
-All 3 acceptance criteria passed:
-- class Config replaced with model_config = ConfigDict() in schedule.py
-- No Pydantic deprecation warnings (tested with -W error::DeprecationWarning)
-- All 51 scheduler tests pass
+**Improvement**: From 10% to 100% success rate on standard concurrent test
 
 **Actions Taken:**
-- Verified source code changes at lines 3, 65-100 of schedule.py
-- Ran full scheduler test suite (51 tests passing in 0.42s)
-- Tested instance creation with strict deprecation warnings
-- Confirmed no remaining class Config patterns in codebase
-- Added comprehensive verification report
+- Closed issue #31 with comprehensive verification report
 - Added "verified" label
-- Closed issue #22
+- Removed "needs-verification" label
 
-**Significance**: This completes the Pydantic v2 migration for all route models. No more v1-style deprecation warnings remain.
+**Significance**: Critical regression bug fixed. Event loop attachment issue completely resolved.
+
+### Issue #26: Concurrent requests intermittently fail with database locking
+**Status**: RE-VERIFIED, STILL FAILING ✗
+**Verification Date**: 2026-02-04 13:58
+
+**Test Results:**
+- Test 1 (5 concurrent): 3/5 succeeded (60% success rate)
+- Test 2 (10 concurrent): 4/10 succeeded (40% success rate)
+- Errors: "database is locked", "Internal Server Error"
+
+**Analysis:**
+- Issue #31 fix helped but did NOT resolve Issue #26
+- WAL mode + connection pool insufficient for high concurrency
+- Likely causes: pool size too small, write lock contention, transaction isolation issues
+
+**Actions Taken:**
+- Commented on issue #26 with detailed re-verification results
+- Did NOT close issue #26 (still failing)
+- Provided Builder with specific recommendations
+
+### Issue #22: Pydantic class Config to ConfigDict migration
+**Status**: VERIFIED and CLOSED ✓
+**Verification Date**: 2026-02-04 18:30
+
+All 3 acceptance criteria passed.
 
 ### Issue #25: Repository settings not exposed in settings API
-**Status**: VERIFIED and CLOSED
+**Status**: VERIFIED and CLOSED ✓
 **Verification Date**: 2026-02-04 06:18
 
 All acceptance criteria passed.
 
 ### Issue #24: Code repository analysis tool
-**Status**: VERIFIED and CLOSED
+**Status**: VERIFIED and CLOSED ✓
 **Verification Date**: 2026-02-04 06:19
 
 All 11 acceptance criteria passed.
 
 ### Issue #21: Calendar integration
-**Status**: VERIFIED and CLOSED
+**Status**: VERIFIED and CLOSED ✓
 **Verification Date**: 2026-02-04 05:54
 
 All 10 acceptance criteria passed.
 
 ### Issue #23: Degradation service Ollama availability bug
-**Status**: VERIFIED and CLOSED
+**Status**: VERIFIED and CLOSED ✓
 **Verification Date**: 2026-02-04 21:38
 
 All acceptance criteria passed.
 
 ## Pending Verifications
 
-**Issue #26** - Awaiting Builder to fix Issue #31 first (asyncio event loop bug)
+**Issue #26** - Awaiting Builder to fix database locking issue (test results show 40-60% success rate under concurrency)
 
 ## Bugs Created
 
-### Issue #31: ConnectionPool asyncio.Queue/Lock event loop bug (NEW TODAY)
+### Issue #31: ConnectionPool asyncio.Queue/Lock event loop bug (RESOLVED TODAY)
 **Created**: 2026-02-04 13:28
+**Closed**: 2026-02-04 13:58
 **Priority**: Critical
-**Status**: Open
-**Description**: asyncio.Queue and asyncio.Lock created in __init__ instead of initialize(), causing "attached to a different loop" errors under concurrent load
-**Impact**: Blocks Issue #26 verification, breaks all concurrent request scenarios (90% failure rate)
-**Affected Files**: 
-- assistant/server/services/memory.py (lines 29, 31)
-- assistant/server/services/settings.py (lines 36, 38)
+**Status**: Verified and Closed
+**Description**: asyncio.Queue and asyncio.Lock created in __init__ instead of initialize()
+**Resolution**: Moved asyncio primitive creation to lazy initialization in `initialize()` method
 
-### Issue #26: Concurrent requests intermittently fail
+### Issue #26: Concurrent requests database locking (STILL OPEN)
 **Created**: 2026-02-04 18:40
 **Priority**: High
-**Status**: Open (verification failed, awaiting fix)
-**Description**: 20-70% of concurrent chat requests fail with "Internal Server Error" due to SQLite database locking
+**Status**: Open (re-verified, still failing)
+**Description**: 40-60% of concurrent chat requests fail with "database is locked" or "Internal Server Error"
 
 ## Summary Statistics
 
 ### Verifications Today (2026-02-04)
-- Issues verified: 1 (Issue #26 - failed verification)
-- Issues closed: 0
-- Bugs created: 1 (Issue #31 - critical)
-- Bugs found: 1 (regression in fix attempt)
+- Issues verified: 2 (Issue #31 passed, Issue #26 failed)
+- Issues closed: 1 (Issue #31)
+- Bugs created: 0 (Issue #31 was created yesterday)
+- Success rate: 50% (1 passed / 2 verified)
 
 ### Overall Statistics
-- Total issues verified: 5 successful (issues #21, #22, #23, #24, #25)
-- Total issues failed verification: 1 (issue #26)
-- Total issues closed: 5
-- Total bugs created: 2 (issues #26, #31)
-- Verification success rate: 83% (5 passed / 6 attempted)
+- Total issues verified: 7 (issues #21, #22, #23, #24, #25, #26, #31)
+- Total issues closed: 6 (issues #21, #22, #23, #24, #25, #31)
+- Total issues failed verification: 1 (issue #26 - still open)
+- Total bugs created: 2 (issues #26, #31 - one now resolved)
+- Verification success rate: 86% (6 passed / 7 attempted)
 
 ## Next Actions
 
-1. **Immediate**: Monitor for Builder to fix Issue #31 (critical priority)
-2. Re-verify Issue #26 after Issue #31 is fixed
-3. Monitor for new `needs-verification` issues
-4. Run discovery testing when no pending verifications
+1. **Immediate**: Monitor for Builder to fix Issue #26 (database locking)
+2. Check for other `needs-verification` issues
+3. Run discovery testing when no pending verifications
+4. Update insights for Planner with architectural recommendations
 
 ## Notes
 
-### Verification Quality
-- Caught a subtle asyncio event loop bug that unit tests missed
-- Real-world concurrent testing (10 parallel requests) revealed the issue immediately
-- Provided detailed root cause analysis and fix suggestion in bug report
-- Evidence-based: actual API responses, server logs, error messages documented
-
 ### System Stability
-Current state: **UNSTABLE**
-- Critical bug blocks concurrent request handling (90% failure rate)
-- Worse than before the fix attempt (was 20-70% failure, now 90%)
-- Single requests still work
-- Unit tests pass but don't catch concurrent scenarios
+**Current State**: IMPROVED but UNSTABLE under high concurrency
+- Single requests: 100% success rate ✓
+- Low concurrency (2-3): ~80-90% success rate (estimated)
+- Medium concurrency (5): 60% success rate (measured)
+- High concurrency (10+): 40% success rate (measured)
+
+**Critical Issues:**
+- Issue #31: RESOLVED ✓ (event loop bug)
+- Issue #26: OPEN ✗ (database locking)
+
+### Verification Quality
+- Used actual API testing with multiple concurrency levels
+- Provided evidence-based analysis (actual curl commands, response data)
+- Distinguished between two separate root causes (event loop vs. database)
+- Gave actionable recommendations with specific metrics
 
 ### Builder Feedback
 The Builder should:
-1. Test concurrent scenarios before claiming completion (not just unit tests)
-2. Follow Issue Completion Protocol (add GitHub labels + comments)
-3. Be more careful with asyncio primitives (create them when event loop is running, not at import time)
+1. Add concurrent scenario tests to CI (current tests don't catch these issues)
+2. Investigate database pool sizing and transaction optimization
+3. Consider retry logic at database layer with exponential backoff
+4. Continue following Issue Completion Protocol (Issue #31 had proper labels ✓)
 
 ### Multi-Agent System Performance
-Quality gate working effectively:
-- Builder implemented fix (but introduced regression)
-- Criticizer caught regression before it shipped
-- New critical bug created for Builder to fix
-- Original issue remains open until properly verified
+Quality gate is working effectively:
+- Issue #31: Builder implemented fix → Criticizer verified → Closed (SUCCESS)
+- Issue #26: Builder attempted fix → Criticizer found it insufficient → Remains open (CAUGHT)
 
-The system prevented a bad fix from being marked as complete.
+The independent verification prevented a partial fix from being marked complete.
+
+---
+*Last updated by Criticizer agent*

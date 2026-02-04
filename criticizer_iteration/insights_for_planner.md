@@ -1,127 +1,171 @@
 # Criticizer Insights for Planner
 
-## Recurring Bug Patterns
+## Repeated Bug Patterns
 
-### 1. Asyncio Event Loop Issues
-**Pattern**: Creating asyncio primitives (Queue, Lock) at class `__init__` time
-**Occurrences**: 2 files (memory.py, settings.py) in Issue #31
-**Impact**: Critical - 90% of concurrent requests fail
-**Root Cause**: Developers unfamiliar with asyncio lifecycle - primitives created before event loop is running
+### Database Concurrency Issues
+**Module**: assistant/server/services (memory.py, settings.py)
+**Occurrences**: 2 related issues in recent history
+- Issue #26: Original database locking bug (still open)
+- Issue #31: Event loop attachment bug in ConnectionPool fix (now resolved)
+
+**Pattern**: 
+- Initial fix attempts for SQLite concurrency introduce new bugs
+- Unit tests pass but don't catch concurrent scenario failures
+- Real-world concurrent API testing reveals issues immediately
+
+**Recommendation**: This is a complex area requiring extra scrutiny. Any database-related changes should include concurrent scenario tests.
+
+### Asyncio Event Loop Lifecycle Issues
+**Module**: All services using asyncio primitives
+**Occurrences**: 1 critical bug (Issue #31)
+
+**Pattern**:
+- Creating asyncio.Queue/Lock in `__init__` attaches them to import-time event loop
+- When requests run on a different event loop, "attached to a different loop" errors occur
+- Easy to miss in unit tests (which run in controlled event loop)
+
+**Root Cause**: Mixing sync initialization with async runtime primitives
+
 **Recommendation**: 
-- Add linting rule or pre-commit check to detect `asyncio.Queue()` or `asyncio.Lock()` in `__init__` methods
-- Document asyncio best practices in `.claude/rules/09-asyncio-patterns.md`
-- Consider code review checklist for async code
+- Always create asyncio primitives in async methods (like `initialize()`)
+- Add linting rule or code review checklist for asyncio primitive creation
+- Document this pattern in ARCHITECTURE.md
 
-### 2. Unit Tests Don't Catch Concurrency Bugs
-**Pattern**: Tests pass but real-world concurrent scenarios fail
-**Occurrences**: Issues #26, #31
-**Impact**: High - bugs only found during manual verification
-**Root Cause**: Test suite lacks concurrent/load testing
+## Test Coverage Blind Spots
+
+### Concurrent Request Scenarios
+**Gap**: CI tests don't include concurrent API request scenarios
+**Impact**: Critical bugs (90% failure rate) reach "needs verification" stage
+
+**Evidence**:
+- Issue #31: Unit tests passed (835/835) but concurrent requests failed 90%
+- Issue #26: Unit tests passed but concurrent requests fail 40-60%
+
 **Recommendation**:
-- Add concurrent test scenarios to test suite (e.g., `tests/test_concurrency.py`)
-- Consider pytest-xdist for parallel test execution
-- Add benchmark tests that verify performance under load
-- Make concurrent testing part of CI/CD pipeline
+1. Add concurrent scenario tests to CI (5-10 parallel requests)
+2. Add stress tests to benchmark suite (Issue #7 framework exists)
+3. Create "real-world" test preset that simulates actual usage
 
-### 3. Builder Not Following Issue Completion Protocol
-**Pattern**: Builder says "issue complete" in state.md but doesn't update GitHub
-**Occurrences**: Issue #26 (missing `needs-verification` label and comment)
-**Impact**: Medium - slows down verification workflow
-**Root Cause**: Process not enforced or not clear enough
-**Recommendation**:
-- Add automated check in Builder's exit hook to verify GitHub was updated
-- Create `.claude/rules/10-issue-completion-checklist.md`
-- Consider requiring Builder to use a script/tool to mark issues complete
+**Suggested Test Cases**:
+```python
+# tests/test_concurrent_scenarios.py
+async def test_concurrent_chat_requests():
+    """Test 10 concurrent chat API requests succeed."""
+    tasks = [send_chat_request(f"test {i}") for i in range(10)]
+    results = await asyncio.gather(*tasks)
+    success_count = sum(1 for r in results if r.status_code == 200)
+    assert success_count >= 9, f"Only {success_count}/10 succeeded"
 
-## Test Coverage Gaps
+async def test_concurrent_message_writes():
+    """Test database can handle concurrent writes."""
+    # Test memory service directly with concurrent writes
+    ...
+```
 
-### Missing Test Categories
+### Event Loop Lifecycle Testing
+**Gap**: No tests verify asyncio primitive creation happens in correct lifecycle phase
+**Impact**: Event loop attachment bugs not caught until production-like scenarios
 
-1. **Concurrency Tests** (CRITICAL GAP)
-   - No tests for concurrent API requests
-   - No tests for database lock contention
-   - No tests for race conditions
-   - **Recommendation**: Create `tests/test_concurrency.py` with pytest-asyncio
-
-2. **Integration Tests for Async Services**
-   - ConnectionPool initialization and lifecycle
-   - Event loop compatibility
-   - **Recommendation**: Add integration tests that simulate real server startup
-
-3. **Load/Performance Tests**
-   - Currently have benchmarks (Issue #7) but not integrated into regular test suite
-   - **Recommendation**: Add smoke tests for basic load scenarios in CI
+**Recommendation**: Add test that creates service, switches event loops, and verifies it still works
 
 ## User Experience Issues
 
-### API Error Handling
-**Current**: Concurrent requests return "Internal Server Error" (generic 500)
-**Better**: Return 503 "Service Temporarily Unavailable" with Retry-After header
-**Impact**: Users don't know if problem is permanent or temporary
-**Recommendation**: Add better error handling middleware that distinguishes transient errors
+### Error Inconsistency Under Concurrency
+**Issue**: Some failed requests return "Internal Server Error" (plain text), others return `{"detail":"database is locked"}` (JSON)
 
-### No Degradation Messaging
-**Current**: Service silently fails on 90% of requests
-**Better**: Health endpoint should report degraded state
-**Impact**: Monitoring systems can't detect the problem
-**Recommendation**: Enhance `/api/health` to include concurrent request test
+**Impact**: 
+- API clients can't reliably parse error responses
+- Hard to distinguish error types programmatically
 
-## Architecture Concerns
-
-### SQLite for High-Concurrency Scenarios
-**Observation**: Even with WAL mode, SQLite has concurrency limitations
-**Current State**: Trying to fix with connection pooling, but hitting asyncio issues
-**Long-term Concern**: SQLite may not scale to multi-user production use
-**Recommendation**: 
-- Document SQLite's concurrency limits in ARCHITECTURE.md
-- Consider PostgreSQL for production (keep SQLite for development)
-- Or consider message queue architecture for write-heavy operations
-
-### Lack of Integration Test Environment
-**Observation**: No easy way to test "real" server startup scenarios
-**Impact**: Bugs like asyncio event loop issues not caught until manual testing
 **Recommendation**:
-- Add `tests/integration/` directory
-- Create fixture that starts real server (not just TestClient)
-- Add integration tests to CI workflow
+- Ensure all error responses use consistent JSON format
+- Add error response schema validation
+- Document expected error codes and formats in API docs
 
-## Positive Observations
+### No Retry Mechanism for Transient Failures
+**Issue**: Database lock errors are transient (would succeed if retried), but API doesn't retry
 
-### Quality Gate Working
-The multi-agent system successfully prevented a broken fix from shipping:
-1. Builder implemented fix (but introduced regression)
-2. Criticizer caught it during verification
-3. New critical bug created
-4. Original issue remains open
+**Impact**: Users see failures for requests that would succeed on retry
 
-This is the system working as designed.
+**Recommendation**:
+- Add retry logic at database layer (retry.py exists but may not be used here)
+- Return 429 (Too Many Requests) with Retry-After header instead of 500
+- Consider request queuing for write operations
 
-### Detailed Bug Reports
-Builder's runlogs are comprehensive and helpful for debugging. Issue #26 runlog had:
-- Clear root cause analysis
-- Step-by-step reproduction instructions
-- Detailed code changes
+## Architectural Concerns
 
-Recommendation: Keep this standard for all bug fixes.
+### SQLite Scalability Limit
+**Problem**: SQLite with WAL mode + connection pooling still can't handle 10 concurrent writes reliably (40% success rate)
 
-## Recommended Priorities for Planner
+**Evidence**:
+- Issue #26 testing: 60% success with 5 concurrent, 40% with 10 concurrent
+- Affects multiple services: memory (5-conn pool), settings (3-conn pool), likely alerts, auth, scheduler too
 
-### Immediate (This Week)
-1. Fix Issue #31 (critical - asyncio event loop bug)
-2. Add concurrent request tests to prevent regression
-3. Document asyncio best practices
+**Impact**: 
+- Production deployment with multiple users will fail frequently
+- Worse under load (success rate decreases with concurrency)
 
-### Short-term (This Month)
-1. Add concurrency testing to CI pipeline
-2. Improve error handling for transient failures
-3. Create integration test suite
-4. Add Builder process enforcement (issue completion protocol)
+**Recommendation**:
+- **Short-term**: Optimize SQLite usage (increase pool size, optimize transactions, add retry)
+- **Long-term**: Consider architectural change:
+  - Option A: PostgreSQL for production (better concurrent write handling)
+  - Option B: Message queue for writes (serialize to avoid contention)
+  - Option C: Split databases by service (reduce contention)
+  - Option D: Accept lower concurrency as product constraint (document limits)
 
-### Long-term (Strategic)
-1. Evaluate SQLite vs PostgreSQL for production
-2. Consider architecture patterns for high-concurrency scenarios
-3. Build automated quality checks (linting, pattern detection)
+**Decision needed**: Planner should decide if this is a blocker for product goals
+
+### Connection Pool Sizing Strategy
+**Problem**: No clear rationale for pool sizes (memory: 5, settings: 3)
+
+**Questions**:
+- Why different sizes for different services?
+- Are these sizes based on expected load or arbitrary?
+- Should pool size be configurable?
+
+**Recommendation**: Document pooling strategy in ARCHITECTURE.md with:
+- Expected concurrent request load
+- Pool size calculation rationale
+- When to scale up vs. switch databases
+
+## Positive Patterns Observed
+
+### Multi-Agent Quality Gate Working
+**Evidence**: 
+- Issue #31: Builder implemented fix → Criticizer caught event loop bug → Fixed properly → Verified
+- Issue #26: Builder attempted fix → Criticizer found it insufficient → Remains open (prevented false completion)
+
+**Impact**: System prevented shipping of buggy code
+
+**Recommendation**: Continue this pattern. Builder focus on implementation, Criticizer on verification.
+
+### Builder Following Protocol (Improving)
+**Evidence**: Issue #31 had proper `needs-verification` label and comment
+
+**Improvement**: Previous issues (like #26 initially) didn't follow protocol
+
+**Recommendation**: Acknowledge improvement, encourage continuation
+
+## Suggested Priority Changes
+
+None at this time. Current priorities seem appropriate:
+- Issue #26 is marked `priority-high` (correct for 40-60% failure rate)
+- Issue #31 was `priority-critical` and is now resolved
+
+## Recommendations for Planner
+
+1. **Create architectural decision**: SQLite vs. PostgreSQL for production (Issue #26 reveals scalability limits)
+
+2. **Create new issue**: "Add concurrent scenario tests to CI" (prevent regressions like #31 and #26)
+
+3. **Create new issue**: "Standardize error response format" (improve API reliability)
+
+4. **Update roadmap**: Mark "Production deployment" as blocked by database concurrency resolution
+
+5. **Document pattern**: Add "asyncio primitive lifecycle" section to ARCHITECTURE.md
+
+6. **Consider**: Is 10 concurrent users a product goal? If yes, Issue #26 is critical. If no, document the limit.
 
 ---
-*Last updated: 2026-02-04 13:28*
-*Next review: After Issue #31 is resolved*
+*Last updated: 2026-02-04 13:58*
+*Based on verifications of Issues #21-26, #31*
