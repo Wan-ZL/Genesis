@@ -484,5 +484,697 @@
         "git_commit": null
       }
     ]
+  },
+  {
+    "timestamp": "2026-02-04T01:49:26.369739",
+    "git_commit": "c0ccd5f",
+    "results": [
+      {
+        "name": "test_bench_add_message",
+        "mean_ms": 0.7161578820326681,
+        "stddev_ms": 0.0775013832216339,
+        "min_ms": 0.6337920000001329,
+        "max_ms": 1.3938330000000665,
+        "rounds": 551,
+        "timestamp": "2026-02-04T01:49:26.369317",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_add_message_bulk",
+        "mean_ms": 7.073535787234059,
+        "stddev_ms": 0.48315996928423427,
+        "min_ms": 6.415083000000044,
+        "max_ms": 9.441208999999784,
+        "rounds": 141,
+        "timestamp": "2026-02-04T01:49:26.369353",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_small",
+        "mean_ms": 0.5014516216632416,
+        "stddev_ms": 0.13743995661604935,
+        "min_ms": 0.433875000000139,
+        "max_ms": 4.588792000000286,
+        "rounds": 1948,
+        "timestamp": "2026-02-04T01:49:26.369355",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_large",
+        "mean_ms": 0.5713733071139436,
+        "stddev_ms": 0.14963732828021936,
+        "min_ms": 0.4966670000001727,
+        "max_ms": 5.36441700000001,
+        "rounds": 1729,
+        "timestamp": "2026-02-04T01:49:26.369356",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_with_limit",
+        "mean_ms": 0.5234889567198087,
+        "stddev_ms": 0.02216971842959597,
+        "min_ms": 0.4770839999999055,
+        "max_ms": 0.8410830000000757,
+        "rounds": 1756,
+        "timestamp": "2026-02-04T01:49:26.369357",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_messages_small",
+        "mean_ms": 0.3243987246181433,
+        "stddev_ms": 0.017306005099987812,
+        "min_ms": 0.29362499999940894,
+        "max_ms": 0.5986249999994087,
+        "rounds": 2226,
+        "timestamp": "2026-02-04T01:49:26.369358",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_messages_large",
+        "mean_ms": 0.3423234323111498,
+        "stddev_ms": 0.06080243007153974,
+        "min_ms": 0.30899999999967065,
+        "max_ms": 1.253540999999636,
+        "rounds": 2674,
+        "timestamp": "2026-02-04T01:49:26.369359",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_no_results",
+        "mean_ms": 0.2830776706948625,
+        "stddev_ms": 0.06842329457263716,
+        "min_ms": 0.24441699999933064,
+        "max_ms": 2.999624999999284,
+        "rounds": 2979,
+        "timestamp": "2026-02-04T01:49:26.369360",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_message_count",
+        "mean_ms": 0.2780283098389122,
+        "stddev_ms": 0.16219567626742667,
+        "min_ms": 0.23041600000084372,
+        "max_ms": 5.098124999999953,
+        "rounds": 3476,
+        "timestamp": "2026-02-04T01:49:26.369361",
+        "git_commit": null
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-02-04T01:49:40.274068",
+    "git_commit": "c0ccd5f",
+    "results": [
+      {
+        "name": "test_bench_tool_registration",
+        "mean_ms": 0.000975010536134495,
+        "stddev_ms": 0.0015982368640467528,
+        "min_ms": 0.0007499999998827889,
+        "max_ms": 0.31962499999993454,
+        "rounds": 65394,
+        "timestamp": "2026-02-04T01:49:40.268413",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_tool_lookup",
+        "mean_ms": 9.992753554502034e-05,
+        "stddev_ms": 1.395384019473495e-05,
+        "min_ms": 8.750000000112834e-05,
+        "max_ms": 0.0014550000000035368,
+        "rounds": 109087,
+        "timestamp": "2026-02-04T01:49:40.268455",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_tool_lookup_miss",
+        "mean_ms": 0.00010011882414152764,
+        "stddev_ms": 1.507856214988177e-05,
+        "min_ms": 8.583000000061958e-05,
+        "max_ms": 0.001067919999999667,
+        "rounds": 107632,
+        "timestamp": "2026-02-04T01:49:40.268458",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_list_all_tools",
+        "mean_ms": 0.00018142081898313994,
+        "stddev_ms": 7.550057325983093e-06,
+        "min_ms": 0.0001595799999964953,
+        "max_ms": 0.0005141699999988703,
+        "rounds": 51393,
+        "timestamp": "2026-02-04T01:49:40.268460",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_to_openai_format",
+        "mean_ms": 0.009431207107209717,
+        "stddev_ms": 0.032096861011919456,
+        "min_ms": 0.006958999999362447,
+        "max_ms": 6.179459000000165,
+        "rounds": 81354,
+        "timestamp": "2026-02-04T01:49:40.268461",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_to_claude_format",
+        "mean_ms": 0.007552498190926849,
+        "stddev_ms": 0.004653212983078392,
+        "min_ms": 0.00629100000004712,
+        "max_ms": 0.4612079999999352,
+        "rounds": 71860,
+        "timestamp": "2026-02-04T01:49:40.268462",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_datetime_tool",
+        "mean_ms": 0.0014398376445072026,
+        "stddev_ms": 0.0005547298564567602,
+        "min_ms": 0.0012499999995085886,
+        "max_ms": 0.07141700000001805,
+        "rounds": 25863,
+        "timestamp": "2026-02-04T01:49:40.268466",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_calculate_tool",
+        "mean_ms": 0.004175368702630453,
+        "stddev_ms": 0.00044893083048954335,
+        "min_ms": 0.0036659999995691805,
+        "max_ms": 0.01254199999944916,
+        "rounds": 4486,
+        "timestamp": "2026-02-04T01:49:40.268467",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_calculate_complex",
+        "mean_ms": 0.005706536429383109,
+        "stddev_ms": 0.002592989550779585,
+        "min_ms": 0.004917000000048688,
+        "max_ms": 0.28429099999982554,
+        "rounds": 63328,
+        "timestamp": "2026-02-04T01:49:40.268469",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_lookup_and_execute",
+        "mean_ms": 0.00017563544144449312,
+        "stddev_ms": 2.2567097534354307e-05,
+        "min_ms": 0.00015208999999849482,
+        "max_ms": 0.0015770799999970109,
+        "rounds": 59260,
+        "timestamp": "2026-02-04T01:49:40.268470",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_validate_and_execute",
+        "mean_ms": 0.0034320108732457132,
+        "stddev_ms": 0.00030460394130618135,
+        "min_ms": 0.00287499999984675,
+        "max_ms": 0.02716699999982808,
+        "rounds": 26579,
+        "timestamp": "2026-02-04T01:49:40.268471",
+        "git_commit": null
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-02-04T01:49:56.296399",
+    "git_commit": "c0ccd5f",
+    "results": [
+      {
+        "name": "test_bench_chat_request_mocked",
+        "mean_ms": 2.9207565641026023,
+        "stddev_ms": 0.2035342067366286,
+        "min_ms": 2.547833000000388,
+        "max_ms": 3.5311249999998573,
+        "rounds": 39,
+        "timestamp": "2026-02-04T01:49:56.291693",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_chat_message_parsing",
+        "mean_ms": 0.0005919331094326473,
+        "stddev_ms": 3.974706217149708e-05,
+        "min_ms": 0.0004999999996257998,
+        "max_ms": 0.001458000000287285,
+        "rounds": 3573,
+        "timestamp": "2026-02-04T01:49:56.291739",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_chat_response_serialization",
+        "mean_ms": 0.0029461936141265905,
+        "stddev_ms": 0.0002800079728563038,
+        "min_ms": 0.0027499999997182556,
+        "max_ms": 0.01020799999995603,
+        "rounds": 1472,
+        "timestamp": "2026-02-04T01:49:56.291742",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_tools_to_openai_format",
+        "mean_ms": 0.0014541274438100698,
+        "stddev_ms": 0.00022411597277590095,
+        "min_ms": 0.0012604999999332733,
+        "max_ms": 0.061375000000030155,
+        "rounds": 183218,
+        "timestamp": "2026-02-04T01:49:56.291743",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_tools_to_claude_format",
+        "mean_ms": 0.0013973332489985598,
+        "stddev_ms": 0.0023195454970558736,
+        "min_ms": 0.0011659999996638248,
+        "max_ms": 0.8924999999999628,
+        "rounds": 181819,
+        "timestamp": "2026-02-04T01:49:56.291746",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_add_user_message",
+        "mean_ms": 0.7393475505124463,
+        "stddev_ms": 0.1520278634862776,
+        "min_ms": 0.6438749999997384,
+        "max_ms": 3.6250000000004334,
+        "rounds": 1366,
+        "timestamp": "2026-02-04T01:49:56.291747",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_add_and_retrieve",
+        "mean_ms": 1.9611198190661412,
+        "stddev_ms": 0.2197645009190498,
+        "min_ms": 1.694917000000018,
+        "max_ms": 4.131875000000562,
+        "rounds": 514,
+        "timestamp": "2026-02-04T01:49:56.291749",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_analyze_message",
+        "mean_ms": 0.019050295729657125,
+        "stddev_ms": 0.0008604915084027333,
+        "min_ms": 0.016916000000755105,
+        "max_ms": 0.047249999999721126,
+        "rounds": 29740,
+        "timestamp": "2026-02-04T01:49:56.291750",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_analyze_message_no_match",
+        "mean_ms": 0.01497130076294905,
+        "stddev_ms": 0.018759297467329766,
+        "min_ms": 0.011833999999488753,
+        "max_ms": 2.464874999999367,
+        "rounds": 59113,
+        "timestamp": "2026-02-04T01:49:56.291751",
+        "git_commit": null
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-02-04T01:50:15.635232",
+    "git_commit": "c0ccd5f",
+    "results": [
+      {
+        "name": "test_bench_add_message",
+        "mean_ms": 0.7441716924083736,
+        "stddev_ms": 0.3657920702983978,
+        "min_ms": 0.6325000000000358,
+        "max_ms": 6.5996660000000595,
+        "rounds": 764,
+        "timestamp": "2026-02-04T01:50:15.634663",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_add_message_bulk",
+        "mean_ms": 6.760362519480518,
+        "stddev_ms": 0.3997731971710098,
+        "min_ms": 6.247125000000242,
+        "max_ms": 9.383541999999911,
+        "rounds": 154,
+        "timestamp": "2026-02-04T01:50:15.634693",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_small",
+        "mean_ms": 0.5621626699218764,
+        "stddev_ms": 0.8529482105960858,
+        "min_ms": 0.4294169999998765,
+        "max_ms": 30.12229100000008,
+        "rounds": 2048,
+        "timestamp": "2026-02-04T01:50:15.634695",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_large",
+        "mean_ms": 0.5517158508691588,
+        "stddev_ms": 0.052461664516133544,
+        "min_ms": 0.4951249999995966,
+        "max_ms": 1.339250000000014,
+        "rounds": 1093,
+        "timestamp": "2026-02-04T01:50:15.634697",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_with_limit",
+        "mean_ms": 0.547703772458312,
+        "stddev_ms": 0.13993511445049459,
+        "min_ms": 0.4731659999999138,
+        "max_ms": 5.644166999999811,
+        "rounds": 1859,
+        "timestamp": "2026-02-04T01:50:15.634698",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_messages_small",
+        "mean_ms": 0.32888097638436325,
+        "stddev_ms": 0.02323587888113666,
+        "min_ms": 0.2962079999999645,
+        "max_ms": 0.6472080000001768,
+        "rounds": 2456,
+        "timestamp": "2026-02-04T01:50:15.634699",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_messages_large",
+        "mean_ms": 0.3398824732972186,
+        "stddev_ms": 0.021036370722407514,
+        "min_ms": 0.30762500000047766,
+        "max_ms": 0.5726670000001377,
+        "rounds": 2584,
+        "timestamp": "2026-02-04T01:50:15.634701",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_no_results",
+        "mean_ms": 0.27979443847432905,
+        "stddev_ms": 0.023624799116562258,
+        "min_ms": 0.2429579999994047,
+        "max_ms": 0.6358329999986978,
+        "rounds": 3015,
+        "timestamp": "2026-02-04T01:50:15.634702",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_message_count",
+        "mean_ms": 0.2634988828852257,
+        "stddev_ms": 0.03390491037037244,
+        "min_ms": 0.22883300000131612,
+        "max_ms": 0.8197919999997083,
+        "rounds": 3868,
+        "timestamp": "2026-02-04T01:50:15.634703",
+        "git_commit": null
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-02-04T01:50:30.700822",
+    "git_commit": "c0ccd5f",
+    "results": [
+      {
+        "name": "test_bench_add_message",
+        "mean_ms": 0.6998986553287997,
+        "stddev_ms": 0.05941336780640358,
+        "min_ms": 0.6433750000001126,
+        "max_ms": 1.5645829999999528,
+        "rounds": 441,
+        "timestamp": "2026-02-04T01:50:30.700281",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_add_message_bulk",
+        "mean_ms": 6.675719234482762,
+        "stddev_ms": 0.2980514341369869,
+        "min_ms": 6.321624999999997,
+        "max_ms": 7.85675000000019,
+        "rounds": 145,
+        "timestamp": "2026-02-04T01:50:30.700301",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_small",
+        "mean_ms": 0.48847068418286915,
+        "stddev_ms": 0.03892799760511215,
+        "min_ms": 0.4333340000002295,
+        "max_ms": 1.380959000000015,
+        "rounds": 1903,
+        "timestamp": "2026-02-04T01:50:30.700303",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_large",
+        "mean_ms": 0.5507152155688603,
+        "stddev_ms": 0.03958092230147045,
+        "min_ms": 0.5011660000002749,
+        "max_ms": 1.0225420000002927,
+        "rounds": 1503,
+        "timestamp": "2026-02-04T01:50:30.700304",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_with_limit",
+        "mean_ms": 0.5281563429978199,
+        "stddev_ms": 0.03180104762887486,
+        "min_ms": 0.4652090000005771,
+        "max_ms": 1.0157089999998092,
+        "rounds": 1828,
+        "timestamp": "2026-02-04T01:50:30.700305",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_messages_small",
+        "mean_ms": 0.3325935020850605,
+        "stddev_ms": 0.03631196846118985,
+        "min_ms": 0.2958749999999455,
+        "max_ms": 1.4436670000002039,
+        "rounds": 2398,
+        "timestamp": "2026-02-04T01:50:30.700307",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_messages_large",
+        "mean_ms": 0.339868649345932,
+        "stddev_ms": 0.03435966819142704,
+        "min_ms": 0.30529100000009635,
+        "max_ms": 1.83099999999925,
+        "rounds": 2752,
+        "timestamp": "2026-02-04T01:50:30.700308",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_no_results",
+        "mean_ms": 0.27831308367539664,
+        "stddev_ms": 0.0387302607587557,
+        "min_ms": 0.24587500000006202,
+        "max_ms": 2.310832999999235,
+        "rounds": 3167,
+        "timestamp": "2026-02-04T01:50:30.700309",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_message_count",
+        "mean_ms": 0.2595494987290308,
+        "stddev_ms": 0.019685035242415428,
+        "min_ms": 0.23120900000073163,
+        "max_ms": 1.010625000001042,
+        "rounds": 3934,
+        "timestamp": "2026-02-04T01:50:30.700310",
+        "git_commit": null
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-02-04T01:50:56.379975",
+    "git_commit": "c0ccd5f",
+    "results": [
+      {
+        "name": "test_bench_add_message",
+        "mean_ms": 0.8142898787313426,
+        "stddev_ms": 0.3964220977821586,
+        "min_ms": 0.6458330000000956,
+        "max_ms": 7.348125000000039,
+        "rounds": 536,
+        "timestamp": "2026-02-04T01:50:56.379340",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_add_message_bulk",
+        "mean_ms": 7.115661290322561,
+        "stddev_ms": 2.115330335192327,
+        "min_ms": 6.231125000000004,
+        "max_ms": 26.55699999999994,
+        "rounds": 155,
+        "timestamp": "2026-02-04T01:50:56.379381",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_small",
+        "mean_ms": 0.6536318934151787,
+        "stddev_ms": 1.0558762730033617,
+        "min_ms": 0.43729199999997803,
+        "max_ms": 30.292124999999892,
+        "rounds": 1792,
+        "timestamp": "2026-02-04T01:50:56.379383",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_large",
+        "mean_ms": 0.8188419607843377,
+        "stddev_ms": 0.48240915722393996,
+        "min_ms": 0.5341669999996412,
+        "max_ms": 4.894458000000768,
+        "rounds": 714,
+        "timestamp": "2026-02-04T01:50:56.379384",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_with_limit",
+        "mean_ms": 0.6740363330501243,
+        "stddev_ms": 0.2796685678936629,
+        "min_ms": 0.49429199999995177,
+        "max_ms": 4.677082999999804,
+        "rounds": 1177,
+        "timestamp": "2026-02-04T01:50:56.379386",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_messages_small",
+        "mean_ms": 0.39305953152399276,
+        "stddev_ms": 0.32243966322350853,
+        "min_ms": 0.29737500000059924,
+        "max_ms": 9.927291000000338,
+        "rounds": 2395,
+        "timestamp": "2026-02-04T01:50:56.379387",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_messages_large",
+        "mean_ms": 0.3581361318458377,
+        "stddev_ms": 0.04334752446779927,
+        "min_ms": 0.3117919999997554,
+        "max_ms": 0.9954580000002267,
+        "rounds": 1972,
+        "timestamp": "2026-02-04T01:50:56.379388",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_no_results",
+        "mean_ms": 0.28472422311443857,
+        "stddev_ms": 0.04607189535771483,
+        "min_ms": 0.23850000000003035,
+        "max_ms": 2.202458000001073,
+        "rounds": 3487,
+        "timestamp": "2026-02-04T01:50:56.379389",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_message_count",
+        "mean_ms": 0.2655435012964698,
+        "stddev_ms": 0.023177094185970477,
+        "min_ms": 0.2284170000006469,
+        "max_ms": 0.4891249999996461,
+        "rounds": 3471,
+        "timestamp": "2026-02-04T01:50:56.379391",
+        "git_commit": null
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-02-04T01:51:12.698008",
+    "git_commit": "c0ccd5f",
+    "results": [
+      {
+        "name": "test_bench_add_message",
+        "mean_ms": 1.186594665835412,
+        "stddev_ms": 3.746128223942794,
+        "min_ms": 0.6482500000000169,
+        "max_ms": 60.203542,
+        "rounds": 401,
+        "timestamp": "2026-02-04T01:51:12.697384",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_add_message_bulk",
+        "mean_ms": 6.980875843137249,
+        "stddev_ms": 0.46571627615317973,
+        "min_ms": 6.306583000000199,
+        "max_ms": 9.219083000000072,
+        "rounds": 153,
+        "timestamp": "2026-02-04T01:51:12.697419",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_small",
+        "mean_ms": 0.5413586897435899,
+        "stddev_ms": 0.2429720652632869,
+        "min_ms": 0.4298329999996575,
+        "max_ms": 5.730042000000157,
+        "rounds": 1560,
+        "timestamp": "2026-02-04T01:51:12.697421",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_large",
+        "mean_ms": 0.5781649405116112,
+        "stddev_ms": 0.07446439505412092,
+        "min_ms": 0.4962079999999425,
+        "max_ms": 1.9647080000000372,
+        "rounds": 1681,
+        "timestamp": "2026-02-04T01:51:12.697422",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_messages_with_limit",
+        "mean_ms": 0.6277657288351203,
+        "stddev_ms": 0.22372383688664196,
+        "min_ms": 0.4741249999993258,
+        "max_ms": 4.002208000000174,
+        "rounds": 1571,
+        "timestamp": "2026-02-04T01:51:12.697423",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_messages_small",
+        "mean_ms": 0.7775262956941988,
+        "stddev_ms": 5.0237003862459915,
+        "min_ms": 0.30008299999995103,
+        "max_ms": 229.13595899999973,
+        "rounds": 2276,
+        "timestamp": "2026-02-04T01:51:12.697424",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_messages_large",
+        "mean_ms": 0.37744169139194345,
+        "stddev_ms": 0.12455597106750052,
+        "min_ms": 0.30945800000026225,
+        "max_ms": 2.886915999999573,
+        "rounds": 2184,
+        "timestamp": "2026-02-04T01:51:12.697426",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_search_no_results",
+        "mean_ms": 0.2973211239116065,
+        "stddev_ms": 0.0674405318680028,
+        "min_ms": 0.24466600000039307,
+        "max_ms": 2.2971249999983456,
+        "rounds": 2986,
+        "timestamp": "2026-02-04T01:51:12.697427",
+        "git_commit": null
+      },
+      {
+        "name": "test_bench_get_message_count",
+        "mean_ms": 0.2654349302716511,
+        "stddev_ms": 0.08924046790559804,
+        "min_ms": 0.2310830000009645,
+        "max_ms": 5.176209000000043,
+        "rounds": 3571,
+        "timestamp": "2026-02-04T01:51:12.697428",
+        "git_commit": null
+      }
+    ]
   }
 ]
