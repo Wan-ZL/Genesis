@@ -12,7 +12,7 @@
 
 ## 日志输出位置
 
-所有日志写入 `/Volumes/Storage/Server/Startup/Genesis/claude_iteration/runlog/`:
+所有日志写入 `$GENESIS_DIR/claude_iteration/runlog/` (project root):
 - `session-YYYY-MM-DD.log` - session 启动记录
 - `YYYY-MM-DD_HHMM.md` - 每次 Stop 时的 runlog
 

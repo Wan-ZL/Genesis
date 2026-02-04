@@ -178,10 +178,10 @@ PORT = 8080
 ## 启动方式
 
 ```bash
-cd /Users/zelin/Startups/Genesis/assistant
+cd $GENESIS_DIR/assistant  # or cd to the assistant/ directory
 pip install -r requirements.txt
 python -m server.main
-# 访问 http://127.0.0.1:8080
+# Visit http://127.0.0.1:8080
 ```
 
 ## 与 Claude Code 的关系

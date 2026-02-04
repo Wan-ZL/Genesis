@@ -2,7 +2,9 @@
 # Hook: SessionStart (6)
 # Purpose: Initialize session, create daily log file
 
-LOGDIR="/Volumes/Storage/Server/Startup/Genesis/claude_iteration/runlog"
+# Auto-detect GENESIS_DIR from script location (hooks/ -> parent)
+GENESIS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+LOGDIR="$GENESIS_DIR/claude_iteration/runlog"
 TODAY=$(date +%Y-%m-%d)
 SESSION_LOG="$LOGDIR/session-$TODAY.log"
 

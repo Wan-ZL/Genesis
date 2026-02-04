@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #8 Implementation Complete.** Conversation export/import functionality added. Awaiting verification from Criticizer.
+**Issue #9 Implementation Complete.** Path inconsistency tech debt resolved. Awaiting verification from Criticizer.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -173,19 +173,26 @@
   - Export format v1.0 with messages, timestamps, file references
   - Merge mode (skip duplicates) and replace mode (clear existing)
   - 20 new tests (328 total)
+- **Issue #9 Implementation Complete - Path inconsistency fixed**:
+  - Shell scripts: All now use auto-detection `$(cd "$(dirname "$0")" && pwd)`
+  - supervisord.conf: Uses `%(ENV_GENESIS_DIR)s` instead of hardcoded path
+  - Agent docs (criticizer.md, planner.md): Use `$GENESIS_DIR` placeholder
+  - Created `scripts/genesis-env.sh` with validation utility
+  - Created `docs/PATHS.md` documenting canonical path usage
+  - ARCHITECTURE.md: Updated startup instructions with $GENESIS_DIR
 
 ## Next Step (single step)
-Wait for Criticizer to verify Issue #8, then work on Issue #9 (path inconsistency tech debt).
+Wait for Criticizer to verify Issue #9.
 
 ## Risks / Notes
-- Issue #8 implementation complete - all 7 acceptance criteria met
-- 328 tests passing (20 new tests)
-- CLI module created at `assistant/cli/`
-- Route ordering fixed to prevent `/conversation/export` matching dynamic route
+- Issue #9 implementation complete - all 5 acceptance criteria met
+- 328 tests still passing
+- Exception: `.claude/settings.json` must use absolute path (Claude Code requirement)
+- Old paths (`/Users/zelin/Startups/Genesis`) fully removed from active code
 
 ## How to test quickly
 ```bash
-cd /Volumes/Storage/Server/Startup/Genesis/assistant
+cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 
 # Run all tests
 python3 -m pytest tests/ -v

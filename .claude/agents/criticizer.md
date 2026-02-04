@@ -29,7 +29,7 @@ You are NOT a code reviewer. You are a functional verifier. The difference:
 ### Step 1: Find Issues to Verify
 
 ```bash
-cd /Volumes/Storage/Server/Startup/Genesis
+cd $GENESIS_DIR  # project root
 gh issue list --label "needs-verification" --state open --json number,title,body
 ```
 
@@ -45,7 +45,7 @@ For each issue:
 ### Step 3: Run Real Tests
 
 ```bash
-cd /Volumes/Storage/Server/Startup/Genesis/assistant
+cd $GENESIS_DIR  # project root/assistant
 
 # Ensure clean state
 pkill -f "python -m server.main" 2>/dev/null || true
@@ -150,7 +150,7 @@ See linked bug for details."
 Run exploratory tests to find new bugs:
 
 ```bash
-cd /Volumes/Storage/Server/Startup/Genesis/assistant
+cd $GENESIS_DIR  # project root/assistant
 python -m server.main &
 sleep 5
 

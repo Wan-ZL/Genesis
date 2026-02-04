@@ -39,7 +39,7 @@ You are NOT a developer. You do NOT write production code. You think about:
 ### Step 1: Gather Context
 
 ```bash
-cd /Volumes/Storage/Server/Startup/Genesis
+cd $GENESIS_DIR  # project root
 
 # Current state
 cat planner_iteration/state.md

@@ -2,7 +2,8 @@
 # Hook: SessionEnd (8)
 # Purpose: Commit changes to git, push to remote, then trigger next iteration
 
-GENESIS_DIR="/Volumes/Storage/Server/Startup/Genesis"
+# Auto-detect GENESIS_DIR from script location (hooks/ -> parent)
+GENESIS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LOOP_FLAG_FILE="$GENESIS_DIR/hooks/loop_claude_code.txt"
 RUNLOG_DIR="$GENESIS_DIR/claude_iteration/runlog"
 

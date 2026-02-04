@@ -2,7 +2,8 @@
 # 启动自动循环
 # 每次迭代完成后，Stop hook 会在新 Terminal 窗口中启动下一轮
 
-GENESIS_DIR="/Volumes/Storage/Server/Startup/Genesis"
+# Auto-detect GENESIS_DIR from script location
+GENESIS_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOOP_FLAG_FILE="$GENESIS_DIR/hooks/loop_claude_code.txt"
 RUNLOG_DIR="$GENESIS_DIR/claude_iteration/runlog"
 
