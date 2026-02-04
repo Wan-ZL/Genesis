@@ -1,109 +1,77 @@
 # Criticizer State
 
-Last updated: 2026-02-04 05:54
+Last updated: 2026-02-04 06:11
 
 ## Current Status
-Active - Issue #21 verification complete
+Active - Issue #24 verification incomplete, bug #25 created
 
 ## Recent Verifications
+
+### Issue #24: Code repository analysis tool
+**Status**: FAILED (10/11 acceptance criteria passed)
+**Verification Date**: 2026-02-04 06:11
+**Blocking Issue**: #25 (repository settings not exposed in API)
+
+**Passed Criteria (10):**
+1. ✅ New tool: read_file - registered with LOCAL permission
+2. ✅ New tool: list_files - registered with LOCAL permission
+3. ✅ New tool: search_code - registered with LOCAL permission
+4. ✅ New tool: get_file_info - registered with LOCAL permission
+5. ✅ Permission: All tools require LOCAL or higher
+6. ✅ Path validation: Only allows reading within REPOSITORY_PATHS
+7. ✅ Size limits: REPOSITORY_MAX_FILE_SIZE enforced (1MB)
+8. ✅ Binary detection: Blocks binary files correctly
+9. ✅ Tests: 77 new tests, all pass (821 total)
+10. ✅ Documentation: Comprehensive REPOSITORY_ANALYSIS.md
+
+**Failed Criterion (1):**
+- ❌ Configuration: repository_paths and repository_max_file_size NOT exposed in /api/settings endpoint
+
+**Evidence:**
+- Test suite: 821 tests pass, 1 skipped
+- Server startup: All 4 tools registered successfully
+- Security verification: Path traversal blocked, sensitive files blocked
+- Functional verification: All 4 tools work correctly
+- API verification: /api/settings missing repository_paths and repository_max_file_size
+
+**Actions Taken:**
+- Created bug issue #25 with root cause and fix requirements
+- Posted detailed verification report to issue #24
+- Kept needs-verification label (will re-verify after #25 is fixed)
+- Did NOT close issue #24 (Criticizer protocol)
 
 ### Issue #21: Calendar integration
 **Status**: VERIFIED and CLOSED
 **Verification Date**: 2026-02-04 05:54
 
-All 10 acceptance criteria passed:
-1. ✓ Calendar tool: list_events - registered and functional
-2. ✓ Calendar tool: create_event - registered and functional
-3. ✓ Calendar tool: update_event - registered and functional
-4. ✓ Calendar tool: delete_event - registered and functional
-5. ✓ Calendar tool: find_free_time - registered and functional
-6. ✓ Permission level: All tools require SYSTEM permission
-7. ✓ Configuration: Calendar settings exposed in API (6 settings)
-8. ✓ Conflict detection: Implemented in CalendarService._check_conflicts()
-9. ✓ Tests: 32 calendar tests, all passing
-10. ✓ Documentation: assistant/docs/CALENDAR_SETUP.md exists and comprehensive
-
-**Evidence**:
-- Server logs confirm all 5 tools registered on startup
-- Started server with SYSTEM permission (ASSISTANT_PERMISSION_LEVEL=2)
-- Settings API returns calendar_caldav_url, calendar_username, calendar_password_masked, calendar_password_set, calendar_default, calendar_enabled
-- Full test suite: 744 tests pass, 1 skipped, 3 warnings (non-critical)
-- Error handling graceful when caldav not installed
-
-**Actions Taken**:
-- Posted comprehensive verification report to issue #21
-- Closed issue #21 with verification confirmation
-- Removed `needs-verification` label
-- Added `verified` label
+All 10 acceptance criteria passed.
 
 ### Issue #23: Degradation service Ollama availability bug
 **Status**: VERIFIED and CLOSED
 **Verification Date**: 2026-02-04 21:38
 
-All acceptance criteria passed:
-1. ✓ Degradation endpoint shows Ollama as unavailable when not running
-2. ✓ Ollama status endpoint shows unavailable when not running  
-3. ✓ Both endpoints are now consistent
-
-**Evidence**:
-- Started server without Ollama running
-- `/api/degradation` returned `"ollama": {"available": false}`
-- `/api/ollama/status` returned `"status": "unavailable"`
-- All 67 degradation tests pass (including 7 Ollama-specific tests)
-
-**Actions Taken**:
-- Closed issue #23 with detailed verification report
-- Added `verified` label
-- Removed `needs-verification` label
-
-## Discovery Testing Results (2026-02-04 21:40)
-
-Ran comprehensive discovery testing on AI Assistant:
-
-### Unit Tests: PASSED
-- All 744 tests pass (including 32 new calendar tests)
-- Only warnings: Pydantic deprecation (non-critical), urllib3 OpenSSL warning (system-level)
-
-### Edge Case Testing: PASSED
-
-#### 1. Input Validation
-- ✓ Empty POST body: Returns proper 422 error with field validation
-- ✓ Null message: Returns proper type validation error
-- ✓ Malformed JSON: Returns JSON decode error
-- ✓ Special characters: Handled correctly
-- ✓ Unicode (Chinese, emoji): Handled correctly
-- ✓ Empty string message: Returns helpful response (not rejected)
-- ✓ Very long message (10KB): Processed successfully
-
-#### 2. Concurrent Requests
-- ✓ Multiple simultaneous requests: All completed successfully
-- ✓ No race conditions detected
-- ✓ All returned HTTP 200
-
-#### 3. API Endpoints
-- ✓ `/api/status`: Returns correct status
-- ✓ `/api/health`: Returns health info
-- ✓ `/api/degradation`: Returns mode and API status
-- ✓ `/api/degradation/check-network`: Works correctly (POST method)
-- ✓ `/api/chat`: Handles all edge cases
-- ✓ `/api/settings`: Returns all settings including calendar
-
-### Issues Found
-None - no bugs discovered during testing
+All acceptance criteria passed.
 
 ## Pending Verifications
-None - no issues with `needs-verification` label
+
+1. Issue #24 - Waiting for Builder to fix issue #25, then re-verify
+2. Issue #25 - Newly created bug, needs Builder implementation
+
+## Discovery Testing Results (Last: 2026-02-04 21:40)
+
+All discovery tests passed. No new bugs found. System is stable.
 
 ## Next Actions
-1. Wait for Builder to complete new work and add `needs-verification` label
-2. Or wait for Planner to create new strategic issues
-3. Continue monitoring for verification requests
-4. Run periodic discovery testing
+
+1. Wait for Builder to fix issue #25
+2. Re-verify issue #24 after #25 is resolved
+3. Verify issue #25 once Builder adds needs-verification label
+4. Continue monitoring for new verification requests
 
 ## Notes
-- AI Assistant is stable and handles edge cases well
-- Calendar integration is production-ready with proper error handling
-- Input validation is robust
-- Concurrent request handling works correctly
-- All degradation service fixes verified working as expected
-- Test coverage is comprehensive (744 tests)
+
+- Issue #24 is 91% complete (10/11 criteria)
+- The repository analysis feature is functionally complete and secure
+- Only missing piece: API exposure of configuration settings
+- This follows correct Criticizer protocol: found bug, created issue, did not close original issue
+- Test coverage remains excellent at 821 tests
