@@ -357,14 +357,32 @@ class SettingsService:
             return "****" if key else ""
         return "****" + key[-4:]
 
-    async def get_display_settings(self) -> dict:
-        """Get settings with masked API keys for display."""
+    async def get_display_settings(self, config_module=None) -> dict:
+        """Get settings with masked API keys for display.
+
+        Combines SQLite settings with config module values (from .env files).
+        If a key exists in SQLite, use that. Otherwise, fall back to config module.
+        This ensures the UI shows accurate status even when keys are only in .env.
+
+        Args:
+            config_module: Optional config module to read fallback values from.
+                          If not provided, will import config module.
+        """
         settings = await self.get_all()
+
+        # Import config module if not provided (avoid circular import at module level)
+        if config_module is None:
+            import config as config_module
+
+        # For API keys: SQLite takes precedence, then fall back to config module
+        openai_key = settings.get("openai_api_key") or config_module.OPENAI_API_KEY or ""
+        anthropic_key = settings.get("anthropic_api_key") or config_module.ANTHROPIC_API_KEY or ""
+
         return {
-            "openai_api_key_masked": self.mask_api_key(settings.get("openai_api_key", "")),
-            "anthropic_api_key_masked": self.mask_api_key(settings.get("anthropic_api_key", "")),
-            "openai_api_key_set": bool(settings.get("openai_api_key")),
-            "anthropic_api_key_set": bool(settings.get("anthropic_api_key")),
+            "openai_api_key_masked": self.mask_api_key(openai_key),
+            "anthropic_api_key_masked": self.mask_api_key(anthropic_key),
+            "openai_api_key_set": bool(openai_key),
+            "anthropic_api_key_set": bool(anthropic_key),
             "model": settings.get("model", "gpt-4o"),
             "permission_level": int(settings.get("permission_level", 1)),
             "available_models": self.AVAILABLE_MODELS,

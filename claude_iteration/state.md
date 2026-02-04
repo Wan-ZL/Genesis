@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #29 Implementation Complete - Needs Verification.** Markdown rendering added to Web UI for assistant messages with security (DOMPurify) and comprehensive styling.
+**Issue #27 Implementation Complete - Needs Verification.** API keys from .env file now shown in Settings UI via config fallback logic.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -368,16 +368,24 @@
   - CSS styles: Headings, code blocks, lists, tables, blockquotes, links, images
   - Security: XSS prevention via DOMPurify, user input isolation
   - 11 new tests in test_markdown_ui.py (all passing)
+- **Issue #27 COMPLETE - API keys from .env file not synced to Settings UI (needs verification)**:
+  - Modified `get_display_settings()` to fallback to config module when SQLite empty
+  - Fallback chain: SQLite → config.OPENAI_API_KEY → empty string
+  - SQLite values take precedence (user preference via UI)
+  - Read-only approach, no database writes on startup
+  - 3 new tests for config fallback behavior (all passing)
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #29 (priority-high). Other open issues: #26 (priority-high, needs-verification), #27 (priority-medium), #28 (priority-medium).
+Await Criticizer verification of Issue #27 (priority-medium). Other open issues: #26 (priority-high, needs-verification), #28 (priority-medium), #29 (priority-high, needs-verification).
 
 ## Risks / Notes
+- Issue #27 implementation complete, awaiting verification (MEDIUM priority)
 - Issue #29 implementation complete, awaiting verification (HIGH priority)
 - Issue #26 implementation complete, awaiting verification (HIGH priority)
 - Issue #31 implementation complete, awaiting verification
 - Issue #22 implementation complete, awaiting verification
 - Issues #24 and #25 verified and closed by Criticizer
+- API key fallback (Issue #27): SQLite takes precedence over .env, ensures UI shows accurate status
 - Markdown rendering uses CDN libraries (marked.js, DOMPurify) - requires internet for first load
 - DOMPurify sanitization is critical for security - do not remove or bypass
 - Database lock issue affected ALL concurrent requests (60-88% failure rate before fix, now 100% pass)
@@ -388,6 +396,18 @@ Await Criticizer verification of Issue #29 (priority-high). Other open issues: #
 ## How to test quickly
 ```bash
 cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
+
+# Test Issue #27 - API key fallback
+python3 -m pytest tests/test_settings.py::TestSettingsService::test_display_settings_falls_back_to_config_module -v
+python3 -m pytest tests/test_settings.py::TestSettingsService::test_display_settings_sqlite_overrides_config -v
+# Expected: All pass
+
+# Manual test:
+# 1. Verify .env has API key: cat ../.claude/openai-key-secrets.env
+# 2. Clear SQLite: rm -f memory/conversations.db
+# 3. Start server: python3 -m server.main
+# 4. Open http://127.0.0.1:8080, click Settings
+# 5. Verify OpenAI API Key shows "Set" (not "Not set")
 
 # Test Issue #29 - Markdown rendering
 python3 -m pytest tests/test_markdown_ui.py -v

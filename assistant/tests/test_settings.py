@@ -131,6 +131,61 @@ class TestSettingsService:
         assert display["repository_max_file_size"] == 5242880
         assert isinstance(display["repository_max_file_size"], int)
 
+    @pytest.mark.asyncio
+    async def test_display_settings_falls_back_to_config_module(self, settings_service):
+        """Test that display settings falls back to config module when SQLite is empty.
+
+        This tests Issue #27 fix: API keys from .env file should be shown in UI.
+        """
+        # Create a mock config module with API keys
+        class MockConfig:
+            OPENAI_API_KEY = "sk-test-openai-key-123456789"
+            ANTHROPIC_API_KEY = "sk-ant-test-anthropic-key-987654321"
+
+        # SQLite has no keys, should fall back to config module
+        display = await settings_service.get_display_settings(config_module=MockConfig)
+
+        # Should show keys from config module
+        assert display["openai_api_key_set"] is True
+        assert display["anthropic_api_key_set"] is True
+        assert display["openai_api_key_masked"] == "****6789"
+        assert display["anthropic_api_key_masked"] == "****4321"
+
+    @pytest.mark.asyncio
+    async def test_display_settings_sqlite_overrides_config(self, settings_service):
+        """Test that SQLite values take precedence over config module.
+
+        If user sets a key via UI, it should override the .env file value.
+        """
+        # Create a mock config module with API keys
+        class MockConfig:
+            OPENAI_API_KEY = "sk-env-key-from-dotenv-file"
+            ANTHROPIC_API_KEY = ""
+
+        # Set different key in SQLite
+        await settings_service.set("openai_api_key", "sk-sqlite-key-from-ui-settings")
+
+        display = await settings_service.get_display_settings(config_module=MockConfig)
+
+        # Should use SQLite value, not config module
+        assert display["openai_api_key_set"] is True
+        assert display["openai_api_key_masked"] == "****ings"  # Last 4 of "settings"
+        assert "dotenv" not in display["openai_api_key_masked"]
+
+    @pytest.mark.asyncio
+    async def test_display_settings_empty_in_both_sources(self, settings_service):
+        """Test display when API keys are empty in both SQLite and config."""
+        class MockConfig:
+            OPENAI_API_KEY = ""
+            ANTHROPIC_API_KEY = None
+
+        display = await settings_service.get_display_settings(config_module=MockConfig)
+
+        assert display["openai_api_key_set"] is False
+        assert display["anthropic_api_key_set"] is False
+        assert display["openai_api_key_masked"] == ""
+        assert display["anthropic_api_key_masked"] == ""
+
 
 class TestSettingsAPI:
     """Tests for settings API endpoints."""
