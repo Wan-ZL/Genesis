@@ -2,6 +2,10 @@
 .claude/*-secrets.env
 .claude/*-secrets/
 
+# Openai and Anthropic secrets (never commit)
+.claude/openai-key-secret.env
+.claude/anthropic-key-secret.env
+
 # Auto-loop flags (local only)
 .auto-loop
 hooks/loop_claude_code.txt

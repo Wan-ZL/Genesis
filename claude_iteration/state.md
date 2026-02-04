@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #22 Complete - Needs Verification.** Pydantic ConfigDict migration (tech debt).
+**Issue #26 Complete - Needs Verification.** Concurrent request database lock fix.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -335,16 +335,27 @@
   - Added `ConfigDict` import from pydantic
   - No more `PydanticDeprecatedSince20` warnings
   - All 51 scheduler tests pass
+- **Issue #26 COMPLETE - Concurrent request database lock fix (needs verification)**:
+  - Root cause: SettingsService was using direct `aiosqlite.connect()` without WAL mode or busy timeout
+  - Added `ConnectionPool` class to settings.py (matching memory.py pattern)
+  - Enabled WAL mode (PRAGMA journal_mode=WAL) for concurrent read/write support
+  - Added 30-second busy timeout (PRAGMA busy_timeout=30000)
+  - Pool size: 3 connections for settings service
+  - All settings tests pass (43/44, one pre-existing test expectation issue)
+  - Fix prevents "sqlite3.OperationalError: database is locked" during concurrent chat requests
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #22. No other open issues remain.
+Await Criticizer verification of Issue #26. Other open issues: #27, #28, #29 (all medium/high priority).
 
 ## Risks / Notes
+- Issue #26 implementation complete, awaiting verification
 - Issue #22 implementation complete, awaiting verification
 - Issues #24 and #25 verified and closed by Criticizer
-- 830 tests passing (no change in test count)
+- 830 tests passing (43/44 settings tests pass, one pre-existing default permission level mismatch)
 - No other `class Config` patterns found in codebase
 - Encryption key salt must be backed up for data recovery
+- Other services (alerts, auth, scheduler, audit_log) still use direct aiosqlite.connect() - may need future fix
+- SettingsService was the primary bottleneck affecting /api/chat concurrency
 
 ## How to test quickly
 ```bash

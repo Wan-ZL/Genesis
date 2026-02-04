@@ -1,5 +1,9 @@
-"""Memory service for conversation persistence using SQLite."""
+"""Memory service for conversation persistence using SQLite.
+
+Uses a connection pool with WAL mode for concurrency safety.
+"""
 import aiosqlite
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
@@ -11,69 +15,158 @@ import config
 # Single infinite conversation - all messages go to this conversation
 DEFAULT_CONVERSATION_ID = "main"
 
+# Connection pool settings
+_DB_BUSY_TIMEOUT_MS = 30000  # 30 seconds - wait for locks
+_DB_POOL_SIZE = 5  # Number of connections in pool
 
-class MemoryService:
-    """Service for managing conversation memory in SQLite."""
 
-    def __init__(self, db_path: Path):
+class ConnectionPool:
+    """Simple async connection pool for aiosqlite with WAL mode."""
+
+    def __init__(self, db_path: Path, pool_size: int = _DB_POOL_SIZE):
         self.db_path = db_path
+        self.pool_size = pool_size
+        self._pool: asyncio.Queue = asyncio.Queue(maxsize=pool_size)
         self._initialized = False
+        self._lock = asyncio.Lock()
 
-    async def _ensure_initialized(self):
-        """Ensure database tables exist."""
+    async def initialize(self):
+        """Initialize the connection pool."""
         if self._initialized:
             return
 
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS conversations (
-                    id TEXT PRIMARY KEY,
-                    title TEXT,
-                    created_at TIMESTAMP,
-                    updated_at TIMESTAMP
+        async with self._lock:
+            if self._initialized:
+                return
+
+            # Create pool of connections
+            for _ in range(self.pool_size):
+                conn = await aiosqlite.connect(
+                    self.db_path,
+                    timeout=_DB_BUSY_TIMEOUT_MS / 1000  # Convert to seconds
                 )
-            """)
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS messages (
-                    id TEXT PRIMARY KEY,
-                    conversation_id TEXT,
-                    role TEXT,
-                    content TEXT,
-                    created_at TIMESTAMP,
-                    FOREIGN KEY (conversation_id) REFERENCES conversations(id)
-                )
-            """)
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS files (
-                    id TEXT PRIMARY KEY,
-                    original_filename TEXT,
-                    stored_filename TEXT,
-                    content_type TEXT,
-                    size INTEGER,
-                    conversation_id TEXT,
-                    uploaded_at TIMESTAMP,
-                    FOREIGN KEY (conversation_id) REFERENCES conversations(id)
-                )
-            """)
-            # Table for storing summaries of old message batches
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS message_summaries (
-                    id TEXT PRIMARY KEY,
-                    conversation_id TEXT,
-                    start_message_id TEXT,
-                    end_message_id TEXT,
-                    message_count INTEGER,
-                    summary TEXT,
-                    created_at TIMESTAMP,
-                    FOREIGN KEY (conversation_id) REFERENCES conversations(id)
-                )
-            """)
-            await db.commit()
-        self._initialized = True
+                # Enable WAL mode for better concurrency
+                await conn.execute("PRAGMA journal_mode=WAL")
+                # Set busy timeout
+                await conn.execute(f"PRAGMA busy_timeout={_DB_BUSY_TIMEOUT_MS}")
+                # Optimize synchronous mode for WAL
+                await conn.execute("PRAGMA synchronous=NORMAL")
+                await self._pool.put(conn)
+
+            self._initialized = True
+
+    async def acquire(self) -> aiosqlite.Connection:
+        """Get a connection from the pool."""
+        await self.initialize()
+        return await self._pool.get()
+
+    async def release(self, conn: aiosqlite.Connection):
+        """Return a connection to the pool."""
+        await self._pool.put(conn)
+
+    async def close(self):
+        """Close all connections in the pool."""
+        while not self._pool.empty():
+            try:
+                conn = self._pool.get_nowait()
+                await conn.close()
+            except asyncio.QueueEmpty:
+                break
+        self._initialized = False
+
+
+class PooledConnection:
+    """Context manager for pooled database connections."""
+
+    def __init__(self, pool: ConnectionPool):
+        self.pool = pool
+        self.conn: Optional[aiosqlite.Connection] = None
+
+    async def __aenter__(self) -> aiosqlite.Connection:
+        self.conn = await self.pool.acquire()
+        return self.conn
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.conn:
+            await self.pool.release(self.conn)
+            self.conn = None
+
+
+class MemoryService:
+    """Service for managing conversation memory in SQLite.
+
+    Uses a connection pool with WAL mode for safe concurrent access.
+    """
+
+    def __init__(self, db_path: Path):
+        self.db_path = db_path
+        self._pool = ConnectionPool(db_path)
+        self._tables_created = False
+        self._tables_lock = asyncio.Lock()
+
+    def _get_connection(self) -> PooledConnection:
+        """Get a pooled connection context manager."""
+        return PooledConnection(self._pool)
+
+    async def _ensure_initialized(self):
+        """Ensure database tables exist."""
+        if self._tables_created:
+            return
+
+        async with self._tables_lock:
+            if self._tables_created:
+                return
+
+            async with self._get_connection() as db:
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS conversations (
+                        id TEXT PRIMARY KEY,
+                        title TEXT,
+                        created_at TIMESTAMP,
+                        updated_at TIMESTAMP
+                    )
+                """)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS messages (
+                        id TEXT PRIMARY KEY,
+                        conversation_id TEXT,
+                        role TEXT,
+                        content TEXT,
+                        created_at TIMESTAMP,
+                        FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+                    )
+                """)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS files (
+                        id TEXT PRIMARY KEY,
+                        original_filename TEXT,
+                        stored_filename TEXT,
+                        content_type TEXT,
+                        size INTEGER,
+                        conversation_id TEXT,
+                        uploaded_at TIMESTAMP,
+                        FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+                    )
+                """)
+                # Table for storing summaries of old message batches
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS message_summaries (
+                        id TEXT PRIMARY KEY,
+                        conversation_id TEXT,
+                        start_message_id TEXT,
+                        end_message_id TEXT,
+                        message_count INTEGER,
+                        summary TEXT,
+                        created_at TIMESTAMP,
+                        FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+                    )
+                """)
+                await db.commit()
+            self._tables_created = True
 
     async def _ensure_default_conversation(self):
         """Ensure the single default conversation exists."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute(
                 "SELECT 1 FROM conversations WHERE id = ?",
                 (DEFAULT_CONVERSATION_ID,)
@@ -94,7 +187,7 @@ class MemoryService:
         conversation_id = f"conv_{uuid.uuid4().hex[:12]}"
         now = datetime.now().isoformat()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             await db.execute(
                 "INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
                 (conversation_id, title or "New conversation", now, now)
@@ -107,7 +200,7 @@ class MemoryService:
         """Check if a conversation exists."""
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute(
                 "SELECT 1 FROM conversations WHERE id = ?",
                 (conversation_id,)
@@ -126,7 +219,7 @@ class MemoryService:
         message_id = f"msg_{uuid.uuid4().hex[:12]}"
         now = datetime.now().isoformat()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             await db.execute(
                 "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
                 (message_id, conversation_id, role, content, now)
@@ -153,7 +246,7 @@ class MemoryService:
         """Remove the last message from a conversation (for error recovery)."""
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute(
                 "SELECT id FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1",
                 (conversation_id,)
@@ -171,7 +264,7 @@ class MemoryService:
             {"role": "system", "content": "You are a helpful AI assistant. Be concise and helpful."}
         ]
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute(
                 "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at",
                 (conversation_id,)
@@ -201,7 +294,7 @@ class MemoryService:
             {"role": "system", "content": "You are a helpful AI assistant. Be concise and helpful."}
         ]
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             if limit:
                 cursor = await db.execute(
                     """SELECT role, content FROM messages
@@ -247,7 +340,7 @@ class MemoryService:
         await self._ensure_default_conversation()
 
         # Get total message count
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute(
                 "SELECT COUNT(*) FROM messages WHERE conversation_id = ?",
                 (DEFAULT_CONVERSATION_ID,)
@@ -275,7 +368,7 @@ class MemoryService:
         ]
 
         # Get or create summaries for older messages
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             # Get all messages ordered by time
             cursor = await db.execute(
                 """SELECT id, role, content, created_at FROM messages
@@ -329,7 +422,7 @@ class MemoryService:
 
                     # Store the summary
                     summary_id = f"sum_{uuid.uuid4().hex[:12]}"
-                    async with aiosqlite.connect(self.db_path) as db:
+                    async with self._get_connection() as db:
                         await db.execute(
                             """INSERT INTO message_summaries
                                (id, conversation_id, start_message_id, end_message_id,
@@ -368,7 +461,7 @@ class MemoryService:
         """
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute(
                 """SELECT id, start_message_id, end_message_id, message_count, summary, created_at
                    FROM message_summaries
@@ -393,7 +486,7 @@ class MemoryService:
         """Clear all stored summaries (useful for testing or reset)."""
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             await db.execute(
                 "DELETE FROM message_summaries WHERE conversation_id = ?",
                 (DEFAULT_CONVERSATION_ID,)
@@ -404,7 +497,7 @@ class MemoryService:
         """List all conversations with metadata."""
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute(
                 "SELECT c.id, c.title, c.created_at, c.updated_at, COUNT(m.id) as message_count "
                 "FROM conversations c LEFT JOIN messages m ON c.id = m.conversation_id "
@@ -426,7 +519,7 @@ class MemoryService:
         """Get a conversation with all its messages."""
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute(
                 "SELECT id, title, created_at, updated_at FROM conversations WHERE id = ?",
                 (conversation_id,)
@@ -459,7 +552,7 @@ class MemoryService:
         """Save file metadata to database."""
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             await db.execute(
                 """INSERT INTO files
                    (id, original_filename, stored_filename, content_type, size, conversation_id, uploaded_at)
@@ -480,7 +573,7 @@ class MemoryService:
         """List files, optionally filtered by conversation."""
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             if conversation_id:
                 cursor = await db.execute(
                     "SELECT id, original_filename, content_type, size, conversation_id, uploaded_at "
@@ -509,7 +602,7 @@ class MemoryService:
         """Get file metadata by ID."""
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute(
                 "SELECT id, original_filename, stored_filename, content_type, size, conversation_id, uploaded_at "
                 "FROM files WHERE id = ?",
@@ -548,7 +641,7 @@ class MemoryService:
         """
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             # Use LIKE for simple keyword search (case-insensitive in SQLite by default for ASCII)
             search_pattern = f"%{query}%"
 
@@ -594,7 +687,7 @@ class MemoryService:
         """Get total message count across all conversations."""
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute("SELECT COUNT(*) FROM messages")
             row = await cursor.fetchone()
             return row[0] if row else 0
@@ -608,7 +701,7 @@ class MemoryService:
         await self._ensure_initialized()
         await self._ensure_default_conversation()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             # Get all messages with their timestamps
             cursor = await db.execute(
                 """SELECT id, role, content, created_at
@@ -688,7 +781,7 @@ class MemoryService:
         # Get existing message timestamps for deduplication
         existing_timestamps = set()
         if mode == "merge":
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._get_connection() as db:
                 cursor = await db.execute(
                     "SELECT created_at FROM messages WHERE conversation_id = ?",
                     (DEFAULT_CONVERSATION_ID,)
@@ -697,7 +790,7 @@ class MemoryService:
                 existing_timestamps = {row[0] for row in rows}
         elif mode == "replace":
             # Clear existing messages and summaries
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._get_connection() as db:
                 await db.execute(
                     "DELETE FROM messages WHERE conversation_id = ?",
                     (DEFAULT_CONVERSATION_ID,)
@@ -712,7 +805,7 @@ class MemoryService:
         imported_count = 0
         skipped_count = 0
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             for msg in messages:
                 # Validate required fields
                 if "role" not in msg or "content" not in msg:

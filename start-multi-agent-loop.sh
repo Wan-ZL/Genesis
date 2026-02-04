@@ -66,15 +66,22 @@ run_builder() {
 
     cd "$GENESIS_DIR"
 
-    # Run Builder (Claude Code with standard rules)
+    # Run Builder agent
     claude --dangerously-skip-permissions \
-        "Execute one iteration per the contract in CLAUDE.md.
-         IMPORTANT: You are the BUILDER.
-         - Check GitHub Issues first (priority-critical > priority-high > oldest)
-         - If you complete an issue, add 'needs-verification' label and comment with test instructions
+        "Use the builder agent to implement the highest priority issue.
+
+         The builder agent will:
+         1. Read claude_iteration/state.md and VISION.md for context
+         2. Select highest priority open issue (critical > high > medium > low)
+         3. Implement the feature or fix the bug
+         4. Write tests for new code
+         5. Add 'needs-verification' label when done
+         6. Update state.md and write to runlog
+
+         IMPORTANT:
          - Do NOT close issues - only Criticizer can do that
-         - Read claude_iteration/state.md for context
-         - Update state.md and write to runlog when done" \
+         - Do NOT modify VISION.md - that belongs to Planner
+         - Focus on ONE issue per iteration" \
         2>&1 | tee "$log_file"
 
     local exit_code=${PIPESTATUS[0]}
@@ -94,15 +101,25 @@ run_criticizer() {
 
     # Run Criticizer subagent
     claude --dangerously-skip-permissions \
-        "Use the criticizer agent to verify all issues with the 'needs-verification' label.
+        "Use the criticizer agent to verify issues and provide insights.
 
          The criticizer agent will:
-         1. Find issues with needs-verification label
-         2. Actually run the AI Assistant and test each acceptance criterion
-         3. Close issues that pass (with verification report)
+         1. Find issues with 'needs-verification' label
+         2. Actually RUN the AI Assistant and test each acceptance criterion
+         3. Close issues that pass (with verification report and evidence)
          4. Create bug issues for failures
-         5. Run discovery testing if no pending verifications
-         6. Update criticizer_iteration/state.md" \
+
+         If no pending verifications, run discovery testing:
+         - 对话流程测试 (context retention)
+         - 功能集成测试 (file upload + query)
+         - 恢复测试 (data persistence)
+         - 异常输入测试 (edge cases)
+         - 连续请求测试 (stability)
+
+         IMPORTANT - Feedback to Planner:
+         - Write insights to criticizer_iteration/insights_for_planner.md
+         - Report: repeated bug patterns, test coverage gaps, UX issues
+         - Update criticizer_iteration/state.md and verification_logs/" \
         2>&1 | tee "$log_file"
 
     local exit_code=${PIPESTATUS[0]}
@@ -120,17 +137,26 @@ run_planner() {
 
     cd "$GENESIS_DIR"
 
-    # Run Planner subagent
+    # Run Planner subagent - The Soul of Genesis
     claude --dangerously-skip-permissions \
-        "Use the planner agent to review the project status and update priorities.
+        "Use the planner agent - you are the SOUL and CREATOR of Genesis.
+
+         你是产品的灵魂。你不是工具，你是创造者。
 
          The planner agent will:
-         1. Gather context from all state files
-         2. Check progress against roadmap
-         3. Identify patterns and technical debt
-         4. Update priorities on issues
-         5. Create new strategic issues if needed
-         6. Update planner_iteration/state.md and roadmap.md" \
+         1. Read VISION.md (you own this) and planner_iteration/state.md
+         2. Read criticizer_iteration/insights_for_planner.md for feedback
+         3. Reflect: Would users LOVE this product? What's missing?
+         4. If ideas are exhausted, use WebSearch to research human needs:
+            - What do users want from AI assistants?
+            - What are competitors doing well?
+            - What human needs can AI fulfill?
+         5. Create/prioritize issues based on your judgment
+         6. You CAN REFUSE any request that conflicts with product vision
+         7. Update VISION.md if the vision evolves
+         8. Update planner_iteration/state.md and roadmap.md
+
+         唯一约束: 让 Genesis 成功 - 人人爱用，人人离不开。" \
         2>&1 | tee "$log_file"
 
     local exit_code=${PIPESTATUS[0]}

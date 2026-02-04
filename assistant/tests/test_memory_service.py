@@ -231,7 +231,7 @@ class TestDatabaseInitialization:
         await memory_service.create_conversation()
         await memory_service.list_conversations()
 
-        assert memory_service._initialized is True
+        assert memory_service._tables_created is True
 
 
 class TestMessageSearch:
@@ -798,6 +798,122 @@ class TestExportImport:
         # Message should have been imported
         messages = await memory_service.get_messages()
         assert len(messages) == 2
+
+
+class TestConcurrency:
+    """Tests for concurrent access handling."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_writes_succeed(self, memory_service):
+        """Test that multiple concurrent writes don't fail with database locked error."""
+        import asyncio
+
+        num_concurrent = 10
+
+        async def add_message(i: int):
+            """Add a message and return success status."""
+            try:
+                await memory_service.add_to_conversation("user", f"Message {i}")
+                return True
+            except Exception as e:
+                print(f"Write {i} failed: {e}")
+                return False
+
+        # Run 10 concurrent writes
+        tasks = [add_message(i) for i in range(num_concurrent)]
+        results = await asyncio.gather(*tasks)
+
+        # All writes should succeed
+        assert all(results), f"Some writes failed: {results}"
+
+        # Verify all messages were stored
+        messages = await memory_service.get_messages()
+        # -1 for system prompt
+        assert len(messages) - 1 == num_concurrent
+
+    @pytest.mark.asyncio
+    async def test_concurrent_reads_and_writes(self, memory_service):
+        """Test mixed concurrent reads and writes."""
+        import asyncio
+
+        # Add some initial messages
+        for i in range(5):
+            await memory_service.add_to_conversation("user", f"Initial {i}")
+
+        async def write_message(i: int):
+            """Write a message."""
+            try:
+                await memory_service.add_to_conversation("user", f"Concurrent write {i}")
+                return ("write", True)
+            except Exception as e:
+                return ("write", False, str(e))
+
+        async def read_messages():
+            """Read messages."""
+            try:
+                messages = await memory_service.get_messages()
+                return ("read", True, len(messages))
+            except Exception as e:
+                return ("read", False, str(e))
+
+        # Mix reads and writes
+        tasks = []
+        for i in range(5):
+            tasks.append(write_message(i))
+            tasks.append(read_messages())
+
+        results = await asyncio.gather(*tasks)
+
+        # All operations should succeed
+        write_results = [r for r in results if r[0] == "write"]
+        read_results = [r for r in results if r[0] == "read"]
+
+        assert all(r[1] for r in write_results), f"Some writes failed: {write_results}"
+        assert all(r[1] for r in read_results), f"Some reads failed: {read_results}"
+
+    @pytest.mark.asyncio
+    async def test_connection_pool_reuse(self, memory_service):
+        """Test that connection pool properly reuses connections."""
+        import asyncio
+
+        # Run many sequential operations (more than pool size)
+        for i in range(20):
+            await memory_service.add_to_conversation("user", f"Message {i}")
+            await memory_service.get_messages()
+
+        # Pool should be initialized
+        assert memory_service._pool._initialized is True
+
+        # Pool should have its connections available
+        assert memory_service._pool._pool.qsize() <= memory_service._pool.pool_size
+
+    @pytest.mark.asyncio
+    async def test_high_concurrency_stress(self, memory_service):
+        """Stress test with high concurrency."""
+        import asyncio
+
+        num_operations = 50
+
+        async def operation(i: int):
+            """Perform mixed operations."""
+            try:
+                if i % 3 == 0:
+                    await memory_service.add_to_conversation("user", f"Stress {i}")
+                elif i % 3 == 1:
+                    await memory_service.get_messages()
+                else:
+                    await memory_service.get_message_count()
+                return True
+            except Exception as e:
+                print(f"Operation {i} failed: {e}")
+                return False
+
+        tasks = [operation(i) for i in range(num_operations)]
+        results = await asyncio.gather(*tasks)
+
+        # All operations should succeed
+        success_rate = sum(results) / len(results)
+        assert success_rate == 1.0, f"Success rate: {success_rate:.1%}"
 
 
 if __name__ == "__main__":

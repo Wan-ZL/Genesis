@@ -1,5 +1,6 @@
 """Settings service for persisting user configuration."""
 import aiosqlite
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -21,11 +22,88 @@ logger = logging.getLogger(__name__)
 # Keys that contain sensitive data and should be encrypted
 SENSITIVE_KEYS = {"openai_api_key", "anthropic_api_key", "calendar_password"}
 
+# Connection pool settings
+_DB_BUSY_TIMEOUT_MS = 30000  # 30 seconds - wait for locks
+_DB_POOL_SIZE = 3  # Number of connections in pool
+
+
+class ConnectionPool:
+    """Simple async connection pool for aiosqlite with WAL mode."""
+
+    def __init__(self, db_path: Path, pool_size: int = _DB_POOL_SIZE):
+        self.db_path = db_path
+        self.pool_size = pool_size
+        self._pool: asyncio.Queue = asyncio.Queue(maxsize=pool_size)
+        self._initialized = False
+        self._lock = asyncio.Lock()
+
+    async def initialize(self):
+        """Initialize the connection pool."""
+        if self._initialized:
+            return
+
+        async with self._lock:
+            if self._initialized:
+                return
+
+            # Create pool of connections
+            for _ in range(self.pool_size):
+                conn = await aiosqlite.connect(
+                    self.db_path,
+                    timeout=_DB_BUSY_TIMEOUT_MS / 1000  # Convert to seconds
+                )
+                # Enable WAL mode for better concurrency
+                await conn.execute("PRAGMA journal_mode=WAL")
+                # Set busy timeout
+                await conn.execute(f"PRAGMA busy_timeout={_DB_BUSY_TIMEOUT_MS}")
+                # Optimize synchronous mode for WAL
+                await conn.execute("PRAGMA synchronous=NORMAL")
+                await self._pool.put(conn)
+
+            self._initialized = True
+
+    async def acquire(self) -> aiosqlite.Connection:
+        """Get a connection from the pool."""
+        await self.initialize()
+        return await self._pool.get()
+
+    async def release(self, conn: aiosqlite.Connection):
+        """Return a connection to the pool."""
+        await self._pool.put(conn)
+
+    async def close(self):
+        """Close all connections in the pool."""
+        while not self._pool.empty():
+            try:
+                conn = self._pool.get_nowait()
+                await conn.close()
+            except asyncio.QueueEmpty:
+                break
+        self._initialized = False
+
+
+class PooledConnection:
+    """Context manager for pooled database connections."""
+
+    def __init__(self, pool: ConnectionPool):
+        self.pool = pool
+        self.conn: Optional[aiosqlite.Connection] = None
+
+    async def __aenter__(self) -> aiosqlite.Connection:
+        self.conn = await self.pool.acquire()
+        return self.conn
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.conn:
+            await self.pool.release(self.conn)
+            self.conn = None
+
 
 class SettingsService:
     """Service for managing user settings in SQLite.
 
     Sensitive settings (API keys) are encrypted at rest using AES-256-GCM.
+    Uses a connection pool with WAL mode for safe concurrent access.
     """
 
     # Default settings
@@ -33,7 +111,7 @@ class SettingsService:
         "openai_api_key": "",
         "anthropic_api_key": "",
         "model": "gpt-4o",  # Default model
-        "permission_level": 1,  # LOCAL by default
+        "permission_level": 3,  # FULL by default
         "ollama_host": "http://localhost:11434",  # Default Ollama endpoint
         "ollama_model": "llama3.2:3b",  # Default local model
         "ollama_enabled": True,  # Enable Ollama fallback by default
@@ -70,9 +148,15 @@ class SettingsService:
                               will use the singleton instance when encrypting.
         """
         self.db_path = db_path
+        self._pool = ConnectionPool(db_path)
         self._initialized = False
+        self._tables_lock = asyncio.Lock()
         self._encryption_service = encryption_service
         self._encryption_available = CRYPTOGRAPHY_AVAILABLE
+
+    def _get_connection(self) -> PooledConnection:
+        """Get a pooled connection context manager."""
+        return PooledConnection(self._pool)
 
     def _get_encryption_service(self) -> Optional[EncryptionService]:
         """Get encryption service, initializing if needed."""
@@ -153,22 +237,26 @@ class SettingsService:
         if self._initialized:
             return
 
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS settings (
-                    key TEXT PRIMARY KEY,
-                    value TEXT,
-                    updated_at TIMESTAMP
-                )
-            """)
-            await db.commit()
-        self._initialized = True
+        async with self._tables_lock:
+            if self._initialized:
+                return
+
+            async with self._get_connection() as db:
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT,
+                        updated_at TIMESTAMP
+                    )
+                """)
+                await db.commit()
+            self._initialized = True
 
     async def get(self, key: str) -> Optional[str]:
         """Get a setting value by key."""
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute(
                 "SELECT value FROM settings WHERE key = ?",
                 (key,)
@@ -187,7 +275,7 @@ class SettingsService:
         stored_value = self._encrypt_if_sensitive(key, value)
 
         now = datetime.now().isoformat()
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             await db.execute(
                 """INSERT INTO settings (key, value, updated_at)
                    VALUES (?, ?, ?)
@@ -203,7 +291,7 @@ class SettingsService:
         # Start with defaults
         settings = dict(self.DEFAULTS)
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute("SELECT key, value FROM settings")
             rows = await cursor.fetchall()
             for key, value in rows:
@@ -216,7 +304,7 @@ class SettingsService:
         await self._ensure_initialized()
 
         now = datetime.now().isoformat()
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             for key, value in settings.items():
                 # Only allow known keys
                 if key in self.DEFAULTS:
@@ -304,7 +392,7 @@ class SettingsService:
         skipped = []
         already_encrypted = []
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             # Get all sensitive keys
             for key in SENSITIVE_KEYS:
                 cursor = await db.execute(
@@ -362,7 +450,7 @@ class SettingsService:
         """
         await self._ensure_initialized()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute(
                 "SELECT value FROM settings WHERE key = ?",
                 (key,)

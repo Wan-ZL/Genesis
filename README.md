@@ -96,7 +96,3 @@ All progress lives in the repo—Claude Code has no memory between runs except w
 ## Contributing
 
 Open a GitHub Issue with clear acceptance criteria. Claude Code will pick it up and implement it. You review the PR.
-
-## License
-
-MIT
