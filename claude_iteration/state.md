@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #19 Complete - Needs Verification.** Critical bug fixed: encrypted API keys no longer leak to external APIs.
+**Issue #18 Complete - Needs Verification.** Fixed TypeError in `rotate_key()` method - now accepts EncryptionService instances.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -268,16 +268,21 @@
   - Enhanced error logging with exception details
   - Startup validation verifies decryption works
   - 6 new tests for leak prevention
-  - 673 tests total
+- **Issue #18 COMPLETE - Key rotation TypeError fix (needs verification)**:
+  - Root cause: `rotate_key()` only accepted `bytes`, but callers expected to pass `EncryptionService`
+  - Fix: Updated signature to `Union[bytes, EncryptionService]`
+  - Runtime type detection handles both cases
+  - 2 new tests for service instance API
+  - 675 tests total
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #19, then check for Issue #18 (key rotation bug).
+Await Criticizer verification of Issues #18 and #19. No other open issues.
 
 ## Risks / Notes
-- Issue #19 implementation complete, awaiting verification
-- 673 tests passing (6 new for leak prevention)
-- Issue #18 (key rotation TypeError) is priority-low but may be fixed next
+- Issues #18 and #19 implementation complete, awaiting verification
+- 675 tests passing (2 new for key rotation fix)
 - Encryption key salt must be backed up for data recovery
+- No other open GitHub issues
 
 ## How to test quickly
 ```bash

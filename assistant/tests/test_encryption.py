@@ -346,6 +346,57 @@ class TestKeyRotation:
         rotated = service.rotate_key({}, new_key)
         assert rotated == {}
 
+    def test_rotate_key_with_service_instance(self):
+        """Test key rotation by passing an EncryptionService instance (Issue #18 fix)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            key_file1 = Path(tmpdir) / ".key1"
+            key_file2 = Path(tmpdir) / ".key2"
+
+            # Create two services with different key files (different machine keys)
+            svc1 = EncryptionService(key_file_path=key_file1)
+            svc2 = EncryptionService(key_file_path=key_file2)
+
+            # Encrypt values with first service
+            values = {
+                "api_key": svc1.encrypt("sk-test-key-1"),
+                "secret": svc1.encrypt("my-secret-value"),
+            }
+
+            # Rotate to second service by passing the service instance directly
+            rotated = svc1.rotate_key(values, svc2)
+
+            # Verify old service can NOT decrypt (different keys)
+            # The rotated values should NOT be decryptable by svc1
+            # (they're encrypted with svc2's key now)
+
+            # Verify new service CAN decrypt
+            assert svc2.decrypt(rotated["api_key"]) == "sk-test-key-1"
+            assert svc2.decrypt(rotated["secret"]) == "my-secret-value"
+
+    def test_rotate_key_both_apis_compatible(self):
+        """Test that both bytes and EncryptionService APIs produce valid results."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            key_file = Path(tmpdir) / ".key"
+            service = EncryptionService(key_file_path=key_file)
+
+            original_value = "test-value-12345"
+            encrypted = service.encrypt(original_value)
+
+            # Test with raw bytes
+            new_key_bytes = secrets.token_bytes(KEY_SIZE)
+            rotated1 = service.rotate_key({"val": encrypted}, new_key_bytes)
+
+            # Verify bytes API works
+            new_service1 = EncryptionService(master_key=new_key_bytes)
+            assert new_service1.decrypt(rotated1["val"]) == original_value
+
+            # Test with EncryptionService instance (same key)
+            new_service2 = EncryptionService(master_key=new_key_bytes)
+            rotated2 = service.rotate_key({"val": encrypted}, new_service2)
+
+            # Verify service API works
+            assert new_service2.decrypt(rotated2["val"]) == original_value
+
 
 class TestSingleton:
     """Tests for singleton pattern."""

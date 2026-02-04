@@ -10,7 +10,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 # Use cryptography library for AES-GCM
 try:
@@ -275,19 +275,25 @@ class EncryptionService:
     def rotate_key(
         self,
         encrypted_values: dict[str, str],
-        new_master_key: bytes
+        new_key: Union[bytes, "EncryptionService"]
     ) -> dict[str, str]:
-        """Re-encrypt values with a new master key.
+        """Re-encrypt values with a new master key or encryption service.
 
         Args:
             encrypted_values: Dict of key -> encrypted_value
-            new_master_key: The new master key to use
+            new_key: Either a new master key (bytes) or an EncryptionService
+                    instance configured with the new key
 
         Returns:
             Dict of key -> newly_encrypted_value
         """
         result = {}
-        new_service = EncryptionService(master_key=new_master_key)
+
+        # Accept either bytes (raw key) or an EncryptionService instance
+        if isinstance(new_key, EncryptionService):
+            new_service = new_key
+        else:
+            new_service = EncryptionService(master_key=new_key)
 
         for key, encrypted_value in encrypted_values.items():
             # Decrypt with old key
