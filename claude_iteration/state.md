@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #6 Implementation Complete.** Streaming response support added. Awaiting verification from Criticizer.
+**Issue #7 Implementation Complete.** Performance benchmarks and regression detection added. Awaiting verification from Criticizer.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -149,7 +149,7 @@
   - **System prompt injection with relevant tool suggestions**
   - **Chat response includes `suggested_tools` field**
   - 286 tests total (+30 new for tool suggestions)
-- **Issue #6 Implementation Complete - Streaming response support**:
+- **Issue #6 VERIFIED - Streaming response support**:
   - SSE endpoint `POST /api/chat/stream` with event-based responses
   - Claude streaming: `stream=True` with message_delta events
   - OpenAI streaming: `stream=True` with chunk deltas
@@ -159,40 +159,48 @@
   - Graceful error handling and fallback to regular endpoint
   - Memory persistence after streaming completes
   - 22 new tests (308 total)
+- **Issue #7 Implementation Complete - Performance benchmarks**:
+  - Benchmark framework: `assistant/benchmarks/framework.py`
+  - CLI runner: `python -m benchmarks`
+  - 48 benchmarks covering:
+    - Memory service (9 benchmarks)
+    - Tool registry (11 benchmarks)
+    - Settings service (6 benchmarks)
+    - File I/O (13 benchmarks)
+    - Chat API (9 benchmarks)
+  - Regression detection with 20% threshold
+  - CI workflow: `.github/workflows/benchmarks.yml`
+  - Baseline documented: `assistant/memory/benchmarks/BASELINES.md`
+  - 308 tests + 48 benchmarks passing
 
 ## Next Step (single step)
-Add `needs-verification` label to Issue #6 and request Criticizer verification.
+Add `needs-verification` label to Issue #7 and request Criticizer verification.
 
 ## Risks / Notes
-- Issue #6 implementation complete - all 6 acceptance criteria met
-- 308 tests passing, CI workflow active
-- Streaming uses native browser EventSource pattern
-- Tool calls during streaming emit separate events for progress tracking
+- Issue #7 implementation complete - all 5 acceptance criteria met
+- 308 tests passing, 48 benchmarks passing
+- CI workflow runs benchmarks on PRs with caching
+- Regression threshold set at 20% (configurable)
 
 ## How to test quickly
 ```bash
 cd /Volumes/Storage/Server/Startup/Genesis/assistant
 
-# Option 1: Run directly
-pip3 install -r requirements.txt
-python3 -m server.main
-# Visit http://127.0.0.1:8080
-
-# Option 2: Install as 24/7 service (macOS)
-./service/assistant-service.sh install
-./service/assistant-service.sh start
-./service/assistant-service.sh status
-./service/assistant-service.sh logs
-
-# Run tests
+# Run all tests
 python3 -m pytest tests/ -v
 
-# Test streaming specifically
-python3 -m pytest tests/test_streaming.py -v
+# Run benchmarks
+python3 -m benchmarks
 
-# Manual streaming test (with server running)
-curl -X POST http://127.0.0.1:8080/api/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Hello, how are you?"}'
-# Should see SSE events: event: start, event: token, event: done
+# Run benchmarks with baseline comparison
+python3 -m benchmarks --compare
+
+# Save new baseline
+python3 -m benchmarks --save-baseline
+
+# CI mode (fails on regressions)
+python3 -m benchmarks --ci --threshold 20
+
+# View benchmark history
+python3 -m benchmarks --history
 ```
