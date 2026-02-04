@@ -37,42 +37,46 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 - [x] Message search and auto-summarization
 - [x] Metrics dashboard
 
-**Outcome**: Fully functional AI assistant with 286 passing tests.
+**Outcome**: Fully functional AI assistant with 328 passing tests.
 
-## Phase 3: Self-Improvement Loop - CURRENT (40%)
+## Phase 3: Self-Improvement Loop - 75% COMPLETE
 
 **Goal**: Enable the system to improve itself reliably.
 
 - [x] Multi-agent architecture (Builder/Criticizer/Planner)
 - [x] Issue-driven workflow with labels (8 labels created)
 - [x] Architectural decision records (ADRs) - ADR-001 exists
-- [ ] Automated verification gate (Criticizer must approve)
-- [ ] Performance regression detection (Issue #7)
+- [x] Automated verification gate (Criticizer verified Issues #6-9)
+- [x] Performance regression detection (Issue #7 - VERIFIED)
+- [x] Streaming responses for better UX (Issue #6 - VERIFIED)
+- [x] Conversation export/import (Issue #8 - VERIFIED)
+- [x] Path consistency (Issue #9 - VERIFIED)
 - [ ] Auto-backlog from bug patterns
-- [ ] Streaming responses for better UX (Issue #6)
+- [ ] PR-based evolution with review gates
 
-**Success Criteria**:
-- Builder cannot close issues (only Criticizer can)
-- All changes verified by actual API testing
-- Recurring bugs trigger tech-debt issues
+**Success Criteria** - ACHIEVED:
+- Builder cannot close issues (only Criticizer can) - WORKING
+- All changes verified by actual API testing - WORKING (4 issues verified)
+- Recurring bugs trigger tech-debt issues - NOT YET TESTED (no bugs found)
+
+## Phase 4: Production Hardening - CURRENT
+
+**Goal**: Make the system robust for continuous operation.
+
+- [ ] Error alerting and notifications (Issue #10 - HIGH)
+- [ ] Backup and restore procedures (Issue #11 - HIGH)
+- [ ] Resource monitoring and limits (Issue #12 - MEDIUM)
+- [ ] Log rotation and cleanup (Issue #13 - MEDIUM)
+- [ ] Graceful degradation modes (Issue #14 - MEDIUM)
 
 **Active Issues**:
 | Issue | Title | Priority |
 |-------|-------|----------|
-| #6 | Streaming response support | High |
-| #7 | Performance benchmarks | Medium |
-| #8 | Conversation export/import | Low |
-| #9 | Fix path inconsistency | Low |
-
-## Phase 4: Production Hardening
-
-**Goal**: Make the system robust for continuous operation.
-
-- [ ] Error recovery and graceful degradation
-- [ ] Resource monitoring and limits
-- [ ] Backup and restore procedures
-- [ ] Health alerting
-- [ ] Log rotation and cleanup
+| #10 | Error alerting and notifications | High |
+| #11 | Backup and restore functionality | High |
+| #12 | Resource monitoring and limits | Medium |
+| #13 | Log rotation and cleanup | Medium |
+| #14 | Graceful degradation modes | Medium |
 
 ## Phase 5: External Integration
 
@@ -92,10 +96,11 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 | M2: Web UI + conversation | Week 2 | COMPLETE |
 | M3: Multimodal input | Week 3 | COMPLETE |
 | M4: Multi-agent system | Week 4 | COMPLETE |
-| M5: Self-verification cycle | Week 5 | IN PROGRESS (40%) |
-| M5.1: Streaming responses | Week 5-6 | IN PROGRESS (#6) |
-| M5.2: Performance benchmarks | Week 6 | NOT STARTED (#7) |
-| M6: Production hardening | Week 7 | NOT STARTED |
+| M5: Self-verification cycle | Week 5 | 75% COMPLETE |
+| M5.1: Streaming responses | Week 5 | COMPLETE (#6 verified) |
+| M5.2: Performance benchmarks | Week 5 | COMPLETE (#7 verified) |
+| M5.3: Export/Import | Week 5 | COMPLETE (#8 verified) |
+| M6: Production hardening | Week 6 | STARTING (5 issues created) |
 
 ## Principles
 

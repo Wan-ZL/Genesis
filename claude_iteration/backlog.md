@@ -1,35 +1,47 @@
 # Backlog
 
-## Priority: High
-- [x] Create supervisor service for 24/7 assistant runtime (launchd/systemd)
+> **Note**: Primary work tracking is via GitHub Issues. This backlog is for ideas not yet converted to issues.
+
+## Active GitHub Issues (see `gh issue list`)
+- Issue #10: Error alerting and notifications (HIGH)
+- Issue #11: Backup and restore functionality (HIGH)
+- Issue #12: Resource monitoring and limits (MEDIUM)
+- Issue #13: Log rotation and cleanup (MEDIUM)
+- Issue #14: Graceful degradation modes (MEDIUM)
+
+## Pending User Action
 - [ ] Activate Claude API (user needs to add ANTHROPIC_API_KEY)
-- [x] Add comprehensive tests for chat API
 
-## Priority: Medium
-- [x] Tool registry system ← **COMPLETE** (registry, datetime, calculate, web_fetch tools)
-- [x] Eval framework for LLM outputs ← **COMPLETE** (framework, 6 cases, SQLite storage, 26 tests)
-- [x] Add health check endpoint for monitoring
-- [x] Error recovery and auto-restart ← **COMPLETE** (retry logic + launchd auto-restart)
-- [x] CLI runner for evals (`python -m evals`) ← **COMPLETE**
-
-## Priority: Low
-- [x] Metrics dashboard ← **COMPLETE** (backend API + UI panel with auto-refresh)
-- [x] CI integration for automated tests ← **COMPLETE** (GitHub Actions workflow)
-- [x] Mobile-friendly UI improvements ← **COMPLETE** (responsive CSS, touch targets, iOS safe areas, collapsible menu)
-- [x] Voice input support ← **COMPLETE** (Web Speech API, continuous mode, graceful fallback)
-
-## Completed (for reference)
-- [x] Web UI: basic chat interface
-- [x] Web UI: status panel showing agent/state.md
-- [x] Multimodal: image upload + storage
-- [x] Multimodal: PDF support via Claude document type
-- [x] Conversation persistence (SQLite)
-- [x] Claude API integration code (needs API key)
-- [x] Set up basic test framework (pytest)
-- [x] Hooks system for Claude Code iteration loop
-
-## Ideas (Unscoped)
+## Ideas (Not Yet Scoped as Issues)
 - Integration with calendar/tasks
 - Automated PR review suggestions
-- Real-time streaming responses
-- Conversation export/import
+- Email summarization integration
+- Slack/Discord bot
+- Local model fallback (ollama) for offline mode
+- Authentication layer for remote access
+- Code repository analysis tool
+
+## Completed (Phase 1-3)
+- [x] Repo structure and memory rules
+- [x] Web UI with chat interface
+- [x] Hooks system for iteration loop
+- [x] Supervisor service for 24/7 operation
+- [x] Conversation persistence (SQLite)
+- [x] Multimodal support (images, PDFs)
+- [x] Claude/OpenAI API integration
+- [x] Tool registry (datetime, calculate, web_fetch, shell)
+- [x] Eval framework with CLI runner
+- [x] Health check endpoint
+- [x] Retry logic with exponential backoff
+- [x] Metrics dashboard with auto-refresh
+- [x] CI integration (GitHub Actions)
+- [x] Mobile-friendly UI
+- [x] Voice input support
+- [x] Settings page with persistence
+- [x] Permission system (4 levels)
+- [x] Capability discovery (23+ tools)
+- [x] Message search and auto-summarization
+- [x] Streaming responses (SSE)
+- [x] Performance benchmarks
+- [x] Conversation export/import
+- [x] Path consistency fix
