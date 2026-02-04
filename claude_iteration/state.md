@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #14 Complete - Needs Verification.** Graceful degradation modes fully implemented including web_fetch tool caching.
+**Issue #15 Complete - Needs Verification.** Authentication layer for remote access implemented.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -230,29 +230,37 @@
   - main.py updated with access logging middleware
   - CLI: `python -m cli logs tail|list|clear|cleanup`
   - 30 new tests
-- **Issue #14 COMPLETE - Graceful degradation modes (needs verification)**:
-  - DegradationService: `assistant/server/services/degradation.py`
-    - `DegradationMode` enum: NORMAL, CLAUDE_UNAVAILABLE, OPENAI_UNAVAILABLE, RATE_LIMITED, OFFLINE, DEGRADED
-    - `APIHealth` class: Tracks availability, failures, rate limits
-    - Circuit breaker pattern (3 failures = unavailable)
-    - Smart API selection via `get_preferred_api()`
-    - Network detection via DNS lookup
-    - Tool result caching infrastructure
-    - **Rate limit queue processing**: `process_queue()`, `start_queue_processor()`, priority-based execution
-  - API: `GET/POST /api/degradation`, network check, cache clear
-  - **Queue API**: `GET/POST/DELETE /api/degradation/queue` for queue management
-  - Chat integration: Records success/failure, smart fallback
-  - UI: Degradation banner in status panel (color-coded by mode)
-  - **web_fetch tool caching**: Caches successful fetches, returns cached on offline/error/timeout
-  - 68 tests for degradation + caching (540 total)
+- **Issue #14 VERIFIED - Graceful degradation modes**:
+  - DegradationService with circuit breaker, API fallback, rate limit queue
+  - web_fetch tool caching for offline access
+  - 68 tests
+- **Issue #15 COMPLETE - Authentication layer (needs verification)**:
+  - AuthService: `assistant/server/services/auth.py`
+    - `AuthConfig` class with dynamic environment variable reading
+    - JWT token creation (access + refresh tokens)
+    - Token verification with expiration and revocation
+    - Session tracking in SQLite
+    - Rate limiting for login attempts (per-IP)
+    - Password hashing with bcrypt
+  - Auth API: `assistant/server/routes/auth.py`
+    - `GET /api/auth/status` - Check auth status
+    - `POST /api/auth/login` - Authenticate and get tokens
+    - `POST /api/auth/logout` - Revoke token
+    - `POST /api/auth/logout-all` - Revoke all sessions
+    - `POST /api/auth/refresh` - Refresh access token
+    - `POST /api/auth/set-password` - Set initial password
+    - `POST /api/auth/change-password` - Change password
+  - Authentication middleware in main.py
+  - PUBLIC_PATHS for routes that don't require auth
+  - 36 new tests (576 total)
 
 ## Next Step (single step)
-Wait for Criticizer verification of Issue #14. Then work on Issue #15 (authentication) or #17 (API key encryption).
+Wait for Criticizer verification of Issue #15. Then work on Issue #16 (scheduled tasks) or #17 (API key encryption).
 
 ## Risks / Notes
-- Issue #14 implementation complete, awaiting verification
-- 540 tests passing (8 new for web_fetch caching)
-- All graceful degradation features implemented
+- Issue #15 implementation complete, awaiting verification
+- 576 tests passing (36 new for authentication)
+- Auth disabled by default for local-only mode
 
 ## How to test quickly
 ```bash

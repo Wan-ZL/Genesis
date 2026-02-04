@@ -91,9 +91,71 @@ async def access_log_middleware(request: Request, call_next):
     return response
 
 
-# Import and include routers
-from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation
+# Routes that don't require authentication
+PUBLIC_PATHS = {
+    "/",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+    "/api/health",
+    "/api/auth/login",
+    "/api/auth/logout",
+    "/api/auth/refresh",
+    "/api/auth/status",
+    "/api/auth/set-password",
+}
 
+# Path prefixes that are public
+PUBLIC_PREFIXES = ("/static/",)
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """Enforce authentication on protected routes when auth is enabled."""
+    from fastapi.responses import JSONResponse
+    from server.services.auth import get_auth_service
+
+    path = request.url.path
+    auth_service = get_auth_service()
+
+    # Skip auth check if auth is disabled
+    if not auth_service.is_auth_enabled():
+        return await call_next(request)
+
+    # Skip auth for public paths
+    if path in PUBLIC_PATHS or any(path.startswith(p) for p in PUBLIC_PREFIXES):
+        return await call_next(request)
+
+    # Extract token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Not authenticated"},
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    token = auth_header[7:]  # Remove "Bearer " prefix
+    valid, payload, error = await auth_service.verify_token(token)
+
+    if not valid:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": error or "Invalid authentication"},
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    # Token is valid, proceed
+    return await call_next(request)
+
+
+# Import and include routers
+from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth
+
+# Auth routes (always accessible)
+app.include_router(auth.router, prefix="/api", tags=["auth"])
+
+# Protected API routes
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(status.router, prefix="/api", tags=["status"])
 app.include_router(upload.router, prefix="/api", tags=["upload"])
