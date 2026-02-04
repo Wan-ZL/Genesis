@@ -418,6 +418,264 @@ class TestDegradationAPI:
         assert data["cleared_entries"] >= 0
 
 
+class TestQueueProcessing:
+    """Tests for queue processing functionality."""
+
+    @pytest.mark.asyncio
+    async def test_process_queue_empty(self):
+        """Test processing empty queue returns empty list."""
+        service = DegradationService()
+        results = await service.process_queue()
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_process_queue_executes_callback(self):
+        """Test queue processing executes callbacks."""
+        service = DegradationService()
+        call_count = [0]
+
+        async def test_callback():
+            call_count[0] += 1
+            return "success"
+
+        await service.queue_request("req1", test_callback)
+        results = await service.process_queue()
+
+        assert len(results) == 1
+        assert results[0]["success"] is True
+        assert results[0]["result"] == "success"
+        assert call_count[0] == 1
+        assert service.get_queue_size() == 0
+
+    @pytest.mark.asyncio
+    async def test_process_queue_handles_sync_callback(self):
+        """Test queue processing handles sync callbacks."""
+        service = DegradationService()
+
+        def sync_callback():
+            return 42
+
+        await service.queue_request("req1", sync_callback)
+        results = await service.process_queue()
+
+        assert len(results) == 1
+        assert results[0]["success"] is True
+        assert results[0]["result"] == 42
+
+    @pytest.mark.asyncio
+    async def test_process_queue_priority_order(self):
+        """Test queue processes in priority order."""
+        service = DegradationService()
+        execution_order = []
+
+        async def callback_a():
+            execution_order.append("a")
+            return "a"
+
+        async def callback_b():
+            execution_order.append("b")
+            return "b"
+
+        async def callback_c():
+            execution_order.append("c")
+            return "c"
+
+        await service.queue_request("req_low", callback_a, priority=1)
+        await service.queue_request("req_high", callback_b, priority=10)
+        await service.queue_request("req_med", callback_c, priority=5)
+
+        await service.process_queue()
+
+        # Should be processed: high (10), medium (5), low (1)
+        assert execution_order == ["b", "c", "a"]
+
+    @pytest.mark.asyncio
+    async def test_process_queue_timeout(self):
+        """Test queue removes timed-out requests."""
+        service = DegradationService()
+        service.QUEUE_TIMEOUT = 1  # 1 second for testing
+
+        async def dummy_callback():
+            return "ok"
+
+        await service.queue_request("req1", dummy_callback)
+
+        # Manually set creation time to past
+        service._request_queue[0].created_at = datetime.now() - timedelta(seconds=10)
+
+        results = await service.process_queue()
+
+        assert len(results) == 1
+        assert results[0]["success"] is False
+        assert "timed out" in results[0]["error"]
+        assert service.get_queue_size() == 0
+
+    @pytest.mark.asyncio
+    async def test_process_queue_callback_error(self):
+        """Test queue handles callback errors."""
+        service = DegradationService()
+
+        async def failing_callback():
+            raise ValueError("Test error")
+
+        await service.queue_request("req1", failing_callback)
+        results = await service.process_queue()
+
+        assert len(results) == 1
+        assert results[0]["success"] is False
+        assert "Test error" in results[0]["error"]
+        assert service.get_queue_size() == 0
+
+    @pytest.mark.asyncio
+    async def test_process_queue_stops_on_rate_limit_error(self):
+        """Test queue stops processing on rate limit error."""
+        service = DegradationService()
+        call_count = [0]
+
+        async def rate_limit_callback():
+            call_count[0] += 1
+            if call_count[0] == 2:
+                raise Exception("Rate limit error 429")
+            return f"result_{call_count[0]}"
+
+        await service.queue_request("req1", rate_limit_callback)
+        await service.queue_request("req2", rate_limit_callback)
+        await service.queue_request("req3", rate_limit_callback)
+
+        results = await service.process_queue()
+
+        # First should succeed, second should fail with rate limit
+        assert len(results) == 2
+        assert results[0]["success"] is True
+        assert results[1]["success"] is False
+        assert results[1].get("requeued") is True
+        # Third should still be in queue
+        assert service.get_queue_size() == 2
+
+    def test_is_any_api_rate_limited(self):
+        """Test is_any_api_rate_limited detection."""
+        service = DegradationService()
+        assert not service.is_any_api_rate_limited()
+
+        service.record_failure("claude", is_rate_limit=True, retry_after=60)
+        assert service.is_any_api_rate_limited()
+
+    def test_get_next_available_time(self):
+        """Test get_next_available_time returns earliest time."""
+        service = DegradationService()
+        assert service.get_next_available_time() is None
+
+        # Add rate limits
+        service.record_failure("claude", is_rate_limit=True, retry_after=60)
+        service.record_failure("openai", is_rate_limit=True, retry_after=30)
+
+        next_time = service.get_next_available_time()
+        assert next_time is not None
+        # Should be closer to 30 seconds from now (openai)
+        time_diff = (next_time - datetime.now()).total_seconds()
+        assert 25 <= time_diff <= 35
+
+    def test_clear_queue(self):
+        """Test clearing the queue."""
+        service = DegradationService()
+
+        async def dummy():
+            pass
+
+        # Add items synchronously via internal method for testing
+        from server.services.degradation import QueuedRequest
+        service._request_queue.append(QueuedRequest(
+            id="req1",
+            created_at=datetime.now(),
+            callback=dummy,
+            args=(),
+            kwargs={},
+            priority=0,
+        ))
+        service._request_queue.append(QueuedRequest(
+            id="req2",
+            created_at=datetime.now(),
+            callback=dummy,
+            args=(),
+            kwargs={},
+            priority=0,
+        ))
+
+        assert service.get_queue_size() == 2
+        cleared = service.clear_queue()
+        assert cleared == 2
+        assert service.get_queue_size() == 0
+
+    def test_get_queue_info(self):
+        """Test getting queue info."""
+        service = DegradationService()
+
+        async def dummy():
+            pass
+
+        from server.services.degradation import QueuedRequest
+        service._request_queue.append(QueuedRequest(
+            id="req1",
+            created_at=datetime.now(),
+            callback=dummy,
+            args=(),
+            kwargs={},
+            priority=5,
+        ))
+
+        info = service.get_queue_info()
+        assert info["size"] == 1
+        assert info["max_size"] == service.MAX_QUEUE_SIZE
+        assert info["timeout_seconds"] == service.QUEUE_TIMEOUT
+        assert len(info["pending_requests"]) == 1
+        assert info["pending_requests"][0]["id"] == "req1"
+        assert info["pending_requests"][0]["priority"] == 5
+
+    def test_stop_queue_processor(self):
+        """Test stopping queue processor sets flag."""
+        service = DegradationService()
+        service._queue_processor_running = True
+        service.stop_queue_processor()
+        assert service._queue_processor_running is False
+
+
+class TestQueueAPI:
+    """Tests for queue API endpoints."""
+
+    @pytest.fixture
+    def client(self):
+        """Create test client."""
+        from fastapi.testclient import TestClient
+        from server.main import app
+        return TestClient(app)
+
+    def test_get_queue_info_endpoint(self, client):
+        """Test GET /api/degradation/queue returns queue info."""
+        response = client.get("/api/degradation/queue")
+        assert response.status_code == 200
+        data = response.json()
+        assert "size" in data
+        assert "max_size" in data
+        assert "pending_requests" in data
+
+    def test_process_queue_endpoint(self, client):
+        """Test POST /api/degradation/queue/process processes queue."""
+        response = client.post("/api/degradation/queue/process")
+        assert response.status_code == 200
+        data = response.json()
+        assert "processed_count" in data
+        assert "results" in data
+        assert "queue_remaining" in data
+
+    def test_clear_queue_endpoint(self, client):
+        """Test DELETE /api/degradation/queue clears queue."""
+        response = client.delete("/api/degradation/queue")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "cleared_count" in data
+
+
 class TestIntegrationWithChat:
     """Test degradation integration with chat endpoints."""
 

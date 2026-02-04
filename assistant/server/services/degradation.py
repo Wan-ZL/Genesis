@@ -129,6 +129,7 @@ class DegradationService:
         self._mode: DegradationMode = DegradationMode.NORMAL
         self._mode_changed_at: datetime = datetime.now()
         self._lock = asyncio.Lock()
+        self._queue_processor_running: bool = False
 
         # Cache for tool results (especially web_fetch)
         self._tool_cache: Dict[str, dict] = {}
@@ -340,12 +341,201 @@ class DegradationService:
                 return max(0, int(remaining))
         return None
 
+    def is_any_api_rate_limited(self) -> bool:
+        """Check if any API is currently rate limited."""
+        return any(health.is_rate_limited for health in self._api_health.values())
+
+    def get_next_available_time(self) -> Optional[datetime]:
+        """Get the earliest time an API will become available.
+
+        Returns None if no APIs are rate limited.
+        """
+        rate_limit_times = [
+            health.rate_limited_until
+            for health in self._api_health.values()
+            if health.is_rate_limited and health.rate_limited_until
+        ]
+        if not rate_limit_times:
+            return None
+        return min(rate_limit_times)
+
+    async def process_queue(self) -> List[dict]:
+        """Process queued requests that can now be executed.
+
+        This method should be called periodically or after rate limits expire.
+        It processes requests in priority order (highest first), removing
+        timed-out requests and executing those that can now proceed.
+
+        Returns:
+            List of result dicts with request_id, success, result/error
+        """
+        results = []
+        now = datetime.now()
+
+        async with self._lock:
+            # Can't process if still rate limited on all APIs
+            if self.is_any_api_rate_limited():
+                # Check if at least one API is available
+                available_api = None
+                for api_name, health in self._api_health.items():
+                    if health.available and not health.is_rate_limited:
+                        available_api = api_name
+                        break
+
+                if not available_api:
+                    logger.debug("All APIs still rate limited, queue processing deferred")
+                    return results
+
+            if not self._request_queue:
+                return results
+
+            # Sort by priority (descending) then by creation time (ascending)
+            sorted_queue = sorted(
+                self._request_queue,
+                key=lambda r: (-r.priority, r.created_at)
+            )
+
+            # Process requests
+            processed_ids = []
+            for request in sorted_queue:
+                # Check if request has timed out
+                age_seconds = (now - request.created_at).total_seconds()
+                if age_seconds > self.QUEUE_TIMEOUT:
+                    logger.warning(f"Request {request.id} timed out after {age_seconds:.0f}s")
+                    results.append({
+                        "request_id": request.id,
+                        "success": False,
+                        "error": "Request timed out in queue",
+                        "age_seconds": age_seconds,
+                    })
+                    processed_ids.append(request.id)
+                    continue
+
+                # Try to execute the callback
+                try:
+                    logger.info(f"Processing queued request {request.id}")
+                    if asyncio.iscoroutinefunction(request.callback):
+                        result = await request.callback(*request.args, **request.kwargs)
+                    else:
+                        result = request.callback(*request.args, **request.kwargs)
+
+                    results.append({
+                        "request_id": request.id,
+                        "success": True,
+                        "result": result,
+                        "queue_time_seconds": age_seconds,
+                    })
+                    processed_ids.append(request.id)
+                except Exception as e:
+                    logger.error(f"Error processing queued request {request.id}: {e}")
+                    # Check if it's a rate limit error - if so, stop processing
+                    if "rate" in str(e).lower() or "429" in str(e):
+                        logger.warning("Hit rate limit again while processing queue")
+                        results.append({
+                            "request_id": request.id,
+                            "success": False,
+                            "error": str(e),
+                            "requeued": True,
+                        })
+                        break  # Stop processing, leave remaining in queue
+                    else:
+                        results.append({
+                            "request_id": request.id,
+                            "success": False,
+                            "error": str(e),
+                        })
+                        processed_ids.append(request.id)
+
+            # Remove processed requests from queue
+            self._request_queue = deque(
+                (r for r in self._request_queue if r.id not in processed_ids),
+                maxlen=self.MAX_QUEUE_SIZE
+            )
+
+        if results:
+            logger.info(f"Processed {len(processed_ids)} queued requests, {len(self._request_queue)} remaining")
+
+        return results
+
+    async def start_queue_processor(self, check_interval: float = 5.0):
+        """Start background task to periodically process the queue.
+
+        This runs indefinitely and checks the queue every check_interval seconds.
+        Should be started when the server starts.
+
+        Args:
+            check_interval: Seconds between queue checks (default 5.0)
+        """
+        logger.info(f"Starting queue processor with {check_interval}s interval")
+        self._queue_processor_running = True
+
+        while self._queue_processor_running:
+            try:
+                # Only process if we have items and rate limit may have expired
+                if self._request_queue:
+                    wait_time = self.get_queue_wait_time()
+                    if wait_time is None or wait_time <= 0:
+                        await self.process_queue()
+
+                await asyncio.sleep(check_interval)
+            except asyncio.CancelledError:
+                logger.info("Queue processor cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Queue processor error: {e}")
+                await asyncio.sleep(check_interval)
+
+        logger.info("Queue processor stopped")
+
+    def stop_queue_processor(self):
+        """Signal the queue processor to stop."""
+        self._queue_processor_running = False
+
+    def clear_queue(self) -> int:
+        """Clear all pending requests from the queue.
+
+        Returns:
+            Number of requests cleared
+        """
+        count = len(self._request_queue)
+        self._request_queue.clear()
+        logger.info(f"Cleared {count} requests from queue")
+        return count
+
+    def get_queue_info(self) -> dict:
+        """Get detailed information about the current queue state.
+
+        Returns:
+            Dict with queue statistics and pending request info
+        """
+        now = datetime.now()
+        pending_requests = []
+
+        for request in self._request_queue:
+            age = (now - request.created_at).total_seconds()
+            pending_requests.append({
+                "id": request.id,
+                "priority": request.priority,
+                "age_seconds": int(age),
+                "timeout_in": max(0, int(self.QUEUE_TIMEOUT - age)),
+            })
+
+        return {
+            "size": len(self._request_queue),
+            "max_size": self.MAX_QUEUE_SIZE,
+            "timeout_seconds": self.QUEUE_TIMEOUT,
+            "wait_time_seconds": self.get_queue_wait_time(),
+            "next_available": self.get_next_available_time().isoformat() if self.get_next_available_time() else None,
+            "pending_requests": pending_requests,
+        }
+
     # =========================================================================
     # Status and Reporting
     # =========================================================================
 
     def get_status(self) -> dict:
         """Get current degradation status."""
+        next_available = self.get_next_available_time()
         return {
             "mode": self._mode.name,
             "is_degraded": self.is_degraded,
@@ -353,6 +543,8 @@ class DegradationService:
             "network_available": self._network_available,
             "queue_size": len(self._request_queue),
             "queue_wait_seconds": self.get_queue_wait_time(),
+            "queue_processor_running": self._queue_processor_running,
+            "next_api_available": next_available.isoformat() if next_available else None,
             "apis": {
                 name: health.to_dict()
                 for name, health in self._api_health.items()

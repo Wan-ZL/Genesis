@@ -18,6 +18,8 @@ class DegradationStatus(BaseModel):
     network_available: bool
     queue_size: int
     queue_wait_seconds: Optional[int]
+    queue_processor_running: bool = False
+    next_api_available: Optional[str] = None
     apis: dict
     cache_entries: int
 
@@ -85,4 +87,49 @@ async def clear_cache():
     return {
         "success": True,
         "cleared_entries": count,
+    }
+
+
+# ============================================================================
+# Queue Management Endpoints
+# ============================================================================
+
+
+@router.get("/degradation/queue")
+async def get_queue_info():
+    """Get detailed information about the request queue.
+
+    Returns queue size, pending requests, timeout info, and estimated wait time.
+    """
+    service = get_degradation_service()
+    return service.get_queue_info()
+
+
+@router.post("/degradation/queue/process")
+async def process_queue():
+    """Manually trigger queue processing.
+
+    Processes all queued requests that can now be executed.
+    Useful for testing or manual intervention.
+    """
+    service = get_degradation_service()
+    results = await service.process_queue()
+    return {
+        "processed_count": len(results),
+        "results": results,
+        "queue_remaining": service.get_queue_size(),
+    }
+
+
+@router.delete("/degradation/queue")
+async def clear_queue():
+    """Clear all pending requests from the queue.
+
+    Use with caution - all queued requests will be discarded.
+    """
+    service = get_degradation_service()
+    cleared = service.clear_queue()
+    return {
+        "success": True,
+        "cleared_count": cleared,
     }

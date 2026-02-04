@@ -238,21 +238,22 @@
     - Smart API selection via `get_preferred_api()`
     - Network detection via DNS lookup
     - Tool result caching infrastructure
-    - Request queue infrastructure for rate limits
+    - **Rate limit queue processing**: `process_queue()`, `start_queue_processor()`, priority-based execution
   - API: `GET/POST /api/degradation`, network check, cache clear
+  - **Queue API**: `GET/POST/DELETE /api/degradation/queue` for queue management
   - Chat integration: Records success/failure, smart fallback
   - UI: Degradation banner in status panel (color-coded by mode)
-  - 45 new tests (517 total)
-  - **Completed**: API fallback, network detection, UI status indicator
-  - **Pending**: Rate limit queue processing, offline cached responses, web_fetch caching
+  - 60 tests for degradation (532 total)
+  - **Completed**: API fallback, network detection, UI status indicator, rate limit queue processing
+  - **Pending**: Offline cached responses, web_fetch tool caching integration
 
 ## Next Step (single step)
-Continue Issue #14: Implement rate limit queue processing and automatic offline cached response usage.
+Continue Issue #14: Implement web_fetch tool caching integration for offline access.
 
 ## Risks / Notes
-- Issue #14 partially complete - core API fallback working
-- 517 tests passing (45 new for degradation service)
-- Rate limit queuing and offline mode infrastructure exists but needs activation
+- Issue #14 partially complete - API fallback and queue processing working
+- 532 tests passing (15 new for queue processing)
+- Offline mode and tool caching infrastructure exists but needs activation in tools
 
 ## How to test quickly
 ```bash
