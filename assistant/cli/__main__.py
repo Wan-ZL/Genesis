@@ -27,6 +27,8 @@ Usage:
     python -m assistant.cli schedule enable <task_id>
     python -m assistant.cli schedule disable <task_id>
     python -m assistant.cli schedule history <task_id>
+    python -m assistant.cli settings encrypt
+    python -m assistant.cli settings status
 """
 import argparse
 import asyncio
@@ -38,15 +40,16 @@ from datetime import datetime
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from assistant.server.services.memory import MemoryService
-from assistant.server.services.alerts import AlertService, AlertSeverity, AlertType
-from assistant.server.services.backup import BackupService, BackupStatus
-from assistant.server.services.resources import ResourceService, ResourceConfig
-from assistant.server.services.logging_service import LogConfig, LoggingService, get_logging_service
-from assistant.server.services.scheduler import (
+from server.services.memory import MemoryService
+from server.services.alerts import AlertService, AlertSeverity, AlertType
+from server.services.backup import BackupService, BackupStatus
+from server.services.resources import ResourceService, ResourceConfig
+from server.services.logging_service import LogConfig, LoggingService, get_logging_service
+from server.services.scheduler import (
     SchedulerService, TaskType, TaskStatus, CronParser, init_scheduler_service
 )
-import assistant.config as config
+from server.services.settings import SettingsService
+import config
 
 
 async def export_command(args):
@@ -811,6 +814,96 @@ async def schedule_validate_command(args):
         print(f"  {run.strftime('%Y-%m-%d %H:%M (%A)')}")
 
 
+# Settings commands
+
+async def settings_encrypt_command(args):
+    """Migrate existing plaintext API keys to encrypted format."""
+    service = SettingsService(config.DATABASE_PATH)
+
+    if args.status_only:
+        # Just show encryption status
+        status = await service.get_encryption_status()
+
+        if args.json:
+            print(json.dumps(status, indent=2))
+            return
+
+        print("Encryption Status")
+        print("=" * 50)
+        print(f"Encryption available: {'Yes' if status['encryption_available'] else 'No'}")
+        print(f"All keys encrypted: {'Yes' if status['all_encrypted'] else 'No'}")
+        print()
+        print("API Key Status:")
+        for key, info in status['keys'].items():
+            status_icon = "OK" if info['is_encrypted'] else ("WARN" if info['has_value'] else "N/A")
+            has_value_str = "set" if info['has_value'] else "not set"
+            encrypted_str = "encrypted" if info['is_encrypted'] else "plaintext"
+            if info['has_value']:
+                print(f"  [{status_icon}] {key}: {has_value_str}, {encrypted_str}")
+            else:
+                print(f"  [N/A] {key}: {has_value_str}")
+        return
+
+    # Perform migration
+    print("Migrating API keys to encrypted format...")
+    result = await service.migrate_to_encrypted()
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+
+    if result['success']:
+        print()
+        print("Migration completed successfully!")
+        if result['migrated']:
+            print(f"  Migrated: {', '.join(result['migrated'])}")
+        if result['already_encrypted']:
+            print(f"  Already encrypted: {', '.join(result['already_encrypted'])}")
+        if result['skipped']:
+            print(f"  Skipped (no value): {', '.join(result['skipped'])}")
+    else:
+        print()
+        print(f"Migration failed: {result['error']}", file=sys.stderr)
+        if result['migrated']:
+            print(f"  Partially migrated: {', '.join(result['migrated'])}")
+        sys.exit(1)
+
+
+async def settings_status_command(args):
+    """Show current settings (with masked API keys)."""
+    service = SettingsService(config.DATABASE_PATH)
+
+    display = await service.get_display_settings()
+    enc_status = await service.get_encryption_status()
+
+    if args.json:
+        output = {
+            "settings": display,
+            "encryption": enc_status
+        }
+        print(json.dumps(output, indent=2))
+        return
+
+    print("Settings Status")
+    print("=" * 50)
+    print()
+    print("API Keys:")
+    print(f"  OpenAI:    {display['openai_api_key_masked'] or '(not set)'}")
+    print(f"  Anthropic: {display['anthropic_api_key_masked'] or '(not set)'}")
+    print()
+    print("Configuration:")
+    print(f"  Model:            {display['model']}")
+    print(f"  Permission level: {display['permission_level']}")
+    print()
+    print("Encryption:")
+    print(f"  Available: {'Yes' if enc_status['encryption_available'] else 'No'}")
+    print(f"  All encrypted: {'Yes' if enc_status['all_encrypted'] else 'No'}")
+    for key, info in enc_status['keys'].items():
+        if info['has_value']:
+            status = "encrypted" if info['is_encrypted'] else "PLAINTEXT"
+            print(f"    {key}: {status}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="assistant.cli",
@@ -1197,6 +1290,31 @@ def main():
         help="Output in JSON format"
     )
 
+    # Settings command with subcommands
+    settings_parser = subparsers.add_parser("settings", help="Manage settings and encryption")
+    settings_subparsers = settings_parser.add_subparsers(dest="settings_command", help="Settings commands")
+
+    # settings encrypt
+    settings_encrypt_parser = settings_subparsers.add_parser("encrypt", help="Migrate API keys to encrypted format")
+    settings_encrypt_parser.add_argument(
+        "--status-only", "-s",
+        action="store_true",
+        help="Only show encryption status without migrating"
+    )
+    settings_encrypt_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
+    # settings status
+    settings_status_parser = settings_subparsers.add_parser("status", help="Show settings status")
+    settings_status_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
     args = parser.parse_args()
 
     if args.command == "export":
@@ -1269,6 +1387,14 @@ def main():
             asyncio.run(schedule_validate_command(args))
         else:
             schedule_parser.print_help()
+            sys.exit(1)
+    elif args.command == "settings":
+        if args.settings_command == "encrypt":
+            asyncio.run(settings_encrypt_command(args))
+        elif args.settings_command == "status":
+            asyncio.run(settings_status_command(args))
+        else:
+            settings_parser.print_help()
             sys.exit(1)
     else:
         parser.print_help()

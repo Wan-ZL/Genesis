@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #16 Complete - Needs Verification.** Scheduled task automation implemented.
+**Issue #17 Complete - Needs Verification.** API key encryption at rest implemented.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -239,32 +239,35 @@
   - Auth API endpoints (login, logout, refresh, etc.)
   - Authentication middleware in main.py
   - 36 tests
-- **Issue #16 COMPLETE - Scheduled task automation (needs verification)**:
-  - SchedulerService: `assistant/server/services/scheduler.py`
-    - `CronParser` for cron expression parsing and next run calculation
-    - `ScheduledTask` dataclass with all task properties
-    - `TaskExecution` dataclass for execution history
-    - SQLite persistence for tasks and executions
-    - Background async task runner (30-second check interval)
-    - Built-in action handlers: notification, http, log
-    - Custom action handler registration support
-  - Schedule API: `assistant/server/routes/schedule.py`
-    - `GET /api/schedule` - List tasks with filtering
-    - `POST /api/schedule` - Create task
-    - `GET/PUT/DELETE /api/schedule/{task_id}` - Task CRUD
-    - `POST /api/schedule/{task_id}/enable|disable` - Toggle task
-    - `GET /api/schedule/{task_id}/history` - Execution history
-    - `POST /api/schedule/validate-cron` - Cron validation
-  - CLI: `python -m cli schedule list|add|remove|enable|disable|history|validate`
-  - 51 new tests (627 total)
+- **Issue #16 VERIFIED - Scheduled task automation**:
+  - SchedulerService with cron parsing, SQLite persistence, background runner
+  - Schedule API for task CRUD
+  - CLI commands for schedule management
+  - 51 tests
+- **Issue #17 COMPLETE - API key encryption at rest (needs verification)**:
+  - EncryptionService: `assistant/server/services/encryption.py`
+    - AES-256-GCM authenticated encryption
+    - Machine-specific key derivation (platform UUID)
+    - PBKDF2 with 480,000 iterations (OWASP 2023)
+    - Key file persistence at `memory/.encryption_key_salt`
+    - Passphrase-based encryption for portable backups
+    - Environment variable key for containerized deployments
+    - Key rotation capability
+  - SettingsService updated:
+    - API keys encrypted on set, decrypted on get
+    - `migrate_to_encrypted()` for existing plaintext keys
+    - `get_encryption_status()` method
+  - CLI: `python -m cli settings encrypt|status`
+  - 40 new tests (30 encryption + 10 settings encryption)
+  - 667 tests total
 
 ## Next Step (single step)
-Add `needs-verification` label to Issue #16 for Criticizer verification.
+Await Criticizer verification of Issue #17, then check for new issues.
 
 ## Risks / Notes
-- Issue #16 implementation complete, awaiting verification
-- 627 tests passing (51 new for scheduler)
-- Scheduler auto-starts when server launches
+- Issue #17 implementation complete, awaiting verification
+- 667 tests passing (40 new for encryption)
+- Encryption key salt must be backed up for data recovery
 
 ## How to test quickly
 ```bash

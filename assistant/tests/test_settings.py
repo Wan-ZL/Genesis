@@ -4,6 +4,8 @@ import tempfile
 from pathlib import Path
 from httpx import AsyncClient, ASGITransport
 
+from server.services.encryption import CRYPTOGRAPHY_AVAILABLE, is_encrypted
+
 
 class TestSettingsService:
     """Tests for SettingsService."""
@@ -305,3 +307,187 @@ class TestSettingsStartup:
 
             # Should not raise any errors
             await settings_routes.load_settings_on_startup()
+
+
+@pytest.mark.skipif(not CRYPTOGRAPHY_AVAILABLE, reason="cryptography not installed")
+class TestSettingsEncryption:
+    """Tests for settings encryption functionality."""
+
+    @pytest.fixture
+    def settings_service(self):
+        """Create a settings service with temp database."""
+        from server.services.settings import SettingsService
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            yield SettingsService(db_path)
+
+    @pytest.mark.asyncio
+    async def test_api_keys_encrypted_on_set(self, settings_service):
+        """Test that API keys are encrypted when set."""
+        await settings_service.set("openai_api_key", "sk-test123456789")
+
+        # Read raw value from database
+        import aiosqlite
+        async with aiosqlite.connect(settings_service.db_path) as db:
+            cursor = await db.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                ("openai_api_key",)
+            )
+            row = await cursor.fetchone()
+
+        # Raw value should be encrypted
+        assert row is not None
+        assert is_encrypted(row[0])
+
+        # But get() should return decrypted value
+        value = await settings_service.get("openai_api_key")
+        assert value == "sk-test123456789"
+
+    @pytest.mark.asyncio
+    async def test_non_sensitive_keys_not_encrypted(self, settings_service):
+        """Test that non-sensitive keys are stored as plaintext."""
+        await settings_service.set("model", "gpt-4o-mini")
+
+        # Read raw value from database
+        import aiosqlite
+        async with aiosqlite.connect(settings_service.db_path) as db:
+            cursor = await db.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                ("model",)
+            )
+            row = await cursor.fetchone()
+
+        # Model should be stored as plaintext
+        assert row is not None
+        assert row[0] == "gpt-4o-mini"
+        assert not is_encrypted(row[0])
+
+    @pytest.mark.asyncio
+    async def test_set_multiple_encrypts_sensitive_keys(self, settings_service):
+        """Test that set_multiple encrypts sensitive keys."""
+        await settings_service.set_multiple({
+            "openai_api_key": "sk-test-multi",
+            "anthropic_api_key": "sk-ant-multi",
+            "model": "gpt-4o"
+        })
+
+        # Read raw values
+        import aiosqlite
+        async with aiosqlite.connect(settings_service.db_path) as db:
+            cursor = await db.execute("SELECT key, value FROM settings")
+            rows = {row[0]: row[1] for row in await cursor.fetchall()}
+
+        # API keys should be encrypted
+        assert is_encrypted(rows["openai_api_key"])
+        assert is_encrypted(rows["anthropic_api_key"])
+        # Model should not be encrypted
+        assert rows["model"] == "gpt-4o"
+
+    @pytest.mark.asyncio
+    async def test_get_all_decrypts_sensitive_keys(self, settings_service):
+        """Test that get_all decrypts all sensitive keys."""
+        await settings_service.set_multiple({
+            "openai_api_key": "sk-openai-test",
+            "anthropic_api_key": "sk-anthropic-test"
+        })
+
+        settings = await settings_service.get_all()
+
+        assert settings["openai_api_key"] == "sk-openai-test"
+        assert settings["anthropic_api_key"] == "sk-anthropic-test"
+
+    @pytest.mark.asyncio
+    async def test_display_settings_includes_encryption_flag(self, settings_service):
+        """Test that display settings shows encryption status."""
+        display = await settings_service.get_display_settings()
+        assert "encryption_enabled" in display
+        assert display["encryption_enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_migrate_to_encrypted(self, settings_service):
+        """Test migration of plaintext keys to encrypted."""
+        # First, set a plaintext value directly in DB
+        import aiosqlite
+        from datetime import datetime
+
+        await settings_service._ensure_initialized()
+        async with aiosqlite.connect(settings_service.db_path) as db:
+            await db.execute(
+                """INSERT INTO settings (key, value, updated_at)
+                   VALUES (?, ?, ?)""",
+                ("openai_api_key", "sk-plaintext-key", datetime.now().isoformat())
+            )
+            await db.commit()
+
+        # Verify it's not encrypted
+        assert not await settings_service.is_key_encrypted("openai_api_key")
+
+        # Run migration
+        result = await settings_service.migrate_to_encrypted()
+
+        assert result["success"] is True
+        assert "openai_api_key" in result["migrated"]
+
+        # Verify it's now encrypted
+        assert await settings_service.is_key_encrypted("openai_api_key")
+
+        # Verify we can still read it
+        value = await settings_service.get("openai_api_key")
+        assert value == "sk-plaintext-key"
+
+    @pytest.mark.asyncio
+    async def test_migrate_skips_already_encrypted(self, settings_service):
+        """Test that migration skips already encrypted keys."""
+        # Set key normally (will be encrypted)
+        await settings_service.set("openai_api_key", "sk-already-encrypted")
+
+        # Run migration
+        result = await settings_service.migrate_to_encrypted()
+
+        assert result["success"] is True
+        assert "openai_api_key" in result["already_encrypted"]
+        assert "openai_api_key" not in result["migrated"]
+
+    @pytest.mark.asyncio
+    async def test_migrate_skips_empty_keys(self, settings_service):
+        """Test that migration skips empty keys."""
+        result = await settings_service.migrate_to_encrypted()
+
+        assert result["success"] is True
+        assert "openai_api_key" in result["skipped"]
+        assert "anthropic_api_key" in result["skipped"]
+
+    @pytest.mark.asyncio
+    async def test_get_encryption_status(self, settings_service):
+        """Test getting encryption status for all keys."""
+        await settings_service.set("openai_api_key", "sk-test")
+
+        status = await settings_service.get_encryption_status()
+
+        assert status["encryption_available"] is True
+        assert status["keys"]["openai_api_key"]["has_value"] is True
+        assert status["keys"]["openai_api_key"]["is_encrypted"] is True
+        assert status["keys"]["anthropic_api_key"]["has_value"] is False
+        assert status["all_encrypted"] is True
+
+    @pytest.mark.asyncio
+    async def test_encryption_status_false_for_plaintext(self, settings_service):
+        """Test that encryption status shows false for plaintext keys."""
+        # Insert plaintext directly
+        import aiosqlite
+        from datetime import datetime
+
+        await settings_service._ensure_initialized()
+        async with aiosqlite.connect(settings_service.db_path) as db:
+            await db.execute(
+                """INSERT INTO settings (key, value, updated_at)
+                   VALUES (?, ?, ?)""",
+                ("openai_api_key", "sk-plaintext", datetime.now().isoformat())
+            )
+            await db.commit()
+
+        status = await settings_service.get_encryption_status()
+
+        assert status["keys"]["openai_api_key"]["has_value"] is True
+        assert status["keys"]["openai_api_key"]["is_encrypted"] is False
+        assert status["all_encrypted"] is False
