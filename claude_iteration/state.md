@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #15 Complete - Needs Verification.** Authentication layer for remote access implemented.
+**Issue #16 Complete - Needs Verification.** Scheduled task automation implemented.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -234,33 +234,37 @@
   - DegradationService with circuit breaker, API fallback, rate limit queue
   - web_fetch tool caching for offline access
   - 68 tests
-- **Issue #15 COMPLETE - Authentication layer (needs verification)**:
-  - AuthService: `assistant/server/services/auth.py`
-    - `AuthConfig` class with dynamic environment variable reading
-    - JWT token creation (access + refresh tokens)
-    - Token verification with expiration and revocation
-    - Session tracking in SQLite
-    - Rate limiting for login attempts (per-IP)
-    - Password hashing with bcrypt
-  - Auth API: `assistant/server/routes/auth.py`
-    - `GET /api/auth/status` - Check auth status
-    - `POST /api/auth/login` - Authenticate and get tokens
-    - `POST /api/auth/logout` - Revoke token
-    - `POST /api/auth/logout-all` - Revoke all sessions
-    - `POST /api/auth/refresh` - Refresh access token
-    - `POST /api/auth/set-password` - Set initial password
-    - `POST /api/auth/change-password` - Change password
+- **Issue #15 VERIFIED - Authentication layer**:
+  - AuthService with JWT tokens, bcrypt password hashing, rate limiting
+  - Auth API endpoints (login, logout, refresh, etc.)
   - Authentication middleware in main.py
-  - PUBLIC_PATHS for routes that don't require auth
-  - 36 new tests (576 total)
+  - 36 tests
+- **Issue #16 COMPLETE - Scheduled task automation (needs verification)**:
+  - SchedulerService: `assistant/server/services/scheduler.py`
+    - `CronParser` for cron expression parsing and next run calculation
+    - `ScheduledTask` dataclass with all task properties
+    - `TaskExecution` dataclass for execution history
+    - SQLite persistence for tasks and executions
+    - Background async task runner (30-second check interval)
+    - Built-in action handlers: notification, http, log
+    - Custom action handler registration support
+  - Schedule API: `assistant/server/routes/schedule.py`
+    - `GET /api/schedule` - List tasks with filtering
+    - `POST /api/schedule` - Create task
+    - `GET/PUT/DELETE /api/schedule/{task_id}` - Task CRUD
+    - `POST /api/schedule/{task_id}/enable|disable` - Toggle task
+    - `GET /api/schedule/{task_id}/history` - Execution history
+    - `POST /api/schedule/validate-cron` - Cron validation
+  - CLI: `python -m cli schedule list|add|remove|enable|disable|history|validate`
+  - 51 new tests (627 total)
 
 ## Next Step (single step)
-Wait for Criticizer verification of Issue #15. Then work on Issue #16 (scheduled tasks) or #17 (API key encryption).
+Add `needs-verification` label to Issue #16 for Criticizer verification.
 
 ## Risks / Notes
-- Issue #15 implementation complete, awaiting verification
-- 576 tests passing (36 new for authentication)
-- Auth disabled by default for local-only mode
+- Issue #16 implementation complete, awaiting verification
+- 627 tests passing (51 new for scheduler)
+- Scheduler auto-starts when server launches
 
 ## How to test quickly
 ```bash

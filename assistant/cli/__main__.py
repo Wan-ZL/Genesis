@@ -20,6 +20,13 @@ Usage:
     python -m assistant.cli logs clear --name assistant --confirm
     python -m assistant.cli logs list
     python -m assistant.cli logs cleanup --dry-run
+    python -m assistant.cli schedule list
+    python -m assistant.cli schedule add --name "Morning Briefing" --type recurring --schedule "0 7 * * *" --action notification --params '{"title":"Good Morning"}'
+    python -m assistant.cli schedule add --name "Reminder" --type one_time --schedule "2026-02-05T15:00:00" --action notification --params '{"message":"Meeting soon"}'
+    python -m assistant.cli schedule remove <task_id>
+    python -m assistant.cli schedule enable <task_id>
+    python -m assistant.cli schedule disable <task_id>
+    python -m assistant.cli schedule history <task_id>
 """
 import argparse
 import asyncio
@@ -36,6 +43,9 @@ from assistant.server.services.alerts import AlertService, AlertSeverity, AlertT
 from assistant.server.services.backup import BackupService, BackupStatus
 from assistant.server.services.resources import ResourceService, ResourceConfig
 from assistant.server.services.logging_service import LogConfig, LoggingService, get_logging_service
+from assistant.server.services.scheduler import (
+    SchedulerService, TaskType, TaskStatus, CronParser, init_scheduler_service
+)
 import assistant.config as config
 
 
@@ -566,6 +576,241 @@ def logs_cleanup_command(args):
             print(f"  {error['path']}: {error['error']}")
 
 
+# Schedule commands
+
+async def schedule_list_command(args):
+    """List scheduled tasks."""
+    db_path = config.DATABASE_PATH.parent / "scheduler.db"
+    service = init_scheduler_service(db_path)
+
+    # Convert filter args
+    status = TaskStatus(args.status) if args.status else None
+    enabled = None
+    if args.enabled is not None:
+        enabled = args.enabled.lower() == "true"
+
+    tasks = await service.list_tasks(
+        status=status,
+        enabled=enabled,
+        limit=args.limit,
+        offset=args.offset
+    )
+
+    if args.json:
+        print(json.dumps([t.to_dict() for t in tasks], indent=2))
+        return
+
+    if not tasks:
+        print("No scheduled tasks found.")
+        return
+
+    print("Scheduled Tasks")
+    print("=" * 70)
+
+    for task in tasks:
+        status_icons = {
+            TaskStatus.PENDING: "PEND",
+            TaskStatus.RUNNING: "RUN ",
+            TaskStatus.COMPLETED: "DONE",
+            TaskStatus.FAILED: "FAIL",
+            TaskStatus.CANCELLED: "CANC",
+            TaskStatus.DISABLED: "OFF "
+        }
+        status_icon = status_icons.get(task.status, "?   ")
+
+        enabled_str = "" if task.enabled else " [disabled]"
+        type_str = "cron" if task.task_type == TaskType.RECURRING else "once"
+
+        print(f"[{status_icon}] {task.name}{enabled_str}")
+        print(f"       ID: {task.id} | Type: {type_str} | Schedule: {task.schedule}")
+        print(f"       Action: {task.action} | Runs: {task.run_count} | Errors: {task.error_count}")
+        if task.next_run:
+            print(f"       Next run: {task.next_run[:19]}")
+        if task.last_run:
+            print(f"       Last run: {task.last_run[:19]}")
+        if task.last_error:
+            print(f"       Last error: {task.last_error[:50]}")
+        print()
+
+
+async def schedule_add_command(args):
+    """Add a new scheduled task."""
+    db_path = config.DATABASE_PATH.parent / "scheduler.db"
+    service = init_scheduler_service(db_path)
+
+    # Parse action params
+    try:
+        action_params = json.loads(args.params) if args.params else {}
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON for --params: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Parse task type
+    try:
+        task_type = TaskType(args.type)
+    except ValueError:
+        print(f"Error: Invalid task type: {args.type}. Use 'one_time' or 'recurring'", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        task = await service.create_task(
+            name=args.name,
+            task_type=task_type,
+            schedule=args.schedule,
+            action=args.action,
+            action_params=action_params,
+            metadata=json.loads(args.metadata) if args.metadata else None
+        )
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(task.to_dict(), indent=2))
+        return
+
+    print(f"Task created successfully!")
+    print(f"  ID: {task.id}")
+    print(f"  Name: {task.name}")
+    print(f"  Type: {task.task_type.value}")
+    print(f"  Schedule: {task.schedule}")
+    print(f"  Action: {task.action}")
+    print(f"  Next run: {task.next_run}")
+
+
+async def schedule_remove_command(args):
+    """Remove a scheduled task."""
+    db_path = config.DATABASE_PATH.parent / "scheduler.db"
+    service = init_scheduler_service(db_path)
+
+    # First check if task exists
+    task = await service.get_task(args.task_id)
+    if not task:
+        print(f"Error: Task not found: {args.task_id}", file=sys.stderr)
+        sys.exit(1)
+
+    # Confirm deletion
+    if not args.confirm:
+        print(f"This will delete task: {task.name} ({task.id})")
+        print(f"  Type: {task.task_type.value}")
+        print(f"  Schedule: {task.schedule}")
+        print(f"  Run count: {task.run_count}")
+        print()
+        print("Run with --confirm to proceed.")
+        sys.exit(0)
+
+    deleted = await service.delete_task(args.task_id)
+
+    if deleted:
+        print(f"Task deleted: {task.name} ({task.id})")
+    else:
+        print(f"Error: Failed to delete task", file=sys.stderr)
+        sys.exit(1)
+
+
+async def schedule_enable_command(args):
+    """Enable a scheduled task."""
+    db_path = config.DATABASE_PATH.parent / "scheduler.db"
+    service = init_scheduler_service(db_path)
+
+    task = await service.update_task(args.task_id, enabled=True)
+
+    if not task:
+        print(f"Error: Task not found: {args.task_id}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Task enabled: {task.name} ({task.id})")
+    print(f"  Next run: {task.next_run}")
+
+
+async def schedule_disable_command(args):
+    """Disable a scheduled task."""
+    db_path = config.DATABASE_PATH.parent / "scheduler.db"
+    service = init_scheduler_service(db_path)
+
+    task = await service.update_task(args.task_id, enabled=False)
+
+    if not task:
+        print(f"Error: Task not found: {args.task_id}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Task disabled: {task.name} ({task.id})")
+
+
+async def schedule_history_command(args):
+    """Show execution history for a task."""
+    db_path = config.DATABASE_PATH.parent / "scheduler.db"
+    service = init_scheduler_service(db_path)
+
+    # First check if task exists
+    task = await service.get_task(args.task_id)
+    if not task:
+        print(f"Error: Task not found: {args.task_id}", file=sys.stderr)
+        sys.exit(1)
+
+    executions = await service.get_task_history(args.task_id, limit=args.limit)
+
+    if args.json:
+        print(json.dumps([{
+            "id": e.id,
+            "started_at": e.started_at,
+            "completed_at": e.completed_at,
+            "status": e.status,
+            "duration_ms": e.duration_ms,
+            "error": e.error
+        } for e in executions], indent=2))
+        return
+
+    print(f"Execution History: {task.name}")
+    print("=" * 60)
+
+    if not executions:
+        print("No executions yet.")
+        return
+
+    for execution in executions:
+        status_icons = {"success": "OK ", "failed": "ERR", "timeout": "TIM"}
+        status_icon = status_icons.get(execution.status, "?  ")
+
+        duration_str = f"{execution.duration_ms}ms" if execution.duration_ms else "N/A"
+
+        print(f"[{status_icon}] {execution.started_at[:19]} ({duration_str})")
+        if execution.error:
+            print(f"       Error: {execution.error[:60]}")
+        print()
+
+
+async def schedule_validate_command(args):
+    """Validate a cron expression."""
+    is_valid, error = CronParser.is_valid(args.cron)
+
+    if not is_valid:
+        print(f"Invalid cron expression: {error}", file=sys.stderr)
+        sys.exit(1)
+
+    # Calculate next runs
+    current = datetime.now()
+    next_runs = []
+    for _ in range(5):
+        next_run = CronParser.get_next_run(args.cron, current)
+        next_runs.append(next_run)
+        current = next_run
+
+    if args.json:
+        print(json.dumps({
+            "valid": True,
+            "cron": args.cron,
+            "next_runs": [r.isoformat() for r in next_runs]
+        }, indent=2))
+        return
+
+    print(f"Valid cron expression: {args.cron}")
+    print()
+    print("Next 5 run times:")
+    for run in next_runs:
+        print(f"  {run.strftime('%Y-%m-%d %H:%M (%A)')}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="assistant.cli",
@@ -825,6 +1070,133 @@ def main():
         help="Output in JSON format"
     )
 
+    # Schedule command with subcommands
+    schedule_parser = subparsers.add_parser("schedule", help="Manage scheduled tasks")
+    schedule_subparsers = schedule_parser.add_subparsers(dest="schedule_command", help="Schedule commands")
+
+    # schedule list
+    schedule_list_parser = schedule_subparsers.add_parser("list", help="List scheduled tasks")
+    schedule_list_parser.add_argument(
+        "--status", "-s",
+        choices=["pending", "running", "completed", "failed", "cancelled", "disabled"],
+        help="Filter by task status"
+    )
+    schedule_list_parser.add_argument(
+        "--enabled", "-e",
+        choices=["true", "false"],
+        help="Filter by enabled state"
+    )
+    schedule_list_parser.add_argument(
+        "--limit", "-l",
+        type=int, default=100,
+        help="Maximum number of tasks to show (default: 100)"
+    )
+    schedule_list_parser.add_argument(
+        "--offset", "-o",
+        type=int, default=0,
+        help="Pagination offset (default: 0)"
+    )
+    schedule_list_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
+    # schedule add
+    schedule_add_parser = schedule_subparsers.add_parser("add", help="Add a new scheduled task")
+    schedule_add_parser.add_argument(
+        "--name", "-n",
+        required=True,
+        help="Task name"
+    )
+    schedule_add_parser.add_argument(
+        "--type", "-t",
+        required=True,
+        choices=["one_time", "recurring"],
+        help="Task type: one_time or recurring"
+    )
+    schedule_add_parser.add_argument(
+        "--schedule", "-s",
+        required=True,
+        help="ISO datetime for one_time (e.g., 2026-02-05T15:00:00), cron expression for recurring (e.g., '0 7 * * *')"
+    )
+    schedule_add_parser.add_argument(
+        "--action", "-a",
+        required=True,
+        choices=["notification", "http", "log"],
+        help="Action type: notification, http, or log"
+    )
+    schedule_add_parser.add_argument(
+        "--params", "-p",
+        default="{}",
+        help="Action parameters as JSON (e.g., '{\"title\":\"Hello\",\"message\":\"World\"}')"
+    )
+    schedule_add_parser.add_argument(
+        "--metadata", "-m",
+        default=None,
+        help="Optional metadata as JSON"
+    )
+    schedule_add_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
+    # schedule remove
+    schedule_remove_parser = schedule_subparsers.add_parser("remove", help="Remove a scheduled task")
+    schedule_remove_parser.add_argument(
+        "task_id",
+        help="ID of the task to remove"
+    )
+    schedule_remove_parser.add_argument(
+        "--confirm", "-y",
+        action="store_true",
+        help="Confirm deletion"
+    )
+
+    # schedule enable
+    schedule_enable_parser = schedule_subparsers.add_parser("enable", help="Enable a disabled task")
+    schedule_enable_parser.add_argument(
+        "task_id",
+        help="ID of the task to enable"
+    )
+
+    # schedule disable
+    schedule_disable_parser = schedule_subparsers.add_parser("disable", help="Disable a task")
+    schedule_disable_parser.add_argument(
+        "task_id",
+        help="ID of the task to disable"
+    )
+
+    # schedule history
+    schedule_history_parser = schedule_subparsers.add_parser("history", help="Show task execution history")
+    schedule_history_parser.add_argument(
+        "task_id",
+        help="ID of the task"
+    )
+    schedule_history_parser.add_argument(
+        "--limit", "-l",
+        type=int, default=50,
+        help="Maximum number of executions to show (default: 50)"
+    )
+    schedule_history_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
+    # schedule validate (validate cron expression)
+    schedule_validate_parser = schedule_subparsers.add_parser("validate", help="Validate a cron expression")
+    schedule_validate_parser.add_argument(
+        "cron",
+        help="Cron expression to validate (e.g., '0 7 * * *')"
+    )
+    schedule_validate_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
     args = parser.parse_args()
 
     if args.command == "export":
@@ -879,6 +1251,24 @@ def main():
             logs_cleanup_command(args)
         else:
             logs_parser.print_help()
+            sys.exit(1)
+    elif args.command == "schedule":
+        if args.schedule_command == "list":
+            asyncio.run(schedule_list_command(args))
+        elif args.schedule_command == "add":
+            asyncio.run(schedule_add_command(args))
+        elif args.schedule_command == "remove":
+            asyncio.run(schedule_remove_command(args))
+        elif args.schedule_command == "enable":
+            asyncio.run(schedule_enable_command(args))
+        elif args.schedule_command == "disable":
+            asyncio.run(schedule_disable_command(args))
+        elif args.schedule_command == "history":
+            asyncio.run(schedule_history_command(args))
+        elif args.schedule_command == "validate":
+            asyncio.run(schedule_validate_command(args))
+        else:
+            schedule_parser.print_help()
             sys.exit(1)
     else:
         parser.print_help()

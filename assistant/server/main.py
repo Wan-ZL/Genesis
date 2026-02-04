@@ -51,10 +51,18 @@ async def lifespan(app: FastAPI):
     init_alert_service()
     logger.info("Alert service initialized")
 
+    # Initialize and start scheduler service
+    from server.routes.schedule import init_scheduler
+    await init_scheduler()
+    logger.info("Scheduler service started")
+
     logger.info(f"Using model: {config.MODEL}")
     if not config.OPENAI_API_KEY and not config.ANTHROPIC_API_KEY:
         logger.warning("No API key set - configure via Settings page or .env files")
     yield
+    # Stop scheduler on shutdown
+    from server.routes.schedule import stop_scheduler
+    await stop_scheduler()
     logger.info("Shutting down AI Assistant")
 
 
@@ -150,7 +158,7 @@ async def auth_middleware(request: Request, call_next):
 
 
 # Import and include routers
-from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth
+from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth, schedule
 
 # Auth routes (always accessible)
 app.include_router(auth.router, prefix="/api", tags=["auth"])
@@ -165,6 +173,7 @@ app.include_router(capabilities.router, prefix="/api", tags=["capabilities"])
 app.include_router(alerts.router, prefix="/api", tags=["alerts"])
 app.include_router(resources.router, prefix="/api", tags=["resources"])
 app.include_router(degradation.router, prefix="/api", tags=["degradation"])
+app.include_router(schedule.router, prefix="/api", tags=["schedule"])
 
 # Serve static UI files (when they exist)
 UI_PATH = Path(__file__).parent.parent / "ui"
