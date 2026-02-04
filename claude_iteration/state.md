@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #21 Complete - Needs Verification.** Calendar integration via CalDAV protocol.
+**Issue #24 Complete - Needs Verification.** Code repository analysis tools.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -307,16 +307,32 @@
   - `calendar_password` encrypted at rest (in SENSITIVE_KEYS)
   - 32 new tests in `test_calendar.py`
   - Documentation: `assistant/docs/CALENDAR_SETUP.md`
-  - 744 tests total
+- **Issue #24 COMPLETE - Code repository analysis tools (needs verification)**:
+  - RepositoryService: `assistant/server/services/repository.py`
+    - `read_file()`: Read file contents with line ranges and size limits
+    - `list_files()`: List directory with glob patterns and recursion
+    - `search_code()`: Regex search with context lines (ripgrep-style)
+    - `get_file_info()`: Get file metadata without reading
+  - Security features:
+    - Path validation (only allowed directories)
+    - Path traversal protection (blocks `../`)
+    - Sensitive file filtering (.env, credentials, keys, etc.)
+    - Binary file detection (extension, MIME, content)
+    - Size limits (configurable max)
+  - Tools registered in tools.py: `read_file`, `list_files`, `search_code`, `get_file_info`
+  - All tools require LOCAL permission
+  - Config: `REPOSITORY_PATHS`, `REPOSITORY_MAX_FILE_SIZE`
+  - 77 new tests in `test_repository.py`
+  - Documentation: `assistant/docs/REPOSITORY_ANALYSIS.md`
+  - 821 tests total
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #21. Remaining open issue: #22 (Pydantic ConfigDict migration).
+Await Criticizer verification of Issue #24. Remaining open issue: #22 (Pydantic ConfigDict migration).
 
 ## Risks / Notes
-- Issue #21 implementation complete, awaiting verification
-- 744 tests passing (32 new for calendar integration)
-- caldav library required for calendar features (`pip install caldav`)
-- Calendar requires SYSTEM permission level
+- Issue #24 implementation complete, awaiting verification
+- 821 tests passing (77 new for repository analysis)
+- Repository tools require LOCAL permission level
 - Encryption key salt must be backed up for data recovery
 
 ## How to test quickly
@@ -326,14 +342,24 @@ cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 # Run all tests
 python3 -m pytest tests/ -v
 
-# Test calendar integration specifically (Issue #21)
-python3 -m pytest tests/test_calendar.py -v
+# Test repository analysis specifically (Issue #24)
+python3 -m pytest tests/test_repository.py -v
 
-# Check calendar tools are registered
-ASSISTANT_PERMISSION_LEVEL=2 python3 -m server.main &
-sleep 3
-curl http://127.0.0.1:8080/api/tools | jq '.tools[] | select(.name | contains("event"))'
-pkill -f 'python3 -m server.main'
+# Check repository tools are registered
+ASSISTANT_PERMISSION_LEVEL=1 python3 -c "
+from server.services.tools import registry
+for name in ['read_file', 'list_files', 'search_code', 'get_file_info']:
+    tool = registry.get_tool(name)
+    print(f'{name}: {tool.required_permission.name if tool else \"NOT FOUND\"}')
+"
+
+# Test read_file
+ASSISTANT_PERMISSION_LEVEL=1 python3 -c "
+from server.services.repository import get_repository_service
+svc = get_repository_service()
+result = svc.read_file('config.py')
+print('Read config.py:', 'OK' if result['success'] else result['error'])
+"
 
 # Test CLI logs commands
 python3 -m cli logs list              # List log files
@@ -341,7 +367,4 @@ python3 -m cli logs tail --lines 10   # Show last 10 lines of assistant.log
 
 # Test CLI resources commands
 python3 -m cli resources              # Show resource usage
-
-# Test CLI backup commands
-python3 -m cli backup list
 ```

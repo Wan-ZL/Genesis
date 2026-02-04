@@ -56,3 +56,10 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")  # Fast local model
 OLLAMA_ENABLED = os.getenv("OLLAMA_ENABLED", "true").lower() == "true"
 # Timeout for Ollama requests (local inference can be slower)
 OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "120"))
+
+# Repository analysis settings
+# Colon-separated list of directories the assistant can read
+# Default: Genesis project root (allows self-analysis)
+REPOSITORY_PATHS = os.getenv("REPOSITORY_PATHS", str(BASE_DIR.parent))
+# Maximum file size to read (in bytes)
+REPOSITORY_MAX_FILE_SIZE = int(os.getenv("REPOSITORY_MAX_FILE_SIZE", str(1024 * 1024)))  # 1MB

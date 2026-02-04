@@ -1075,3 +1075,327 @@ registry.register_tool(ToolSpec(
     handler=_find_free_time_impl,
     required_permission=PermissionLevel.SYSTEM,
 ))
+
+
+# ============================================================
+# Repository Analysis Tools
+# ============================================================
+
+def _read_file_impl(
+    file_path: str,
+    max_length: int = 50000,
+    start_line: int = 1,
+    end_line: int = 0,
+) -> str:
+    """Implementation for read_file tool."""
+    from .repository import get_repository_service
+
+    service = get_repository_service()
+    result = service.read_file(
+        file_path=file_path,
+        max_length=max_length if max_length > 0 else None,
+        start_line=start_line,
+        end_line=end_line if end_line > 0 else None,
+    )
+
+    if not result["success"]:
+        return f"Error: {result['error']}"
+
+    # Format output with line numbers
+    lines = result["content"].split("\n")
+    numbered_lines = []
+    for i, line in enumerate(lines, start=result.get("start_line", 1)):
+        numbered_lines.append(f"{i:5d} | {line}")
+
+    output = "\n".join(numbered_lines)
+
+    # Add metadata header
+    header = f"File: {result['path']}\n"
+    header += f"Lines: {result.get('start_line', 1)}-{result.get('end_line', result['lines'])} of {result['lines']}\n"
+    if result.get("truncated"):
+        header += "[Content truncated]\n"
+    header += "-" * 60 + "\n"
+
+    return header + output
+
+
+# Register read_file tool
+registry.register_tool(ToolSpec(
+    name="read_file",
+    description="Read the contents of a file from the codebase. Returns the file contents with line numbers. Useful for reviewing code, understanding implementations, or analyzing files. Respects path security restrictions.",
+    parameters=[
+        ToolParameter(
+            name="file_path",
+            type="string",
+            description="Path to the file (absolute or relative to project root)",
+            required=True,
+        ),
+        ToolParameter(
+            name="max_length",
+            type="integer",
+            description="Maximum characters to return. Default: 50000. Use smaller values for quick previews.",
+            required=False,
+            default=50000,
+        ),
+        ToolParameter(
+            name="start_line",
+            type="integer",
+            description="First line to read (1-indexed). Default: 1",
+            required=False,
+            default=1,
+        ),
+        ToolParameter(
+            name="end_line",
+            type="integer",
+            description="Last line to read. Default: 0 (read to end)",
+            required=False,
+            default=0,
+        ),
+    ],
+    handler=_read_file_impl,
+    required_permission=PermissionLevel.LOCAL,  # Requires LOCAL permission
+))
+
+
+def _list_files_impl(
+    directory: str = ".",
+    pattern: str = "*",
+    recursive: bool = False,
+    include_hidden: bool = False,
+) -> str:
+    """Implementation for list_files tool."""
+    from .repository import get_repository_service
+
+    service = get_repository_service()
+    result = service.list_files(
+        directory=directory,
+        pattern=pattern,
+        recursive=recursive,
+        include_hidden=include_hidden,
+    )
+
+    if not result["success"]:
+        return f"Error: {result['error']}"
+
+    # Format output
+    files = result["files"]
+    if not files:
+        return f"No files found in {result['directory']} matching '{pattern}'"
+
+    lines = [f"Directory: {result['directory']}"]
+    lines.append(f"Pattern: {pattern}")
+    lines.append(f"Found: {result['total']} items")
+    if result.get("truncated"):
+        lines.append("[Results truncated]")
+    lines.append("-" * 60)
+
+    for f in files:
+        if f.is_directory:
+            lines.append(f"  📁 {f.path}/")
+        else:
+            size_str = _format_size(f.size)
+            lines.append(f"  📄 {f.path} ({size_str})")
+
+    return "\n".join(lines)
+
+
+def _format_size(size: int) -> str:
+    """Format file size in human-readable form."""
+    for unit in ["B", "KB", "MB", "GB"]:
+        if size < 1024:
+            return f"{size:.0f}{unit}" if unit == "B" else f"{size:.1f}{unit}"
+        size /= 1024
+    return f"{size:.1f}TB"
+
+
+# Register list_files tool
+registry.register_tool(ToolSpec(
+    name="list_files",
+    description="List files in a directory with optional pattern matching. Useful for exploring the codebase structure, finding specific file types, or understanding project organization.",
+    parameters=[
+        ToolParameter(
+            name="directory",
+            type="string",
+            description="Directory path to list. Default: current project root",
+            required=False,
+            default=".",
+        ),
+        ToolParameter(
+            name="pattern",
+            type="string",
+            description="Glob pattern to filter files (e.g., '*.py', '*.ts', 'test_*'). Default: '*' (all files)",
+            required=False,
+            default="*",
+        ),
+        ToolParameter(
+            name="recursive",
+            type="boolean",
+            description="Search subdirectories recursively. Default: false",
+            required=False,
+            default=False,
+        ),
+        ToolParameter(
+            name="include_hidden",
+            type="boolean",
+            description="Include hidden files/directories (starting with .). Default: false",
+            required=False,
+            default=False,
+        ),
+    ],
+    handler=_list_files_impl,
+    required_permission=PermissionLevel.LOCAL,
+))
+
+
+def _search_code_impl(
+    pattern: str,
+    directory: str = ".",
+    file_pattern: str = "*",
+    context_lines: int = 2,
+    max_results: int = 50,
+    case_sensitive: bool = True,
+) -> str:
+    """Implementation for search_code tool."""
+    from .repository import get_repository_service
+
+    service = get_repository_service()
+    result = service.search_code(
+        pattern=pattern,
+        directory=directory,
+        file_pattern=file_pattern,
+        context_lines=context_lines,
+        max_results=max_results,
+        case_sensitive=case_sensitive,
+        regex=True,
+    )
+
+    if not result["success"]:
+        return f"Error: {result['error']}"
+
+    matches = result["matches"]
+    if not matches:
+        return f"No matches found for '{pattern}' in {result['files_searched']} files"
+
+    # Format output
+    lines = [f"Search: '{pattern}'"]
+    lines.append(f"Files searched: {result['files_searched']}")
+    lines.append(f"Matches: {result['total']}")
+    if result.get("truncated"):
+        lines.append(f"[Showing first {len(matches)} of {result['total']} matches]")
+    lines.append("=" * 60)
+
+    current_file = None
+    for match in matches:
+        if match.file != current_file:
+            lines.append(f"\n📄 {match.file}")
+            lines.append("-" * 40)
+            current_file = match.file
+
+        # Show context before
+        for ctx_line in match.context_before:
+            lines.append(f"  {ctx_line}")
+
+        # Highlight match line
+        lines.append(f"→ {match.line_number:5d}: {match.line}")
+
+        # Show context after
+        for ctx_line in match.context_after:
+            lines.append(f"  {ctx_line}")
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+# Register search_code tool
+registry.register_tool(ToolSpec(
+    name="search_code",
+    description="Search for patterns in code files using regex. Similar to ripgrep. Returns matching lines with context. Useful for finding function definitions, class usages, imports, or any code pattern.",
+    parameters=[
+        ToolParameter(
+            name="pattern",
+            type="string",
+            description="Search pattern (regex). Examples: 'def.*test', 'class\\s+\\w+', 'TODO'",
+            required=True,
+        ),
+        ToolParameter(
+            name="directory",
+            type="string",
+            description="Directory to search. Default: project root",
+            required=False,
+            default=".",
+        ),
+        ToolParameter(
+            name="file_pattern",
+            type="string",
+            description="Glob pattern to filter files (e.g., '*.py'). Default: '*' (all text files)",
+            required=False,
+            default="*",
+        ),
+        ToolParameter(
+            name="context_lines",
+            type="integer",
+            description="Lines of context before/after match. Default: 2",
+            required=False,
+            default=2,
+        ),
+        ToolParameter(
+            name="max_results",
+            type="integer",
+            description="Maximum matches to return. Default: 50",
+            required=False,
+            default=50,
+        ),
+        ToolParameter(
+            name="case_sensitive",
+            type="boolean",
+            description="Case-sensitive search. Default: true",
+            required=False,
+            default=True,
+        ),
+    ],
+    handler=_search_code_impl,
+    required_permission=PermissionLevel.LOCAL,
+))
+
+
+def _get_file_info_impl(file_path: str) -> str:
+    """Implementation for get_file_info tool."""
+    from .repository import get_repository_service
+
+    service = get_repository_service()
+    result = service.get_file_info(file_path)
+
+    if not result["success"]:
+        return f"Error: {result['error']}"
+
+    # Format output
+    lines = [f"Path: {result['path']}"]
+    lines.append(f"Name: {result['name']}")
+    lines.append(f"Type: {'Directory' if result['is_directory'] else 'File'}")
+    if result['is_file']:
+        lines.append(f"Size: {_format_size(result['size'])}")
+        lines.append(f"Extension: {result['extension'] or 'none'}")
+        lines.append(f"Binary: {'Yes' if result['is_binary'] else 'No'}")
+        lines.append(f"Readable: {'Yes' if result['can_read'] else 'No'}")
+        if result['is_sensitive']:
+            lines.append("⚠️ Sensitive file (access restricted)")
+
+    return "\n".join(lines)
+
+
+# Register get_file_info tool
+registry.register_tool(ToolSpec(
+    name="get_file_info",
+    description="Get information about a file without reading its contents. Returns metadata like size, type, and whether it can be read. Useful for checking file properties before reading.",
+    parameters=[
+        ToolParameter(
+            name="file_path",
+            type="string",
+            description="Path to the file or directory",
+            required=True,
+        ),
+    ],
+    handler=_get_file_info_impl,
+    required_permission=PermissionLevel.LOCAL,
+))

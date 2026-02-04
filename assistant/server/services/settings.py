@@ -44,6 +44,9 @@ class SettingsService:
         "calendar_password": "",  # App-specific password (encrypted)
         "calendar_default": "",  # Default calendar name
         "calendar_enabled": False,  # Calendar integration enabled
+        # Repository analysis settings
+        "repository_paths": "",  # Colon-separated allowed directories (empty = Genesis root)
+        "repository_max_file_size": 1048576,  # 1MB default
     }
 
     # Available models
