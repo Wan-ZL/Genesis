@@ -4,34 +4,36 @@
 
 ## Active GitHub Issues (see `gh issue list`)
 
-### Phase 4 (Production Hardening)
-- Issue #14: Graceful degradation modes (MEDIUM) - IN PROGRESS
-
-### Phase 5 (External Integration) - NEW
-- Issue #15: Authentication layer for remote access (MEDIUM)
-- Issue #16: Scheduled task automation (MEDIUM)
-- Issue #17: API key encryption at rest (MEDIUM)
+### Phase 5 (External Integration) - CURRENT
+- Issue #20: Local model fallback with Ollama (HIGH) - NEW
+- Issue #21: Calendar integration (MEDIUM) - NEW
+- Issue #22: Pydantic ConfigDict migration (LOW) - Tech Debt
 
 ## Recently Completed (Phase 4)
 - Issue #10: Error alerting and notifications - VERIFIED
 - Issue #11: Backup and restore functionality - VERIFIED
 - Issue #12: Resource monitoring and limits - VERIFIED
 - Issue #13: Log rotation and cleanup - VERIFIED
+- Issue #14: Graceful degradation modes - VERIFIED
+- Issue #15: Authentication layer for remote access - VERIFIED
+- Issue #16: Scheduled task automation - VERIFIED
+- Issue #17: API key encryption at rest - VERIFIED
+- Issue #18: Key rotation TypeError fix - VERIFIED
+- Issue #19: Encrypted API key leak prevention - VERIFIED
 
 ## Pending User Action
 - [ ] Activate Claude API (user needs to add ANTHROPIC_API_KEY)
 - [ ] Configure valid OpenAI API key (current key appears invalid)
+- [ ] Install Ollama for local model support (once Issue #20 is complete)
 
 ## Ideas (Not Yet Scoped as Issues)
-- Integration with calendar/tasks
 - Automated PR review suggestions
 - Email summarization integration
 - Slack/Discord bot
-- Local model fallback (ollama) for offline mode
-- Authentication layer for remote access
 - Code repository analysis tool
+- Task/todo integration
 
-## Completed (Phase 1-3)
+## Completed (Phase 1-4)
 - [x] Repo structure and memory rules
 - [x] Web UI with chat interface
 - [x] Hooks system for iteration loop
@@ -55,3 +57,11 @@
 - [x] Performance benchmarks
 - [x] Conversation export/import
 - [x] Path consistency fix
+- [x] Error alerting and notifications
+- [x] Backup and restore
+- [x] Resource monitoring and limits
+- [x] Log rotation and cleanup
+- [x] Graceful degradation modes
+- [x] Authentication layer
+- [x] Scheduled task automation
+- [x] API key encryption at rest
