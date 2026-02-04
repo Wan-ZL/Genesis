@@ -78,7 +78,7 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 
 **Outcome**: Robust 24/7 operation with monitoring, alerting, backup, and security features. 675 tests passing.
 
-## Phase 5: External Integration - READY TO START
+## Phase 5: External Integration - NEAR COMPLETE
 
 **Goal**: Connect to external systems and enable advanced automation.
 
@@ -87,21 +87,36 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 - [x] API key encryption at rest (Issue #17)
 - [x] Scheduled task automation (Issue #16)
 
-**Integrations** (to be prioritized and converted to issues):
+**Completed Integrations**:
+- [x] Local model fallback with Ollama (Issue #20 - VERIFIED)
+- [x] Calendar integration via CalDAV (Issue #21 - VERIFIED)
+- [x] Bug fix: Ollama status consistency (Issue #23 - VERIFIED)
+
+**In Progress**:
+- [ ] Code repository analysis (Issue #24 - HIGH, self-improvement enabler)
+- [ ] Pydantic ConfigDict migration (Issue #22 - LOW, trivial tech debt)
+
+**Remaining Integration Candidates** (not yet created as issues):
 
 | Integration | Priority | Value | Effort | Notes |
 |-------------|----------|-------|--------|-------|
-| Local model fallback (ollama) | HIGH | High | Medium | Offline-first mission alignment |
-| Calendar integration | MEDIUM | Medium | Medium | Practical daily utility |
-| Code repository analysis | MEDIUM | High | High | Self-improvement capabilities |
 | Slack/Discord bot | MEDIUM | Medium | Medium | Alternative interface |
+| Email summarization | MEDIUM | Medium | High | Privacy considerations |
 | Task/todo integration | LOW | Medium | Low | Overlaps with scheduler |
-| Email summarization | LOW | Medium | High | Privacy considerations |
 
-**Recommended Next Steps**:
-1. Create Issue for local model fallback (ollama)
-2. Create Issue for calendar integration
-3. User feedback on priorities
+## Phase 6: Intelligence Enhancement - PROPOSED
+
+**Goal**: Make the assistant smarter and more proactive.
+
+**Potential Features**:
+- [ ] Context-aware tool selection - Improve accuracy of tool suggestions
+- [ ] Long-term memory patterns - Learn user preferences over time
+- [ ] Proactive suggestions - Anticipate needs based on context/time
+- [ ] Multi-turn planning - Handle complex multi-step tasks autonomously
+- [ ] Conversation summarization improvements - Better context compression
+- [ ] Knowledge base integration - Store and retrieve domain knowledge
+
+**Dependencies**: Requires stable Phase 5 foundation (complete)
 
 ## Milestones
 
@@ -121,18 +136,24 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 | M6.6: Authentication | Week 6 | COMPLETE (#15) |
 | M6.7: Scheduled tasks | Week 6 | COMPLETE (#16) |
 | M6.8: Encryption + bug fixes | Week 6 | COMPLETE (#17, #18, #19) |
-| M7: External integrations | Week 7+ | READY TO START |
+| M7: External integrations | Week 7 | NEAR COMPLETE |
+| M7.1: Ollama integration | Week 7 | COMPLETE (#20, #23) |
+| M7.2: Calendar integration | Week 7 | COMPLETE (#21) |
+| M7.3: Code repository analysis | Week 7 | IN PROGRESS (#24) |
+| M7.4: Tech debt cleanup | Week 7 | PENDING (#22) |
+| M8: Intelligence enhancement | Week 8+ | PROPOSED |
 
 ## Statistics
 
 | Metric | Value |
 |--------|-------|
-| Total issues created | 19 |
-| Issues verified and closed | 19 |
-| Bugs found by Criticizer | 2 |
-| Total tests | 675 |
-| Service modules | 16 |
-| Phases completed | 4 of 5 |
+| Total issues created | 24 |
+| Issues verified and closed | 22 |
+| Issues open | 2 |
+| Bugs found by Criticizer | 3 |
+| Total tests | 745 |
+| Service modules | 17+ |
+| Phases completed | 4.9 of 5 |
 
 ## Principles
 
@@ -152,9 +173,24 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 
 ## Key Learning: Multi-Agent Validation
 
-Issue #17 (API key encryption) passed all 667 unit tests but the Criticizer found 2 real bugs during verification:
+The multi-agent system has proven its value multiple times:
 
+**Issue #17 (API key encryption)** - passed all 667 unit tests but Criticizer found 2 bugs:
 1. **#19 (Critical)**: Silent decryption failure causes encrypted keys to be sent to external APIs
 2. **#18 (Low)**: Key rotation has TypeError in edge case
 
-Both bugs were fixed by Builder and verified by Criticizer. This proves the value of independent verification - unit tests alone are not sufficient for quality assurance.
+**Issue #20 (Ollama integration)** - Criticizer found during verification:
+3. **#23 (Medium)**: Degradation service showed Ollama as available when not running
+
+All 3 bugs were fixed by Builder and verified by Criticizer. This proves the value of independent verification - unit tests alone are not sufficient for quality assurance.
+
+## Current Project Capabilities
+
+The AI Assistant now supports:
+- **Communication**: Web UI, CLI, API
+- **AI Providers**: Claude, OpenAI, Ollama (local)
+- **Tools**: datetime, calculate, web_fetch, shell, calendar (5 events tools)
+- **Security**: Authentication, API key encryption, permission levels
+- **Reliability**: Graceful degradation, backup/restore, monitoring, alerts
+- **Operations**: Log rotation, resource limits, scheduled tasks
+- **Data**: SQLite persistence, conversation export/import, message search

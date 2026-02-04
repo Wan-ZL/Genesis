@@ -4,12 +4,16 @@
 
 ## Active GitHub Issues (see `gh issue list`)
 
-### Phase 5 (External Integration) - CURRENT
-- Issue #20: Local model fallback with Ollama (HIGH) - NEW
-- Issue #21: Calendar integration (MEDIUM) - NEW
-- Issue #22: Pydantic ConfigDict migration (LOW) - Tech Debt
+### Phase 5 (External Integration) - CONTINUING
+- Issue #24: Code repository analysis tool (HIGH) - NEW - Self-improvement enabler
+- Issue #22: Pydantic ConfigDict migration (LOW) - Tech Debt - Trivial
 
-## Recently Completed (Phase 4)
+## Recently Completed (Phase 5)
+- Issue #20: Local model fallback with Ollama - VERIFIED
+- Issue #21: Calendar integration via CalDAV - VERIFIED
+- Issue #23: Ollama status inconsistency fix - VERIFIED
+
+## Completed Earlier (Phase 4)
 - Issue #10: Error alerting and notifications - VERIFIED
 - Issue #11: Backup and restore functionality - VERIFIED
 - Issue #12: Resource monitoring and limits - VERIFIED
@@ -27,11 +31,19 @@
 - [ ] Install Ollama for local model support (once Issue #20 is complete)
 
 ## Ideas (Not Yet Scoped as Issues)
-- Automated PR review suggestions
-- Email summarization integration
-- Slack/Discord bot
-- Code repository analysis tool
-- Task/todo integration
+
+### Phase 5 Extensions (External Integration)
+- ~~Code repository analysis tool~~ - Issue #24 created
+- Slack/Discord bot - Alternative interface
+- Email summarization integration - Privacy considerations
+- Task/todo integration - Overlaps with scheduler
+
+### Phase 6 Candidates (Intelligence Enhancement)
+- Context-aware tool selection improvements
+- Long-term memory pattern learning
+- Proactive suggestions based on context/time
+- Multi-turn planning for complex tasks
+- Knowledge base integration
 
 ## Completed (Phase 1-4)
 - [x] Repo structure and memory rules
