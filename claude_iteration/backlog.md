@@ -3,14 +3,24 @@
 > **Note**: Primary work tracking is via GitHub Issues. This backlog is for ideas not yet converted to issues.
 
 ## Active GitHub Issues (see `gh issue list`)
-- Issue #10: Error alerting and notifications (HIGH)
-- Issue #11: Backup and restore functionality (HIGH)
-- Issue #12: Resource monitoring and limits (MEDIUM)
-- Issue #13: Log rotation and cleanup (MEDIUM)
-- Issue #14: Graceful degradation modes (MEDIUM)
+
+### Phase 4 (Production Hardening)
+- Issue #14: Graceful degradation modes (MEDIUM) - IN PROGRESS
+
+### Phase 5 (External Integration) - NEW
+- Issue #15: Authentication layer for remote access (MEDIUM)
+- Issue #16: Scheduled task automation (MEDIUM)
+- Issue #17: API key encryption at rest (MEDIUM)
+
+## Recently Completed (Phase 4)
+- Issue #10: Error alerting and notifications - VERIFIED
+- Issue #11: Backup and restore functionality - VERIFIED
+- Issue #12: Resource monitoring and limits - VERIFIED
+- Issue #13: Log rotation and cleanup - VERIFIED
 
 ## Pending User Action
 - [ ] Activate Claude API (user needs to add ANTHROPIC_API_KEY)
+- [ ] Configure valid OpenAI API key (current key appears invalid)
 
 ## Ideas (Not Yet Scoped as Issues)
 - Integration with calendar/tasks

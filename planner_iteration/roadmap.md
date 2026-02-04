@@ -39,49 +39,60 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 
 **Outcome**: Fully functional AI assistant with 328 passing tests.
 
-## Phase 3: Self-Improvement Loop - 75% COMPLETE
+## Phase 3: Self-Improvement Loop - 85% COMPLETE
 
 **Goal**: Enable the system to improve itself reliably.
 
 - [x] Multi-agent architecture (Builder/Criticizer/Planner)
-- [x] Issue-driven workflow with labels (8 labels created)
+- [x] Issue-driven workflow with labels (9 labels created)
 - [x] Architectural decision records (ADRs) - ADR-001 exists
-- [x] Automated verification gate (Criticizer verified Issues #6-9)
+- [x] Automated verification gate (Criticizer verified Issues #6-13)
 - [x] Performance regression detection (Issue #7 - VERIFIED)
 - [x] Streaming responses for better UX (Issue #6 - VERIFIED)
 - [x] Conversation export/import (Issue #8 - VERIFIED)
 - [x] Path consistency (Issue #9 - VERIFIED)
-- [ ] Auto-backlog from bug patterns
-- [ ] PR-based evolution with review gates
+- [ ] Auto-backlog from bug patterns (deferred - no bugs found to trigger)
+- [ ] PR-based evolution with review gates (deferred - current workflow effective)
 
 **Success Criteria** - ACHIEVED:
 - Builder cannot close issues (only Criticizer can) - WORKING
-- All changes verified by actual API testing - WORKING (4 issues verified)
-- Recurring bugs trigger tech-debt issues - NOT YET TESTED (no bugs found)
+- All changes verified by actual API testing - WORKING (8 issues verified)
+- Recurring bugs trigger tech-debt issues - NOT YET TESTED (zero bugs found by Criticizer)
 
-## Phase 4: Production Hardening - CURRENT
+**Note**: Remaining Phase 3 items deferred. The multi-agent system is working well enough that auto-backlog generation has not been needed (Criticizer found 0 bugs). PR-based evolution can be added when needed for team collaboration.
+
+## Phase 4: Production Hardening - 80% COMPLETE
 
 **Goal**: Make the system robust for continuous operation.
 
-- [ ] Error alerting and notifications (Issue #10 - HIGH)
-- [ ] Backup and restore procedures (Issue #11 - HIGH)
-- [ ] Resource monitoring and limits (Issue #12 - MEDIUM)
-- [ ] Log rotation and cleanup (Issue #13 - MEDIUM)
-- [ ] Graceful degradation modes (Issue #14 - MEDIUM)
+- [x] Error alerting and notifications (Issue #10 - VERIFIED)
+- [x] Backup and restore procedures (Issue #11 - VERIFIED)
+- [x] Resource monitoring and limits (Issue #12 - VERIFIED)
+- [x] Log rotation and cleanup (Issue #13 - VERIFIED)
+- [ ] Graceful degradation modes (Issue #14 - IN PROGRESS, ~60%)
 
-**Active Issues**:
-| Issue | Title | Priority |
-|-------|-------|----------|
-| #10 | Error alerting and notifications | High |
-| #11 | Backup and restore functionality | High |
-| #12 | Resource monitoring and limits | Medium |
-| #13 | Log rotation and cleanup | Medium |
-| #14 | Graceful degradation modes | Medium |
+**Remaining Work (Issue #14)**:
+| Feature | Status | Notes |
+|---------|--------|-------|
+| API fallback | DONE | Claude/OpenAI automatic failover |
+| Network detection | DONE | Offline state detection |
+| UI status indicator | DONE | Color-coded banner |
+| Rate limit queue | TODO | Infrastructure exists |
+| Offline cached responses | TODO | Infrastructure exists |
+| web_fetch caching | TODO | Not started |
 
-## Phase 5: External Integration
+## Phase 5: External Integration - PLANNED
 
-**Goal**: Connect to external systems for real utility.
+**Goal**: Connect to external systems and enable remote access.
 
+**Security Foundation**:
+- [ ] Authentication layer for remote access (Issue #15)
+- [ ] API key encryption at rest (Issue #17)
+
+**Automation**:
+- [ ] Scheduled task automation (Issue #16)
+
+**Integrations** (not yet issues):
 - [ ] Calendar integration
 - [ ] Task/todo integration
 - [ ] Email summarization
@@ -96,11 +107,16 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 | M2: Web UI + conversation | Week 2 | COMPLETE |
 | M3: Multimodal input | Week 3 | COMPLETE |
 | M4: Multi-agent system | Week 4 | COMPLETE |
-| M5: Self-verification cycle | Week 5 | 75% COMPLETE |
+| M5: Self-verification cycle | Week 5 | COMPLETE |
 | M5.1: Streaming responses | Week 5 | COMPLETE (#6 verified) |
 | M5.2: Performance benchmarks | Week 5 | COMPLETE (#7 verified) |
 | M5.3: Export/Import | Week 5 | COMPLETE (#8 verified) |
-| M6: Production hardening | Week 6 | STARTING (5 issues created) |
+| M6: Production hardening | Week 6 | 80% COMPLETE |
+| M6.1: Error alerting | Week 6 | COMPLETE (#10 verified) |
+| M6.2: Backup/restore | Week 6 | COMPLETE (#11 verified) |
+| M6.3: Resource monitoring | Week 6 | COMPLETE (#12 verified) |
+| M6.4: Log rotation | Week 6 | COMPLETE (#13 verified) |
+| M6.5: Graceful degradation | Week 6 | IN PROGRESS (#14) |
 
 ## Principles
 
