@@ -119,6 +119,7 @@ class TestDegradationService:
         assert not service.is_degraded
         assert "claude" in service._api_health
         assert "openai" in service._api_health
+        assert "ollama" in service._api_health
 
     def test_get_api_health(self):
         """Test getting API health."""
@@ -147,9 +148,20 @@ class TestDegradationService:
         assert service.mode == DegradationMode.CLAUDE_UNAVAILABLE
         assert service.is_degraded
 
-    def test_record_failure_both_apis_goes_offline(self):
-        """Test both APIs failing results in OFFLINE mode."""
+    def test_record_failure_both_cloud_apis_with_ollama(self):
+        """Test both cloud APIs failing with Ollama available results in CLOUD_UNAVAILABLE."""
         service = DegradationService()
+        # Ollama is available by default
+        service._api_health["ollama"].available = True
+        for _ in range(3):
+            service.record_failure("claude")
+            service.record_failure("openai")
+        assert service.mode == DegradationMode.CLOUD_UNAVAILABLE
+
+    def test_record_failure_all_apis_goes_offline(self):
+        """Test all APIs (including Ollama) failing results in OFFLINE mode."""
+        service = DegradationService()
+        service._api_health["ollama"].available = False
         for _ in range(3):
             service.record_failure("claude")
             service.record_failure("openai")
@@ -188,13 +200,25 @@ class TestDegradationService:
             service.record_failure("claude")
         assert service.get_preferred_api("claude") == "openai"
 
-    def test_get_preferred_api_both_unavailable(self):
-        """Test preferred API when both unavailable still returns one."""
+    def test_get_preferred_api_both_cloud_unavailable_returns_ollama(self):
+        """Test preferred API falls back to Ollama when both cloud APIs unavailable."""
         service = DegradationService()
+        service._api_health["ollama"].available = True
         for _ in range(3):
             service.record_failure("claude")
             service.record_failure("openai")
-        # Should still return something (fallback logic)
+        # Should fall back to Ollama
+        result = service.get_preferred_api("claude")
+        assert result == "ollama"
+
+    def test_get_preferred_api_all_unavailable_returns_primary(self):
+        """Test preferred API returns primary when all APIs unavailable."""
+        service = DegradationService()
+        service._api_health["ollama"].available = False
+        for _ in range(3):
+            service.record_failure("claude")
+            service.record_failure("openai")
+        # Should still return one of the cloud APIs (fallback logic)
         result = service.get_preferred_api("claude")
         assert result in ["claude", "openai"]
 
@@ -334,12 +358,16 @@ class TestDegradationService:
     def test_reset_api_health_all(self):
         """Test resetting all API health."""
         service = DegradationService()
+        # Disable Ollama so both cloud APIs failing = OFFLINE
+        service._api_health["ollama"].available = False
         for _ in range(3):
             service.record_failure("claude")
             service.record_failure("openai")
         assert service.mode == DegradationMode.OFFLINE
         service.reset_api_health()
         assert service.mode == DegradationMode.NORMAL
+        # Verify Ollama is also reset
+        assert "ollama" in service._api_health
 
 
 class TestGlobalService:

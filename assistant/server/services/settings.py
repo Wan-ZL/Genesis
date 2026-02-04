@@ -34,6 +34,10 @@ class SettingsService:
         "anthropic_api_key": "",
         "model": "gpt-4o",  # Default model
         "permission_level": 1,  # LOCAL by default
+        "ollama_host": "http://localhost:11434",  # Default Ollama endpoint
+        "ollama_model": "llama3.2:3b",  # Default local model
+        "ollama_enabled": True,  # Enable Ollama fallback by default
+        "local_only_mode": False,  # Force local-only (no cloud APIs)
     }
 
     # Available models
@@ -42,6 +46,10 @@ class SettingsService:
         {"id": "gpt-4o-mini", "name": "GPT-4o Mini (OpenAI)", "provider": "openai"},
         {"id": "claude-sonnet-4-20250514", "name": "Claude Sonnet 4 (Anthropic)", "provider": "anthropic"},
         {"id": "claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku (Anthropic)", "provider": "anthropic"},
+        {"id": "ollama:llama3.2:3b", "name": "Llama 3.2 3B (Local)", "provider": "ollama"},
+        {"id": "ollama:llama3.2:70b", "name": "Llama 3.2 70B (Local)", "provider": "ollama"},
+        {"id": "ollama:mistral", "name": "Mistral (Local)", "provider": "ollama"},
+        {"id": "ollama:codellama", "name": "Code Llama (Local)", "provider": "ollama"},
     ]
 
     def __init__(self, db_path: Path, encryption_service: Optional[EncryptionService] = None):
@@ -231,7 +239,20 @@ class SettingsService:
             "permission_level": int(settings.get("permission_level", 1)),
             "available_models": self.AVAILABLE_MODELS,
             "encryption_enabled": self._encryption_available,
+            # Ollama settings
+            "ollama_host": settings.get("ollama_host", "http://localhost:11434"),
+            "ollama_model": settings.get("ollama_model", "llama3.2:3b"),
+            "ollama_enabled": self._parse_bool(settings.get("ollama_enabled", True)),
+            "local_only_mode": self._parse_bool(settings.get("local_only_mode", False)),
         }
+
+    def _parse_bool(self, value) -> bool:
+        """Parse a boolean value from various types."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes", "on")
+        return bool(value)
 
     async def migrate_to_encrypted(self) -> dict:
         """Migrate existing plaintext keys to encrypted format.

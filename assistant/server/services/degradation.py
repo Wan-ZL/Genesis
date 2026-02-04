@@ -25,8 +25,10 @@ class DegradationMode(Enum):
     NORMAL = auto()           # All services working normally
     CLAUDE_UNAVAILABLE = auto()   # Claude API down, using OpenAI fallback
     OPENAI_UNAVAILABLE = auto()   # OpenAI API down, using Claude fallback
+    CLOUD_UNAVAILABLE = auto()    # Both cloud APIs down, using Ollama fallback
     RATE_LIMITED = auto()     # Currently rate limited, queuing requests
     OFFLINE = auto()          # Network unavailable, using cached responses
+    LOCAL_ONLY = auto()       # User requested local-only mode (Ollama only)
     DEGRADED = auto()         # Some services impaired but functional
 
 
@@ -122,7 +124,9 @@ class DegradationService:
         self._api_health: Dict[str, APIHealth] = {
             "claude": APIHealth(name="claude"),
             "openai": APIHealth(name="openai"),
+            "ollama": APIHealth(name="ollama"),
         }
+        self._local_only_mode: bool = False
         self._request_queue: deque[QueuedRequest] = deque(maxlen=self.MAX_QUEUE_SIZE)
         self._last_network_check: Optional[datetime] = None
         self._network_available: bool = True
@@ -151,14 +155,24 @@ class DegradationService:
 
         claude_health = self._api_health["claude"]
         openai_health = self._api_health["openai"]
+        ollama_health = self._api_health["ollama"]
 
-        if not self._network_available:
-            self._mode = DegradationMode.OFFLINE
+        if self._local_only_mode:
+            self._mode = DegradationMode.LOCAL_ONLY
+        elif not self._network_available:
+            # Network down - check if Ollama is available locally
+            if ollama_health.available:
+                self._mode = DegradationMode.OFFLINE  # Can use Ollama offline
+            else:
+                self._mode = DegradationMode.OFFLINE
         elif claude_health.is_rate_limited or openai_health.is_rate_limited:
             self._mode = DegradationMode.RATE_LIMITED
         elif not claude_health.available and not openai_health.available:
-            # Both APIs down - offline mode
-            self._mode = DegradationMode.OFFLINE
+            # Both cloud APIs down - use Ollama if available
+            if ollama_health.available:
+                self._mode = DegradationMode.CLOUD_UNAVAILABLE
+            else:
+                self._mode = DegradationMode.OFFLINE
         elif not claude_health.available:
             self._mode = DegradationMode.CLAUDE_UNAVAILABLE
         elif not openai_health.available:
@@ -198,16 +212,30 @@ class DegradationService:
         return not primary_health.available or primary_health.is_rate_limited
 
     def get_preferred_api(self, preferred: str = "claude") -> str:
-        """Get the best available API to use."""
+        """Get the best available API to use.
+
+        Fallback order: preferred -> other cloud API -> ollama
+        In local_only_mode, always returns "ollama".
+        """
+        # If local-only mode is enabled, always use Ollama
+        if self._local_only_mode:
+            return "ollama"
+
         if not self.should_use_fallback(preferred):
             return preferred
 
-        # Try fallback
+        # Try cloud fallback
         fallback = "openai" if preferred == "claude" else "claude"
         if not self.should_use_fallback(fallback):
             return fallback
 
-        # Both unavailable - return primary anyway (will fail but might recover)
+        # Both cloud APIs unavailable - try Ollama
+        ollama_health = self._api_health["ollama"]
+        if ollama_health.available and not ollama_health.is_rate_limited:
+            logger.info("Cloud APIs unavailable, falling back to Ollama")
+            return "ollama"
+
+        # Try recovery for cloud APIs
         primary_health = self._api_health[preferred]
         fallback_health = self._api_health[fallback]
 
@@ -233,6 +261,17 @@ class DegradationService:
             return fallback
 
         return preferred if primary_health.last_failure > fallback_health.last_failure else fallback
+
+    def set_local_only_mode(self, enabled: bool):
+        """Enable or disable local-only mode (Ollama only)."""
+        self._local_only_mode = enabled
+        self._update_mode()
+        logger.info(f"Local-only mode {'enabled' if enabled else 'disabled'}")
+
+    @property
+    def is_local_only(self) -> bool:
+        """Check if local-only mode is enabled."""
+        return self._local_only_mode
 
     async def check_network(self, force: bool = False) -> bool:
         """Check if network is available.
@@ -561,6 +600,7 @@ class DegradationService:
             self._api_health = {
                 "claude": APIHealth(name="claude"),
                 "openai": APIHealth(name="openai"),
+                "ollama": APIHealth(name="ollama"),
             }
         self._update_mode()
 

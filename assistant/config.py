@@ -48,3 +48,11 @@ RECENT_MESSAGES_VERBATIM = 20
 MESSAGES_PER_SUMMARY_BATCH = 10
 # Maximum characters for a summary
 MAX_SUMMARY_LENGTH = 500
+
+# Ollama settings for local model fallback
+# Ollama provides local inference with models like Llama, Mistral, etc.
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")  # Fast local model
+OLLAMA_ENABLED = os.getenv("OLLAMA_ENABLED", "true").lower() == "true"
+# Timeout for Ollama requests (local inference can be slower)
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "120"))

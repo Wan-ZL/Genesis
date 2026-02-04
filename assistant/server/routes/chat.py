@@ -25,6 +25,7 @@ from server.services.metrics import metrics
 from server.services.tool_suggestions import get_suggestion_service
 from server.services.degradation import get_degradation_service
 from server.services.encryption import is_encrypted, ENCRYPTED_PREFIX
+from server.services.ollama import get_ollama_client, OllamaStatus
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -501,6 +502,140 @@ async def call_openai_api(messages: list, file_ids: list, user_message: str, sys
     return "I apologize, I couldn't complete the task after multiple tool attempts.", config.OPENAI_MODEL, None
 
 
+async def call_ollama_api(messages: list, file_ids: list, user_message: str, system_prompt: str = "") -> tuple[str, str, Optional[dict]]:
+    """Call Ollama API for local model inference with tool support.
+
+    Args:
+        messages: Conversation history
+        file_ids: List of file IDs to attach (limited support)
+        user_message: The current user message
+        system_prompt: Optional system prompt with tool suggestions
+
+    Returns:
+        tuple: (response_text, model_name, permission_escalation_or_none)
+
+    Note: Local models may have limited multimodal support compared to cloud APIs.
+    Tool support depends on the specific model being used.
+    """
+    degradation = get_degradation_service()
+    client = get_ollama_client()
+
+    if not await client.is_available():
+        degradation.record_failure("ollama")
+        raise ValueError("Ollama service not available")
+
+    model_name = f"ollama:{client.model}"
+
+    # Build messages for Ollama (uses same format as OpenAI)
+    ollama_messages = []
+
+    # Add system prompt first if provided
+    if system_prompt:
+        ollama_messages.append({"role": "system", "content": system_prompt})
+
+    # Add conversation history
+    for msg in messages[:-1]:
+        ollama_messages.append({
+            "role": msg["role"],
+            "content": msg["content"]
+        })
+
+    # Add current user message
+    # Note: Most local models don't support multimodal input well
+    if file_ids:
+        # Include a note about attached files
+        file_note = f"\n[Note: {len(file_ids)} file(s) were attached but may not be viewable by this local model]"
+        ollama_messages.append({"role": "user", "content": user_message + file_note})
+        logger.warning(f"Ollama: Files attached but local model may not support multimodal input")
+    else:
+        ollama_messages.append({"role": "user", "content": user_message})
+
+    # Get tools in OpenAI format (Ollama uses the same format)
+    tools = tool_registry.to_openai_tools()
+
+    # Check if model supports tools
+    models = await client.list_models()
+    current_model = next((m for m in models if m.name == client.model), None)
+    model_supports_tools = current_model and current_model.supports_tools if current_model else False
+
+    # Loop to handle tool calls
+    max_tool_iterations = 5
+    for iteration in range(max_tool_iterations):
+        try:
+            response = await client.chat(
+                messages=ollama_messages,
+                tools=tools if model_supports_tools else None,
+                stream=False
+            )
+            degradation.record_success("ollama")
+        except Exception as e:
+            degradation.record_failure("ollama")
+            raise
+
+        # Extract response content
+        message = response.get("message", {})
+        content = message.get("content", "")
+        tool_calls = message.get("tool_calls", [])
+
+        if not tool_calls:
+            # No tool calls, return the response
+            return content, model_name, None
+
+        # Process tool calls
+        # Ollama tool calls follow the same format as OpenAI
+        ollama_messages.append({
+            "role": "assistant",
+            "content": content,
+            "tool_calls": tool_calls
+        })
+
+        for tool_call in tool_calls:
+            func = tool_call.get("function", {})
+            tool_name = func.get("name", "")
+            tool_args_str = func.get("arguments", "{}")
+            tool_id = tool_call.get("id", f"call_{iteration}")
+
+            try:
+                tool_args = json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
+            except json.JSONDecodeError:
+                tool_args = {}
+
+            logger.info(f"Ollama calling tool: {tool_name} with input: {tool_args}")
+
+            # Execute the tool and record metrics
+            result = tool_registry.execute(tool_name, **tool_args)
+            metrics.record_tool_call(tool_name)
+
+            if result["success"]:
+                tool_result = str(result["result"])
+            elif "permission_escalation" in result:
+                # Tool requires elevated permission - return escalation request
+                escalation = result["permission_escalation"]
+                logger.info(
+                    f"Tool {tool_name} requires permission escalation: "
+                    f"{escalation['current_level_name']} -> {escalation['required_level_name']}"
+                )
+                escalation_msg = (
+                    f"I need elevated permissions to use the **{tool_name}** tool.\n\n"
+                    f"**Current permission level:** {escalation['current_level_name']}\n"
+                    f"**Required permission level:** {escalation['required_level_name']}\n\n"
+                    f"Would you like to grant {escalation['required_level_name']} permission? "
+                    f"This will allow me to: {escalation['tool_description']}"
+                )
+                return escalation_msg, model_name, escalation
+            else:
+                tool_result = f"Error: {result['error']}"
+
+            ollama_messages.append({
+                "role": "tool",
+                "tool_call_id": tool_id,
+                "content": tool_result,
+            })
+
+    # If we exit the loop, return what we have
+    return "I apologize, I couldn't complete the task after multiple tool attempts.", model_name, None
+
+
 # ============================================================================
 # Streaming API Support
 # ============================================================================
@@ -905,6 +1040,180 @@ async def stream_openai_response(
     })
 
 
+async def stream_ollama_response(
+    messages: list,
+    file_ids: list,
+    user_message: str,
+    system_prompt: str = ""
+) -> AsyncGenerator[str, None]:
+    """Stream response from Ollama with tool call support.
+
+    Yields SSE-formatted events:
+    - start: Initial metadata (model info)
+    - token: Text content chunk
+    - tool_call: Tool is being called
+    - tool_result: Tool execution result
+    - done: Stream complete with final metadata
+    - error: Error occurred
+    """
+    client = get_ollama_client()
+    if not await client.is_available():
+        yield format_sse("error", {"message": "Ollama service not available"})
+        return
+
+    model_name = f"ollama:{client.model}"
+
+    # Build messages for Ollama
+    ollama_messages = []
+
+    if system_prompt:
+        ollama_messages.append({"role": "system", "content": system_prompt})
+
+    for msg in messages[:-1]:
+        ollama_messages.append({
+            "role": msg["role"],
+            "content": msg["content"]
+        })
+
+    if file_ids:
+        file_note = f"\n[Note: {len(file_ids)} file(s) were attached but may not be viewable by this local model]"
+        ollama_messages.append({"role": "user", "content": user_message + file_note})
+    else:
+        ollama_messages.append({"role": "user", "content": user_message})
+
+    # Get tools in OpenAI format
+    tools = tool_registry.to_openai_tools()
+
+    # Check if model supports tools
+    models = await client.list_models()
+    current_model = next((m for m in models if m.name == client.model), None)
+    model_supports_tools = current_model and current_model.supports_tools if current_model else False
+
+    yield format_sse("start", {"model": model_name, "provider": "ollama"})
+
+    max_tool_iterations = 5
+    accumulated_text = ""
+
+    for iteration in range(max_tool_iterations):
+        try:
+            current_text = ""
+            tool_calls = []
+
+            # Stream from Ollama
+            stream_generator = await client.chat(
+                messages=ollama_messages,
+                tools=tools if model_supports_tools else None,
+                stream=True
+            )
+
+            async for chunk in stream_generator:
+                if chunk.get("done"):
+                    # Final chunk may contain tool calls
+                    message = chunk.get("message", {})
+                    if message.get("tool_calls"):
+                        tool_calls = message["tool_calls"]
+                    break
+
+                message = chunk.get("message", {})
+                content = message.get("content", "")
+
+                if content:
+                    current_text += content
+                    yield format_sse("token", {"text": content})
+
+                # Check for tool calls in streaming response
+                if message.get("tool_calls"):
+                    tool_calls.extend(message["tool_calls"])
+
+            accumulated_text += current_text
+
+            # If no tool calls, we're done
+            if not tool_calls:
+                break
+
+            # Process tool calls
+            ollama_messages.append({
+                "role": "assistant",
+                "content": current_text,
+                "tool_calls": tool_calls
+            })
+
+            for tool_call in tool_calls:
+                func = tool_call.get("function", {})
+                tool_name = func.get("name", "")
+                tool_args_str = func.get("arguments", "{}")
+                tool_id = tool_call.get("id", f"call_{iteration}")
+
+                try:
+                    tool_args = json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
+                except json.JSONDecodeError:
+                    tool_args = {}
+
+                yield format_sse("tool_call", {
+                    "name": tool_name,
+                    "input": tool_args
+                })
+
+                logger.info(f"Ollama streaming: calling tool {tool_name}")
+                result = tool_registry.execute(tool_name, **tool_args)
+                metrics.record_tool_call(tool_name)
+
+                if result["success"]:
+                    tool_result_content = str(result["result"])
+                    yield format_sse("tool_result", {
+                        "name": tool_name,
+                        "success": True,
+                        "result": tool_result_content
+                    })
+                    ollama_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_id,
+                        "content": tool_result_content,
+                    })
+                elif "permission_escalation" in result:
+                    escalation = result["permission_escalation"]
+                    yield format_sse("tool_result", {
+                        "name": tool_name,
+                        "success": False,
+                        "permission_escalation": escalation
+                    })
+                    escalation_msg = (
+                        f"I need elevated permissions to use the **{tool_name}** tool.\n\n"
+                        f"**Current permission level:** {escalation['current_level_name']}\n"
+                        f"**Required permission level:** {escalation['required_level_name']}"
+                    )
+                    yield format_sse("token", {"text": escalation_msg})
+                    accumulated_text += escalation_msg
+                    yield format_sse("done", {
+                        "total_text": accumulated_text,
+                        "model": model_name,
+                        "permission_escalation": escalation
+                    })
+                    return
+                else:
+                    error_content = f"Error: {result['error']}"
+                    yield format_sse("tool_result", {
+                        "name": tool_name,
+                        "success": False,
+                        "error": result["error"]
+                    })
+                    ollama_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_id,
+                        "content": error_content,
+                    })
+
+        except Exception as e:
+            logger.error(f"Ollama streaming error: {e}")
+            yield format_sse("error", {"message": str(e)})
+            return
+
+    yield format_sse("done", {
+        "total_text": accumulated_text,
+        "model": model_name
+    })
+
+
 @router.post("/chat/stream")
 async def chat_stream(request: ChatMessage):
     """Stream chat response using Server-Sent Events (SSE).
@@ -983,7 +1292,20 @@ async def chat_stream(request: ChatMessage):
             stream_generator = None
 
             # Try selected API first
-            if selected_api == "claude" and config.ANTHROPIC_API_KEY:
+            if selected_api == "ollama" and config.OLLAMA_ENABLED:
+                try:
+                    ollama_client = get_ollama_client()
+                    logger.info(f"Starting Ollama stream with model {ollama_client.model}")
+                    if degradation.mode.name not in ("NORMAL", "LOCAL_ONLY"):
+                        logger.info(f"Degradation mode: {degradation.mode.name}")
+                    stream_generator = stream_ollama_response(
+                        messages, request.file_ids or [], request.message, system_prompt
+                    )
+                    model_used = f"ollama:{ollama_client.model}"
+                except Exception as e:
+                    logger.warning(f"Ollama streaming init failed: {e}")
+                    stream_generator = None
+            elif selected_api == "claude" and config.ANTHROPIC_API_KEY:
                 try:
                     logger.info(f"Starting Claude stream with model {config.CLAUDE_MODEL}")
                     if degradation.mode.name not in ("NORMAL", "OPENAI_UNAVAILABLE"):
@@ -1008,21 +1330,40 @@ async def chat_stream(request: ChatMessage):
                     logger.warning(f"OpenAI streaming init failed: {e}")
                     stream_generator = None
 
-            # Fallback if primary failed
+            # Fallback chain: primary cloud -> secondary cloud -> ollama
             if stream_generator is None:
                 fallback_api = "openai" if selected_api == "claude" else "claude"
                 if fallback_api == "openai" and config.OPENAI_API_KEY:
-                    logger.info(f"Falling back to OpenAI stream with model {config.OPENAI_MODEL}")
-                    stream_generator = stream_openai_response(
-                        messages, request.file_ids or [], request.message, system_prompt
-                    )
-                    model_used = config.OPENAI_MODEL
+                    try:
+                        logger.info(f"Falling back to OpenAI stream with model {config.OPENAI_MODEL}")
+                        stream_generator = stream_openai_response(
+                            messages, request.file_ids or [], request.message, system_prompt
+                        )
+                        model_used = config.OPENAI_MODEL
+                    except Exception as e:
+                        logger.warning(f"OpenAI fallback failed: {e}")
                 elif fallback_api == "claude" and config.ANTHROPIC_API_KEY:
-                    logger.info(f"Falling back to Claude stream with model {config.CLAUDE_MODEL}")
-                    stream_generator = stream_claude_response(
-                        messages, request.file_ids or [], request.message, system_prompt
-                    )
-                    model_used = config.CLAUDE_MODEL
+                    try:
+                        logger.info(f"Falling back to Claude stream with model {config.CLAUDE_MODEL}")
+                        stream_generator = stream_claude_response(
+                            messages, request.file_ids or [], request.message, system_prompt
+                        )
+                        model_used = config.CLAUDE_MODEL
+                    except Exception as e:
+                        logger.warning(f"Claude fallback failed: {e}")
+
+            # Final fallback to Ollama if cloud APIs failed
+            if stream_generator is None and config.OLLAMA_ENABLED:
+                try:
+                    ollama_client = get_ollama_client()
+                    if await ollama_client.is_available():
+                        logger.info(f"Final fallback to Ollama with model {ollama_client.model}")
+                        stream_generator = stream_ollama_response(
+                            messages, request.file_ids or [], request.message, system_prompt
+                        )
+                        model_used = f"ollama:{ollama_client.model}"
+                except Exception as e:
+                    logger.warning(f"Ollama fallback failed: {e}")
 
             if stream_generator is None:
                 raise ValueError("No API available for streaming")
@@ -1148,7 +1489,20 @@ async def chat(request: ChatMessage):
         last_error = None
 
         # Try selected API first
-        if selected_api == "claude" and config.ANTHROPIC_API_KEY:
+        if selected_api == "ollama" and config.OLLAMA_ENABLED:
+            try:
+                ollama_client = get_ollama_client()
+                logger.info(f"Calling Ollama API with model {ollama_client.model}, files: {request.file_ids or []}")
+                if degradation.mode.name not in ("NORMAL", "LOCAL_ONLY"):
+                    logger.info(f"Degradation mode: {degradation.mode.name}")
+                assistant_message, model_used, permission_escalation = await call_ollama_api(
+                    messages, request.file_ids or [], request.message, system_prompt
+                )
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Ollama API failed: {e}")
+
+        elif selected_api == "claude" and config.ANTHROPIC_API_KEY:
             try:
                 logger.info(f"Calling Claude API with model {config.CLAUDE_MODEL}, files: {request.file_ids or []}")
                 if degradation.mode.name not in ("NORMAL", "OPENAI_UNAVAILABLE"):
@@ -1172,8 +1526,8 @@ async def chat(request: ChatMessage):
                 last_error = e
                 logger.warning(f"OpenAI API failed: {e}")
 
-        # If primary failed, try fallback
-        if assistant_message is None:
+        # Cloud API fallback chain if primary failed (not if using Ollama)
+        if assistant_message is None and selected_api != "ollama":
             fallback_api = "openai" if selected_api == "claude" else "claude"
 
             if fallback_api == "openai" and config.OPENAI_API_KEY:
@@ -1195,6 +1549,19 @@ async def chat(request: ChatMessage):
                 except Exception as e:
                     last_error = e
                     logger.error(f"Claude fallback also failed: {e}")
+
+        # Final fallback to Ollama if all cloud APIs failed
+        if assistant_message is None and config.OLLAMA_ENABLED:
+            try:
+                ollama_client = get_ollama_client()
+                if await ollama_client.is_available():
+                    logger.info(f"Final fallback to Ollama with model {ollama_client.model}")
+                    assistant_message, model_used, permission_escalation = await call_ollama_api(
+                        messages, request.file_ids or [], request.message, system_prompt
+                    )
+            except Exception as e:
+                last_error = e
+                logger.error(f"Ollama fallback also failed: {e}")
 
         # If still no response, raise the last error
         if assistant_message is None:

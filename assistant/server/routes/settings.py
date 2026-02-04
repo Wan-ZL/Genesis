@@ -1,7 +1,7 @@
 """Settings API routes."""
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from pathlib import Path
 import os
 import logging
@@ -9,6 +9,8 @@ import logging
 import config
 from server.services.settings import SettingsService
 from server.services.encryption import is_encrypted, ENCRYPTED_PREFIX
+from server.services.ollama import get_ollama_client, OllamaStatus
+from server.services.degradation import get_degradation_service
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,11 @@ class SettingsUpdate(BaseModel):
     anthropic_api_key: Optional[str] = None
     model: Optional[str] = None
     permission_level: Optional[int] = None
+    # Ollama settings
+    ollama_host: Optional[str] = None
+    ollama_model: Optional[str] = None
+    ollama_enabled: Optional[bool] = None
+    local_only_mode: Optional[bool] = None
 
 
 @router.get("/settings")
@@ -61,6 +68,22 @@ async def update_settings(update: SettingsUpdate):
                 detail="Permission level must be 0 (SANDBOX), 1 (LOCAL), 2 (SYSTEM), or 3 (FULL)"
             )
         updates["permission_level"] = update.permission_level
+
+    # Ollama settings
+    if update.ollama_host is not None:
+        updates["ollama_host"] = update.ollama_host
+
+    if update.ollama_model is not None:
+        updates["ollama_model"] = update.ollama_model
+
+    if update.ollama_enabled is not None:
+        updates["ollama_enabled"] = str(update.ollama_enabled).lower()
+
+    if update.local_only_mode is not None:
+        updates["local_only_mode"] = str(update.local_only_mode).lower()
+        # Update degradation service immediately
+        degradation = get_degradation_service()
+        degradation.set_local_only_mode(update.local_only_mode)
 
     if updates:
         await settings_service.set_multiple(updates)
@@ -206,5 +229,174 @@ async def load_settings_on_startup():
         await _apply_runtime_settings()
         logger.info("Settings loaded from database")
 
+        # Load Ollama settings
+        settings = await settings_service.get_all()
+
+        # Apply local_only_mode to degradation service
+        local_only = settings.get("local_only_mode", False)
+        if isinstance(local_only, str):
+            local_only = local_only.lower() == "true"
+        if local_only:
+            degradation = get_degradation_service()
+            degradation.set_local_only_mode(True)
+            logger.info("Local-only mode enabled from settings")
+
+        # Update Ollama config
+        ollama_host = settings.get("ollama_host")
+        if ollama_host:
+            config.OLLAMA_HOST = ollama_host
+
+        ollama_model = settings.get("ollama_model")
+        if ollama_model:
+            config.OLLAMA_MODEL = ollama_model
+
+        ollama_enabled = settings.get("ollama_enabled", True)
+        if isinstance(ollama_enabled, str):
+            ollama_enabled = ollama_enabled.lower() == "true"
+        config.OLLAMA_ENABLED = ollama_enabled
+
     except Exception as e:
         logger.error(f"Failed to load settings from database: {type(e).__name__}: {e}")
+
+
+# ============================================================================
+# Ollama-specific endpoints
+# ============================================================================
+
+
+@router.get("/ollama/status")
+async def get_ollama_status():
+    """Get Ollama service status and available models."""
+    client = get_ollama_client()
+    status = await client.check_health()
+
+    models = []
+    if status == OllamaStatus.AVAILABLE:
+        for model_info in await client.list_models():
+            models.append({
+                "name": model_info.name,
+                "size": model_info.size,
+                "supports_tools": model_info.supports_tools,
+            })
+
+    return {
+        "status": status.value,
+        "host": client.host,
+        "current_model": client.model,
+        "available_models": models,
+        "ollama_enabled": config.OLLAMA_ENABLED,
+    }
+
+
+@router.get("/ollama/models")
+async def list_ollama_models():
+    """List available Ollama models.
+
+    Returns a list of locally installed models that can be used for inference.
+    """
+    if not config.OLLAMA_ENABLED:
+        raise HTTPException(
+            status_code=400,
+            detail="Ollama is disabled. Enable it in settings."
+        )
+
+    client = get_ollama_client()
+
+    if not await client.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail=f"Ollama service not available at {client.host}. "
+                   "Make sure Ollama is running (ollama serve)."
+        )
+
+    models = await client.list_models()
+    return {
+        "models": [
+            {
+                "name": m.name,
+                "size": m.size,
+                "size_gb": round(m.size / (1024 ** 3), 2) if m.size else 0,
+                "supports_tools": m.supports_tools,
+                "digest": m.digest,
+            }
+            for m in models
+        ]
+    }
+
+
+class OllamaModelSelect(BaseModel):
+    """Model for selecting an Ollama model."""
+    model: str
+
+
+@router.post("/ollama/model")
+async def select_ollama_model(request: OllamaModelSelect):
+    """Select which Ollama model to use.
+
+    The model must be installed locally (use `ollama pull <model>` to install).
+    """
+    client = get_ollama_client()
+
+    if not await client.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="Ollama service not available"
+        )
+
+    # Verify model exists
+    if not await client.has_model(request.model):
+        available = [m.name for m in await client.list_models()]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{request.model}' not found. Available: {', '.join(available)}"
+        )
+
+    # Update settings
+    await settings_service.set("ollama_model", request.model)
+
+    # Update runtime config
+    config.OLLAMA_MODEL = request.model
+    client.model = request.model
+
+    return {
+        "status": "updated",
+        "model": request.model
+    }
+
+
+class LocalOnlyModeRequest(BaseModel):
+    """Request to enable/disable local-only mode."""
+    enabled: bool
+
+
+@router.post("/ollama/local-only")
+async def set_local_only_mode(request: LocalOnlyModeRequest):
+    """Enable or disable local-only mode (Ollama only, no cloud APIs).
+
+    When enabled, all requests will use Ollama regardless of cloud API availability.
+    This is useful for:
+    - Privacy-sensitive conversations
+    - Offline operation
+    - Reducing API costs
+    """
+    # Verify Ollama is available if enabling
+    if request.enabled:
+        client = get_ollama_client()
+        if not await client.is_available():
+            raise HTTPException(
+                status_code=503,
+                detail="Cannot enable local-only mode: Ollama is not available. "
+                       "Start Ollama first (ollama serve)."
+            )
+
+    # Update settings
+    await settings_service.set("local_only_mode", str(request.enabled).lower())
+
+    # Update degradation service
+    degradation = get_degradation_service()
+    degradation.set_local_only_mode(request.enabled)
+
+    return {
+        "status": "updated",
+        "local_only_mode": request.enabled
+    }

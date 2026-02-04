@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #18 Complete - Needs Verification.** Fixed TypeError in `rotate_key()` method - now accepts EncryptionService instances.
+**Issue #20 Complete - Needs Verification.** Added local model fallback with Ollama integration.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -273,16 +273,27 @@
   - Fix: Updated signature to `Union[bytes, EncryptionService]`
   - Runtime type detection handles both cases
   - 2 new tests for service instance API
-  - 675 tests total
+- **Issue #20 COMPLETE - Local model fallback with Ollama (needs verification)**:
+  - Ollama API client: `assistant/server/services/ollama.py`
+  - Config: `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_ENABLED`, `OLLAMA_TIMEOUT`
+  - Degradation modes: `CLOUD_UNAVAILABLE`, `LOCAL_ONLY`
+  - Fallback chain: Claude → OpenAI → Ollama
+  - API endpoints: `/api/ollama/status`, `/api/ollama/models`, `/api/ollama/model`, `/api/ollama/local-only`
+  - Health check includes Ollama availability
+  - Streaming support for Ollama responses
+  - Tool calling support (model-dependent)
+  - 31 new tests in `test_ollama.py`
+  - Documentation: `assistant/docs/OLLAMA_SETUP.md`
+  - 708 tests total
 
 ## Next Step (single step)
-Await Criticizer verification of Issues #18 and #19. No other open issues.
+Await Criticizer verification of Issues #18, #19, and #20. Remaining open issues: #21 (Calendar integration), #22 (Pydantic ConfigDict migration).
 
 ## Risks / Notes
-- Issues #18 and #19 implementation complete, awaiting verification
-- 675 tests passing (2 new for key rotation fix)
+- Issues #18, #19, #20 implementation complete, awaiting verification
+- 708 tests passing (31 new for Ollama)
+- Ollama must be running for local model fallback to work
 - Encryption key salt must be backed up for data recovery
-- No other open GitHub issues
 
 ## How to test quickly
 ```bash
