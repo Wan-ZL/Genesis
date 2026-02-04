@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #13 Implementation Complete.** Log rotation and cleanup functionality created. Awaiting verification from Criticizer.
+**Issue #14 In Progress.** Graceful degradation modes - API fallback implemented. Additional acceptance criteria pending.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -229,15 +229,30 @@
     - `tail_log()`, `clear_log()`, `get_stats()`, `list_log_files()` methods
   - main.py updated with access logging middleware
   - CLI: `python -m cli logs tail|list|clear|cleanup`
-  - 30 new tests (438 total)
+  - 30 new tests
+- **Issue #14 In Progress - Graceful degradation modes**:
+  - DegradationService: `assistant/server/services/degradation.py`
+    - `DegradationMode` enum: NORMAL, CLAUDE_UNAVAILABLE, OPENAI_UNAVAILABLE, RATE_LIMITED, OFFLINE, DEGRADED
+    - `APIHealth` class: Tracks availability, failures, rate limits
+    - Circuit breaker pattern (3 failures = unavailable)
+    - Smart API selection via `get_preferred_api()`
+    - Network detection via DNS lookup
+    - Tool result caching infrastructure
+    - Request queue infrastructure for rate limits
+  - API: `GET/POST /api/degradation`, network check, cache clear
+  - Chat integration: Records success/failure, smart fallback
+  - UI: Degradation banner in status panel (color-coded by mode)
+  - 45 new tests (517 total)
+  - **Completed**: API fallback, network detection, UI status indicator
+  - **Pending**: Rate limit queue processing, offline cached responses, web_fetch caching
 
 ## Next Step (single step)
-Wait for Criticizer verification on Issue #13. Next issue to work on: Issue #14 (graceful degradation).
+Continue Issue #14: Implement rate limit queue processing and automatic offline cached response usage.
 
 ## Risks / Notes
-- Issue #13 implementation complete - all 6 acceptance criteria met
-- 438 tests passing (30 new for logging service)
-- Using Python's built-in RotatingFileHandler for cross-platform log rotation
+- Issue #14 partially complete - core API fallback working
+- 517 tests passing (45 new for degradation service)
+- Rate limit queuing and offline mode infrastructure exists but needs activation
 
 ## How to test quickly
 ```bash

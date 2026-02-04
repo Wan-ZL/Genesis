@@ -1,4 +1,10 @@
-"""Chat API endpoint with Claude API (primary) and OpenAI fallback."""
+"""Chat API endpoint with Claude API (primary) and OpenAI fallback.
+
+Includes graceful degradation features:
+- API fallback: Automatically switches between Claude and OpenAI on failures
+- Rate limit handling: Tracks rate limits and uses fallback
+- Health tracking: Records API success/failure for smart routing
+"""
 import logging
 import base64
 import json
@@ -17,6 +23,7 @@ from server.services.tools import registry as tool_registry
 from server.services.retry import api_retry
 from server.services.metrics import metrics
 from server.services.tool_suggestions import get_suggestion_service
+from server.services.degradation import get_degradation_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -180,9 +187,12 @@ async def call_claude_api(messages: list, file_ids: list, user_message: str, sys
         tuple: (response_text, model_name, permission_escalation_or_none)
 
     Includes automatic retry with exponential backoff for transient failures.
+    Records success/failure to degradation service for smart fallback.
     """
+    degradation = get_degradation_service()
     client = get_anthropic_client()
     if not client:
+        degradation.record_failure("claude")
         raise ValueError("Anthropic client not available")
 
     # Convert message history for Claude format
@@ -221,7 +231,22 @@ async def call_claude_api(messages: list, file_ids: list, user_message: str, sys
         if tools:
             api_kwargs["tools"] = tools
 
-        response = client.messages.create(**api_kwargs)
+        try:
+            response = client.messages.create(**api_kwargs)
+            degradation.record_success("claude")
+        except Exception as e:
+            # Check if it's a rate limit error
+            is_rate_limit = "rate" in str(e).lower() or "429" in str(e)
+            retry_after = None
+            if hasattr(e, 'response') and hasattr(e.response, 'headers'):
+                retry_after = e.response.headers.get('retry-after')
+                if retry_after:
+                    try:
+                        retry_after = int(retry_after)
+                    except ValueError:
+                        retry_after = None
+            degradation.record_failure("claude", is_rate_limit=is_rate_limit, retry_after=retry_after)
+            raise
 
         # Check if response contains tool use
         tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
@@ -308,9 +333,12 @@ async def call_openai_api(messages: list, file_ids: list, user_message: str, sys
         tuple: (response_text, model_name, permission_escalation_or_none)
 
     Includes automatic retry with exponential backoff for transient failures.
+    Records success/failure to degradation service for smart fallback.
     """
+    degradation = get_degradation_service()
     client = get_openai_client()
     if not client:
+        degradation.record_failure("openai")
         raise ValueError("OpenAI client not available")
 
     # Inject system prompt at the beginning if provided
@@ -339,7 +367,23 @@ async def call_openai_api(messages: list, file_ids: list, user_message: str, sys
         if tools:
             api_kwargs["tools"] = tools
 
-        completion = client.chat.completions.create(**api_kwargs)
+        try:
+            completion = client.chat.completions.create(**api_kwargs)
+            degradation.record_success("openai")
+        except Exception as e:
+            # Check if it's a rate limit error
+            is_rate_limit = "rate" in str(e).lower() or "429" in str(e)
+            retry_after = None
+            if hasattr(e, 'response') and hasattr(e.response, 'headers'):
+                retry_after = e.response.headers.get('retry-after')
+                if retry_after:
+                    try:
+                        retry_after = int(retry_after)
+                    except ValueError:
+                        retry_after = None
+            degradation.record_failure("openai", is_rate_limit=is_rate_limit, retry_after=retry_after)
+            raise
+
         choice = completion.choices[0]
 
         # Check if response contains tool calls
@@ -882,12 +926,19 @@ async def chat_stream(request: ChatMessage):
 
             system_prompt = "\n".join(system_parts)
 
-            # Try Claude first, fallback to OpenAI
+            # Smart API selection using degradation service
+            degradation = get_degradation_service()
+            preferred_api = "claude" if config.USE_CLAUDE else "openai"
+            selected_api = degradation.get_preferred_api(preferred_api)
+
             stream_generator = None
 
-            if config.USE_CLAUDE:
+            # Try selected API first
+            if selected_api == "claude" and config.ANTHROPIC_API_KEY:
                 try:
                     logger.info(f"Starting Claude stream with model {config.CLAUDE_MODEL}")
+                    if degradation.mode.name not in ("NORMAL", "OPENAI_UNAVAILABLE"):
+                        logger.info(f"Degradation mode: {degradation.mode.name}")
                     stream_generator = stream_claude_response(
                         messages, request.file_ids or [], request.message, system_prompt
                     )
@@ -895,13 +946,37 @@ async def chat_stream(request: ChatMessage):
                 except Exception as e:
                     logger.warning(f"Claude streaming init failed: {e}")
                     stream_generator = None
+            elif selected_api == "openai" and config.OPENAI_API_KEY:
+                try:
+                    logger.info(f"Starting OpenAI stream with model {config.OPENAI_MODEL}")
+                    if degradation.mode.name not in ("NORMAL", "CLAUDE_UNAVAILABLE"):
+                        logger.info(f"Degradation mode: {degradation.mode.name}")
+                    stream_generator = stream_openai_response(
+                        messages, request.file_ids or [], request.message, system_prompt
+                    )
+                    model_used = config.OPENAI_MODEL
+                except Exception as e:
+                    logger.warning(f"OpenAI streaming init failed: {e}")
+                    stream_generator = None
+
+            # Fallback if primary failed
+            if stream_generator is None:
+                fallback_api = "openai" if selected_api == "claude" else "claude"
+                if fallback_api == "openai" and config.OPENAI_API_KEY:
+                    logger.info(f"Falling back to OpenAI stream with model {config.OPENAI_MODEL}")
+                    stream_generator = stream_openai_response(
+                        messages, request.file_ids or [], request.message, system_prompt
+                    )
+                    model_used = config.OPENAI_MODEL
+                elif fallback_api == "claude" and config.ANTHROPIC_API_KEY:
+                    logger.info(f"Falling back to Claude stream with model {config.CLAUDE_MODEL}")
+                    stream_generator = stream_claude_response(
+                        messages, request.file_ids or [], request.message, system_prompt
+                    )
+                    model_used = config.CLAUDE_MODEL
 
             if stream_generator is None:
-                logger.info(f"Starting OpenAI stream with model {config.OPENAI_MODEL}")
-                stream_generator = stream_openai_response(
-                    messages, request.file_ids or [], request.message, system_prompt
-                )
-                model_used = config.OPENAI_MODEL
+                raise ValueError("No API available for streaming")
 
             # Forward events from the stream
             async for event_str in stream_generator:
@@ -1006,25 +1081,75 @@ async def chat(request: ChatMessage):
 
         system_prompt = "\n".join(system_parts)
 
-        # Try Claude first, fallback to OpenAI
+        # Smart API selection using degradation service
+        degradation = get_degradation_service()
+
+        # Check network availability first
+        network_available = await degradation.check_network()
+        if not network_available:
+            logger.warning("Network unavailable, API calls may fail")
+
+        # Determine preferred API based on config and health
+        preferred_api = "claude" if config.USE_CLAUDE else "openai"
+        selected_api = degradation.get_preferred_api(preferred_api)
+
         model_used = None
         assistant_message = None
         permission_escalation = None
+        last_error = None
 
-        if config.USE_CLAUDE:
+        # Try selected API first
+        if selected_api == "claude" and config.ANTHROPIC_API_KEY:
             try:
                 logger.info(f"Calling Claude API with model {config.CLAUDE_MODEL}, files: {request.file_ids or []}")
+                if degradation.mode.name not in ("NORMAL", "OPENAI_UNAVAILABLE"):
+                    logger.info(f"Degradation mode: {degradation.mode.name}")
                 assistant_message, model_used, permission_escalation = await call_claude_api(
                     messages, request.file_ids or [], request.message, system_prompt
                 )
             except Exception as e:
-                logger.warning(f"Claude API failed, falling back to OpenAI: {e}")
+                last_error = e
+                logger.warning(f"Claude API failed: {e}")
 
+        elif selected_api == "openai" and config.OPENAI_API_KEY:
+            try:
+                logger.info(f"Calling OpenAI API with model {config.OPENAI_MODEL}, files: {request.file_ids or []}")
+                if degradation.mode.name not in ("NORMAL", "CLAUDE_UNAVAILABLE"):
+                    logger.info(f"Degradation mode: {degradation.mode.name}")
+                assistant_message, model_used, permission_escalation = await call_openai_api(
+                    messages, request.file_ids or [], request.message, system_prompt
+                )
+            except Exception as e:
+                last_error = e
+                logger.warning(f"OpenAI API failed: {e}")
+
+        # If primary failed, try fallback
         if assistant_message is None:
-            logger.info(f"Calling OpenAI API with model {config.OPENAI_MODEL}, files: {request.file_ids or []}")
-            assistant_message, model_used, permission_escalation = await call_openai_api(
-                messages, request.file_ids or [], request.message, system_prompt
-            )
+            fallback_api = "openai" if selected_api == "claude" else "claude"
+
+            if fallback_api == "openai" and config.OPENAI_API_KEY:
+                try:
+                    logger.info(f"Falling back to OpenAI API with model {config.OPENAI_MODEL}")
+                    assistant_message, model_used, permission_escalation = await call_openai_api(
+                        messages, request.file_ids or [], request.message, system_prompt
+                    )
+                except Exception as e:
+                    last_error = e
+                    logger.error(f"OpenAI fallback also failed: {e}")
+
+            elif fallback_api == "claude" and config.ANTHROPIC_API_KEY:
+                try:
+                    logger.info(f"Falling back to Claude API with model {config.CLAUDE_MODEL}")
+                    assistant_message, model_used, permission_escalation = await call_claude_api(
+                        messages, request.file_ids or [], request.message, system_prompt
+                    )
+                except Exception as e:
+                    last_error = e
+                    logger.error(f"Claude fallback also failed: {e}")
+
+        # If still no response, raise the last error
+        if assistant_message is None:
+            raise last_error or ValueError("No API available")
 
         # Save assistant response
         await memory.add_to_conversation("assistant", assistant_message)

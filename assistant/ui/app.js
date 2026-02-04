@@ -582,9 +582,62 @@ async function loadStatus() {
         if (lastRunEl) {
             lastRunEl.textContent = `Uptime: ${formatUptime(data.uptime_seconds || 0)}`;
         }
+
+        // Load degradation status
+        loadDegradationStatus();
     } catch (error) {
         if (currentFocusEl) currentFocusEl.textContent = 'Error loading status';
         if (lastRunEl) lastRunEl.textContent = 'Error loading status';
+    }
+}
+
+async function loadDegradationStatus() {
+    const banner = document.getElementById('degradation-banner');
+    const modeEl = document.getElementById('degradation-mode');
+    const detailsEl = document.getElementById('degradation-details');
+
+    if (!banner) return;
+
+    try {
+        const response = await fetch('/api/degradation');
+        const data = await response.json();
+
+        // Remove all mode classes
+        banner.classList.remove('mode-offline', 'mode-rate-limited');
+
+        if (!data.is_degraded) {
+            // System is normal - hide banner
+            banner.classList.add('hidden');
+            return;
+        }
+
+        // Show banner
+        banner.classList.remove('hidden');
+
+        // Set mode-specific styling
+        if (data.mode === 'OFFLINE') {
+            banner.classList.add('mode-offline');
+            modeEl.textContent = 'Offline Mode';
+            detailsEl.textContent = 'Network unavailable - using cached responses';
+        } else if (data.mode === 'RATE_LIMITED') {
+            banner.classList.add('mode-rate-limited');
+            modeEl.textContent = 'Rate Limited';
+            const waitTime = data.queue_wait_seconds || 0;
+            detailsEl.textContent = `Requests queued - resuming in ${waitTime}s`;
+        } else if (data.mode === 'CLAUDE_UNAVAILABLE') {
+            modeEl.textContent = 'Using OpenAI Fallback';
+            detailsEl.textContent = 'Claude API unavailable';
+        } else if (data.mode === 'OPENAI_UNAVAILABLE') {
+            modeEl.textContent = 'Using Claude Fallback';
+            detailsEl.textContent = 'OpenAI API unavailable';
+        } else {
+            modeEl.textContent = 'Degraded Mode';
+            detailsEl.textContent = 'Some services may be impaired';
+        }
+
+    } catch (error) {
+        // Silently fail - degradation API might not exist yet
+        banner.classList.add('hidden');
     }
 }
 

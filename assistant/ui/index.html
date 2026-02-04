@@ -37,6 +37,15 @@
             <aside class="status-panel">
                 <h2>Status</h2>
                 <div id="status-content">
+                    <!-- Degradation Banner - shown when system is degraded -->
+                    <div id="degradation-banner" class="degradation-banner hidden">
+                        <div class="degradation-icon">⚠️</div>
+                        <div class="degradation-info">
+                            <span class="degradation-mode" id="degradation-mode">-</span>
+                            <span class="degradation-details" id="degradation-details"></span>
+                        </div>
+                    </div>
+
                     <div class="status-section">
                         <h3>Assistant Status</h3>
                         <div class="assistant-status-grid">

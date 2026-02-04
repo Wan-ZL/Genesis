@@ -899,3 +899,68 @@ header {
     color: #fd7e14;
     background: rgba(253, 126, 20, 0.05);
 }
+
+/* Degradation Banner */
+.degradation-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
+    border: 1px solid #ffc107;
+}
+
+.degradation-banner.hidden {
+    display: none;
+}
+
+.degradation-banner.mode-offline {
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+    border-color: #dc3545;
+}
+
+.degradation-banner.mode-rate-limited {
+    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+    border-color: #17a2b8;
+}
+
+.degradation-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.degradation-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.degradation-mode {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #856404;
+}
+
+.mode-offline .degradation-mode {
+    color: #721c24;
+}
+
+.mode-rate-limited .degradation-mode {
+    color: #0c5460;
+}
+
+.degradation-details {
+    font-size: 0.8rem;
+    color: #856404;
+    opacity: 0.9;
+}
+
+.mode-offline .degradation-details {
+    color: #721c24;
+}
+
+.mode-rate-limited .degradation-details {
+    color: #0c5460;
+}

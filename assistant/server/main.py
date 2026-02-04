@@ -92,7 +92,7 @@ async def access_log_middleware(request: Request, call_next):
 
 
 # Import and include routers
-from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources
+from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation
 
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(status.router, prefix="/api", tags=["status"])
@@ -102,6 +102,7 @@ app.include_router(settings.router, prefix="/api", tags=["settings"])
 app.include_router(capabilities.router, prefix="/api", tags=["capabilities"])
 app.include_router(alerts.router, prefix="/api", tags=["alerts"])
 app.include_router(resources.router, prefix="/api", tags=["resources"])
+app.include_router(degradation.router, prefix="/api", tags=["degradation"])
 
 # Serve static UI files (when they exist)
 UI_PATH = Path(__file__).parent.parent / "ui"
