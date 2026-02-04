@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #11 Implementation Complete.** Backup and restore functionality created. Awaiting verification from Criticizer.
+**Issue #12 Implementation Complete.** Resource monitoring and limits functionality created. Awaiting verification from Criticizer.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -194,7 +194,7 @@
     - `POST /api/alerts/{id}/acknowledge` - Acknowledge alert
   - CLI: `python -m assistant.cli alerts list|stats|acknowledge|clear`
   - 30 new tests (358 total)
-- **Issue #11 Implementation Complete - Backup and restore**:
+- **Issue #11 VERIFIED - Backup and restore**:
   - BackupService: `assistant/server/services/backup.py`
     - `create_backup()` - Creates tar.gz backup of all assistant data
     - `restore()` - Restores from backup with force option
@@ -205,14 +205,28 @@
     - Backup rotation (keep N most recent, default 10)
   - CLI: `python -m cli backup create|restore|list|verify|schedule`
   - 36 new tests (394 total)
+- **Issue #12 Implementation Complete - Resource monitoring and limits**:
+  - ResourceService: `assistant/server/services/resources.py`
+    - `get_memory_usage()` - Process and system memory stats
+    - `get_cpu_usage()` - Process and system CPU stats
+    - `get_disk_usage()` - Disk space stats with thresholds
+    - `get_snapshot()` - Complete resource snapshot
+    - `check_rate_limit()` / `record_request()` - Per-client rate limiting
+    - `cleanup_old_files()` - Delete files older than max age
+    - `cleanup_memory()` - GC and cache clearing
+    - Configurable limits: max_memory_mb, max_requests_per_minute, file_max_age_days
+    - Status thresholds: WARNING and CRITICAL for memory/CPU/disk
+  - API: `GET /api/resources`, `POST /api/resources/cleanup/files|memory`
+  - CLI: `python -m cli resources`, `python -m cli resources cleanup|memory`
+  - 48 new tests (442 total)
 
 ## Next Step (single step)
-Add `needs-verification` label to Issue #11 and comment with test instructions for Criticizer.
+Add `needs-verification` label to Issue #12 and comment with test instructions for Criticizer.
 
 ## Risks / Notes
-- Issue #11 implementation complete - all 6 acceptance criteria met
-- 394 tests passing
-- Backup format version 1.0
+- Issue #12 implementation complete - all 6 acceptance criteria met
+- 442 tests passing
+- psutil dependency added for cross-platform resource monitoring
 
 ## How to test quickly
 ```bash
@@ -220,6 +234,12 @@ cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 
 # Run all tests
 python3 -m pytest tests/ -v
+
+# Test CLI resources commands
+python3 -m cli resources              # Show resource usage
+python3 -m cli resources --json       # JSON output
+python3 -m cli resources cleanup --dry-run  # Preview file cleanup
+python3 -m cli resources memory       # Run memory cleanup
 
 # Test CLI backup commands
 python3 -m cli backup create

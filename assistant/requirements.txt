@@ -1,5 +1,6 @@
 # AI Assistant v1 dependencies
 fastapi>=0.109.0
+psutil>=5.9.0
 uvicorn[standard]>=0.27.0
 openai>=1.12.0
 anthropic>=0.21.0

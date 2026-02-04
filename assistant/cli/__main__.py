@@ -11,6 +11,10 @@ Usage:
     python -m assistant.cli backup restore --input backup.tar.gz
     python -m assistant.cli backup list
     python -m assistant.cli backup verify --input backup.tar.gz
+    python -m assistant.cli resources
+    python -m assistant.cli resources --json
+    python -m assistant.cli resources cleanup --dry-run
+    python -m assistant.cli resources cleanup memory
 """
 import argparse
 import asyncio
@@ -25,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from assistant.server.services.memory import MemoryService
 from assistant.server.services.alerts import AlertService, AlertSeverity, AlertType
 from assistant.server.services.backup import BackupService, BackupStatus
+from assistant.server.services.resources import ResourceService, ResourceConfig
 import assistant.config as config
 
 
@@ -327,6 +332,120 @@ async def backup_schedule_command(args):
     print(f"  {schedule_config['schedule']['cron']} cd {memory_dir.parent} && {schedule_config['command']}")
 
 
+async def resources_command(args):
+    """Show current resource usage."""
+    service = ResourceService(files_path=config.FILES_PATH)
+    data = service.to_dict()
+
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return
+
+    # Status indicator
+    status_icons = {
+        "healthy": "OK",
+        "warning": "WARN",
+        "critical": "CRIT"
+    }
+    status_icon = status_icons.get(data["status"], "?")
+
+    print("Resource Usage")
+    print("=" * 50)
+    print(f"Status: {status_icon} ({data['status']})")
+    print()
+
+    # Memory section
+    mem = data["memory"]
+    print(f"Memory:")
+    print(f"  Process:  {mem['process_mb']:.1f} MB ({mem['process_percent']:.1f}% of system)")
+    print(f"  System:   {mem['system_available_mb']:.0f} MB available / {mem['system_total_mb']:.0f} MB total ({mem['system_percent']:.1f}% used)")
+    print(f"  Limit:    {mem['limit_mb']} MB")
+    print(f"  Status:   {mem['status']}")
+    print()
+
+    # CPU section
+    cpu = data["cpu"]
+    print(f"CPU:")
+    print(f"  Process:  {cpu['process_percent']:.1f}%")
+    print(f"  System:   {cpu['system_percent']:.1f}%")
+    print(f"  Cores:    {cpu['cpu_count']}")
+    print(f"  Status:   {cpu['status']}")
+    print()
+
+    # Disk section
+    disk = data["disk"]
+    print(f"Disk:")
+    print(f"  Used:     {disk['used_gb']:.1f} GB / {disk['total_gb']:.1f} GB ({disk['percent']:.1f}%)")
+    print(f"  Free:     {disk['free_gb']:.1f} GB")
+    print(f"  Status:   {disk['status']}")
+    print()
+
+    # Warnings
+    if data["warnings"]:
+        print("Warnings:")
+        for warning in data["warnings"]:
+            print(f"  - {warning}")
+        print()
+
+    # Limits summary
+    limits = data["limits"]
+    print("Configured Limits:")
+    print(f"  Max memory:              {limits['max_memory_mb']} MB")
+    print(f"  Max requests/minute:     {limits['max_requests_per_minute']}")
+    print(f"  File max age:            {limits['file_max_age_days']} days")
+
+
+async def resources_cleanup_files_command(args):
+    """Clean up old files."""
+    service = ResourceService(files_path=config.FILES_PATH)
+
+    result = await service.cleanup_old_files(dry_run=args.dry_run)
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+
+    action = "Would delete" if args.dry_run else "Deleted"
+
+    if not result["deleted"]:
+        print("No files to clean up.")
+        return
+
+    print(f"File Cleanup {'(DRY RUN)' if args.dry_run else ''}")
+    print("=" * 50)
+
+    for file_info in result["deleted"]:
+        size_kb = file_info["size_bytes"] / 1024
+        print(f"  {action}: {file_info['path']} ({size_kb:.1f} KB)")
+
+    total_mb = result["total_bytes_freed"] / (1024 * 1024)
+    print()
+    print(f"Total: {len(result['deleted'])} files, {total_mb:.2f} MB")
+
+    if result["errors"]:
+        print()
+        print("Errors:")
+        for error in result["errors"]:
+            print(f"  {error['path']}: {error['error']}")
+
+
+async def resources_cleanup_memory_command(args):
+    """Clean up memory."""
+    service = ResourceService(files_path=config.FILES_PATH)
+
+    result = await service.cleanup_memory()
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+
+    print("Memory Cleanup")
+    print("=" * 50)
+    print(f"Before: {result['memory_before_mb']:.1f} MB")
+    print(f"After:  {result['memory_after_mb']:.1f} MB")
+    print(f"Freed:  {result['freed_mb']:.1f} MB")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="assistant.cli",
@@ -488,6 +607,36 @@ def main():
         help="Output in JSON format"
     )
 
+    # Resources command with subcommands
+    resources_parser = subparsers.add_parser("resources", help="Monitor system resources")
+    resources_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+    resources_subparsers = resources_parser.add_subparsers(dest="resources_command", help="Resources commands")
+
+    # resources cleanup files
+    resources_cleanup_files_parser = resources_subparsers.add_parser("cleanup", help="Clean up old files")
+    resources_cleanup_files_parser.add_argument(
+        "--dry-run", "-n",
+        action="store_true",
+        help="Show what would be deleted without actually deleting"
+    )
+    resources_cleanup_files_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
+    # resources cleanup memory (as a separate subcommand under cleanup)
+    resources_cleanup_memory_parser = resources_subparsers.add_parser("memory", help="Clean up memory (run garbage collection)")
+    resources_cleanup_memory_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
     args = parser.parse_args()
 
     if args.command == "export":
@@ -519,6 +668,17 @@ def main():
             asyncio.run(backup_schedule_command(args))
         else:
             backup_parser.print_help()
+            sys.exit(1)
+    elif args.command == "resources":
+        if args.resources_command == "cleanup":
+            asyncio.run(resources_cleanup_files_command(args))
+        elif args.resources_command == "memory":
+            asyncio.run(resources_cleanup_memory_command(args))
+        elif args.resources_command is None:
+            # Default: show resource status
+            asyncio.run(resources_command(args))
+        else:
+            resources_parser.print_help()
             sys.exit(1)
     else:
         parser.print_help()
