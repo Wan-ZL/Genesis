@@ -422,6 +422,17 @@ async function sendMessageStreaming(message, fileIds) {
     messageEl.classList.remove('streaming');
     progressEl.remove();
 
+    // Convert accumulated plain text to markdown
+    if (accumulatedText && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+        });
+        const rawHtml = marked.parse(accumulatedText);
+        const cleanHtml = DOMPurify.sanitize(rawHtml);
+        contentSpan.innerHTML = cleanHtml;
+    }
+
     // Add model badge if we know the model
     if (modelUsed) {
         const modelBadge = document.createElement('span');
@@ -517,7 +528,23 @@ async function sendMessageRegular(message, fileIds) {
 function addMessageToUI(role, content, model = null) {
     const messageEl = document.createElement('div');
     messageEl.className = `message ${role}`;
-    messageEl.textContent = content;
+
+    // Render markdown for assistant messages, plain text for user messages
+    if (role === 'assistant' && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+        // Configure marked for security and features
+        marked.setOptions({
+            breaks: true,  // Convert \n to <br>
+            gfm: true,     // GitHub Flavored Markdown
+        });
+
+        // Parse markdown and sanitize HTML to prevent XSS
+        const rawHtml = marked.parse(content);
+        const cleanHtml = DOMPurify.sanitize(rawHtml);
+        messageEl.innerHTML = cleanHtml;
+    } else {
+        // Fallback to plain text for user messages or if libraries not loaded
+        messageEl.textContent = content;
+    }
 
     // Add model badge for assistant messages
     if (role === 'assistant' && model) {

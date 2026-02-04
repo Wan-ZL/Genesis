@@ -964,3 +964,113 @@ header {
 .mode-rate-limited .degradation-details {
     color: #0c5460;
 }
+
+/* Markdown Rendering Styles */
+.message.assistant h1,
+.message.assistant h2,
+.message.assistant h3,
+.message.assistant h4,
+.message.assistant h5,
+.message.assistant h6 {
+    margin: 1rem 0 0.5rem 0;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.message.assistant h1 { font-size: 1.5rem; }
+.message.assistant h2 { font-size: 1.3rem; }
+.message.assistant h3 { font-size: 1.1rem; }
+.message.assistant h4 { font-size: 1rem; }
+.message.assistant h5 { font-size: 0.9rem; }
+.message.assistant h6 { font-size: 0.85rem; }
+
+.message.assistant p {
+    margin: 0.5rem 0;
+    line-height: 1.6;
+}
+
+.message.assistant code {
+    background-color: #f4f4f4;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+    font-size: 0.9em;
+    color: #e83e8c;
+}
+
+.message.assistant pre {
+    background-color: #f6f8fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+}
+
+.message.assistant pre code {
+    background-color: transparent;
+    padding: 0;
+    color: inherit;
+    border-radius: 0;
+}
+
+.message.assistant ul,
+.message.assistant ol {
+    margin: 0.5rem 0;
+    padding-left: 2rem;
+    line-height: 1.6;
+}
+
+.message.assistant li {
+    margin: 0.25rem 0;
+}
+
+.message.assistant blockquote {
+    border-left: 4px solid #dfe2e5;
+    padding: 0.5rem 1rem;
+    margin: 0.5rem 0;
+    color: #6a737d;
+    background-color: #f6f8fa;
+}
+
+.message.assistant table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.5rem 0;
+    overflow-x: auto;
+    display: block;
+}
+
+.message.assistant th,
+.message.assistant td {
+    border: 1px solid #dfe2e5;
+    padding: 0.5rem;
+    text-align: left;
+}
+
+.message.assistant th {
+    background-color: #f6f8fa;
+    font-weight: 600;
+}
+
+.message.assistant a {
+    color: #0366d6;
+    text-decoration: none;
+}
+
+.message.assistant a:hover {
+    text-decoration: underline;
+}
+
+.message.assistant img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin: 0.5rem 0;
+}
+
+.message.assistant hr {
+    border: none;
+    border-top: 2px solid #e1e4e8;
+    margin: 1rem 0;
+}

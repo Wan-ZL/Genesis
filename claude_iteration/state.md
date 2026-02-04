@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #26 Implementation Complete - Needs Verification.** Database lock errors under concurrent load fixed with retry logic and larger connection pools.
+**Issue #29 Implementation Complete - Needs Verification.** Markdown rendering added to Web UI for assistant messages with security (DOMPurify) and comprehensive styling.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -360,15 +360,26 @@
   - Applied @with_db_retry() to: add_message(), remove_last_message(), _store_summary(), _ensure_default_conversation()
   - All 55 memory service tests pass (100% success rate on concurrency tests)
   - 43/44 settings tests pass (1 pre-existing test expectation issue)
+- **Issue #29 COMPLETE - Markdown rendering for Web UI (needs verification)**:
+  - Added marked.js v11.1.1 (markdown parser) and DOMPurify v3.0.8 (XSS sanitization)
+  - Assistant messages: Parse with marked.parse(), sanitize with DOMPurify.sanitize(), render as HTML
+  - User messages: Remain plain text (textContent) for security
+  - Streaming: Accumulate plain text, convert to markdown at completion
+  - CSS styles: Headings, code blocks, lists, tables, blockquotes, links, images
+  - Security: XSS prevention via DOMPurify, user input isolation
+  - 11 new tests in test_markdown_ui.py (all passing)
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #26 (priority-high). Other open issues: #29 (priority-high), #27 (priority-medium), #28 (priority-medium).
+Await Criticizer verification of Issue #29 (priority-high). Other open issues: #26 (priority-high, needs-verification), #27 (priority-medium), #28 (priority-medium).
 
 ## Risks / Notes
+- Issue #29 implementation complete, awaiting verification (HIGH priority)
 - Issue #26 implementation complete, awaiting verification (HIGH priority)
 - Issue #31 implementation complete, awaiting verification
 - Issue #22 implementation complete, awaiting verification
 - Issues #24 and #25 verified and closed by Criticizer
+- Markdown rendering uses CDN libraries (marked.js, DOMPurify) - requires internet for first load
+- DOMPurify sanitization is critical for security - do not remove or bypass
 - Database lock issue affected ALL concurrent requests (60-88% failure rate before fix, now 100% pass)
 - Retry logic with exponential backoff + larger pools = robust concurrent handling
 - Encryption key salt must be backed up for data recovery
@@ -377,6 +388,16 @@ Await Criticizer verification of Issue #26 (priority-high). Other open issues: #
 ## How to test quickly
 ```bash
 cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
+
+# Test Issue #29 - Markdown rendering
+python3 -m pytest tests/test_markdown_ui.py -v
+# Expected: 11/11 tests pass
+
+# Manual test in browser:
+python3 -m server.main
+# Open http://127.0.0.1:8080
+# Send: "Show me a **bold** word and a `code` example"
+# Expect: Bold text and inline code with pink background
 
 # Test Issue #26 - Concurrent requests (manual test)
 python3 -m server.main &
