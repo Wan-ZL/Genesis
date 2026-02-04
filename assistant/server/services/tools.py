@@ -14,6 +14,7 @@ Tool Requirements (per .claude/rules/04-tools-network.md):
 from dataclasses import dataclass, field
 from typing import Callable, Any, Optional
 from datetime import datetime
+import hashlib
 import json
 import logging
 import re
@@ -324,9 +325,26 @@ def calculate(expression: str) -> str:
         return f"Error: {e}"
 
 
-def _web_fetch_impl(url: str, max_length: int = 4000) -> str:
-    """Implementation for web_fetch tool."""
+def _compute_cache_key(url: str, max_length: int) -> str:
+    """Compute a cache key hash for web_fetch arguments."""
+    key_data = f"{url}:{max_length}"
+    return hashlib.sha256(key_data.encode()).hexdigest()[:16]
+
+
+def _web_fetch_impl(url: str, max_length: int = 4000, use_cache: bool = True) -> str:
+    """Implementation for web_fetch tool.
+
+    Supports caching for offline access via the degradation service.
+    When offline or degraded, returns cached content if available.
+    Successful fetches are cached for future offline use.
+
+    Args:
+        url: The URL to fetch
+        max_length: Maximum characters to return (default 4000)
+        use_cache: Whether to use caching (default True)
+    """
     import httpx
+    from .degradation import get_degradation_service, DegradationMode
 
     # Validate URL
     parsed = urlparse(url)
@@ -334,6 +352,23 @@ def _web_fetch_impl(url: str, max_length: int = 4000) -> str:
         return f"Error: Invalid URL scheme. Only http and https are supported."
     if not parsed.netloc:
         return f"Error: Invalid URL. Missing domain."
+
+    # Get degradation service for caching
+    degradation_service = get_degradation_service()
+    cache_key = _compute_cache_key(url, max_length)
+
+    # Check if we should try cache first (offline or network issues)
+    if use_cache and degradation_service.mode in (
+        DegradationMode.OFFLINE,
+        DegradationMode.DEGRADED,
+        DegradationMode.RATE_LIMITED,
+    ):
+        cached = degradation_service.get_cached_tool_result("web_fetch", cache_key)
+        if cached:
+            logger.info(f"web_fetch: Returning cached content for {url} (mode: {degradation_service.mode.name})")
+            cached_result = cached["result"]
+            # Add cache indicator to result
+            return f"[CACHED - {cached['cached_at']}]\n{cached_result}"
 
     # Log external call (per network rules in 04-tools-network.md)
     logger.info(f"web_fetch: Fetching URL={url}, purpose=user_request")
@@ -348,6 +383,12 @@ def _web_fetch_impl(url: str, max_length: int = 4000) -> str:
         logger.info(f"web_fetch: status={response.status_code}, content_type={response.headers.get('content-type', 'unknown')}, length={len(response.text)}")
 
         if response.status_code != 200:
+            # On error, try cache as fallback
+            if use_cache:
+                cached = degradation_service.get_cached_tool_result("web_fetch", cache_key)
+                if cached:
+                    logger.info(f"web_fetch: HTTP error, returning cached content for {url}")
+                    return f"[CACHED FALLBACK - HTTP {response.status_code}]\n{cached['result']}"
             return f"Error: HTTP {response.status_code} - {response.reason_phrase}"
 
         content = response.text
@@ -359,13 +400,31 @@ def _web_fetch_impl(url: str, max_length: int = 4000) -> str:
 
         # Add metadata
         result = f"URL: {url}\nStatus: {response.status_code}\nContent-Type: {content_type}\n\n{content}"
+
+        # Cache successful result for offline access
+        if use_cache:
+            degradation_service.cache_tool_result("web_fetch", cache_key, result)
+            logger.debug(f"web_fetch: Cached result for {url}")
+
         return result
 
     except httpx.TimeoutException:
         logger.warning(f"web_fetch: Timeout fetching {url}")
+        # Try cache on timeout
+        if use_cache:
+            cached = degradation_service.get_cached_tool_result("web_fetch", cache_key)
+            if cached:
+                logger.info(f"web_fetch: Timeout, returning cached content for {url}")
+                return f"[CACHED FALLBACK - Timeout]\n{cached['result']}"
         return f"Error: Request timed out after 10 seconds"
     except httpx.RequestError as e:
         logger.error(f"web_fetch: Request error for {url}: {e}")
+        # Try cache on network error
+        if use_cache:
+            cached = degradation_service.get_cached_tool_result("web_fetch", cache_key)
+            if cached:
+                logger.info(f"web_fetch: Network error, returning cached content for {url}")
+                return f"[CACHED FALLBACK - Network Error]\n{cached['result']}"
         return f"Error: Failed to fetch URL - {str(e)}"
     except Exception as e:
         logger.error(f"web_fetch: Unexpected error for {url}: {e}")
@@ -375,7 +434,7 @@ def _web_fetch_impl(url: str, max_length: int = 4000) -> str:
 # Register web_fetch with explicit spec
 registry.register_tool(ToolSpec(
     name="web_fetch",
-    description="Fetch content from a URL. Returns the text content of the webpage. Useful for reading articles, documentation, or any web page. Note: Only fetches text content, does not execute JavaScript.",
+    description="Fetch content from a URL. Returns the text content of the webpage. Useful for reading articles, documentation, or any web page. Supports offline caching - results are cached for later use when network is unavailable. Note: Only fetches text content, does not execute JavaScript.",
     parameters=[
         ToolParameter(
             name="url",
@@ -389,6 +448,13 @@ registry.register_tool(ToolSpec(
             description="Maximum characters to return. Default: 4000. Increase for longer content, decrease for summaries.",
             required=False,
             default=4000,
+        ),
+        ToolParameter(
+            name="use_cache",
+            type="boolean",
+            description="Whether to use caching for offline access. Default: true. Set to false to always fetch fresh content.",
+            required=False,
+            default=True,
         ),
     ],
     handler=_web_fetch_impl,

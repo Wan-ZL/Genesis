@@ -301,12 +301,13 @@ class TestWebFetchTool:
         assert "404" in result
 
     def test_web_fetch_timeout(self):
-        """Test web_fetch handles timeouts."""
+        """Test web_fetch handles timeouts (with no cached fallback)."""
         import httpx
 
         with patch("httpx.Client") as mock_client:
             mock_client.return_value.__enter__.return_value.get.side_effect = httpx.TimeoutException("timeout")
-            result = web_fetch("https://example.com")
+            # Use unique URL and disable cache to test pure timeout behavior
+            result = web_fetch("https://example.com/unique-timeout-test-no-cache", use_cache=False)
 
         assert "Error" in result
         assert "timed out" in result
@@ -477,3 +478,194 @@ class TestRunShellCommand:
         result = run_shell_command("sleep 10", timeout=1)
         assert "Error" in result
         assert "timed out" in result
+
+
+class TestWebFetchCaching:
+    """Tests for web_fetch caching functionality."""
+
+    def test_web_fetch_caches_successful_result(self):
+        """Test that successful web_fetch results are cached."""
+        from server.services.degradation import get_degradation_service
+
+        # Clear any existing cache
+        degradation = get_degradation_service()
+        degradation.clear_cache()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "Cached content here"
+        mock_response.reason_phrase = "OK"
+        mock_response.headers = {"content-type": "text/html"}
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+            result = web_fetch("https://example.com/cacheable", use_cache=True)
+
+        assert "Cached content here" in result
+        # Verify content is cached
+        assert degradation._tool_cache  # Should have at least one entry
+
+    def test_web_fetch_returns_cached_when_offline(self):
+        """Test that web_fetch returns cached content when in OFFLINE mode."""
+        from server.services.degradation import get_degradation_service, DegradationMode
+
+        degradation = get_degradation_service()
+        degradation.clear_cache()
+
+        # First, cache some content
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "Original cached content"
+        mock_response.reason_phrase = "OK"
+        mock_response.headers = {"content-type": "text/html"}
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+            web_fetch("https://example.com/offline-test", use_cache=True)
+
+        # Now simulate offline mode
+        degradation._network_available = False
+        degradation._update_mode()
+        assert degradation.mode == DegradationMode.OFFLINE
+
+        # Fetch should return cached content
+        result = web_fetch("https://example.com/offline-test", use_cache=True)
+        assert "[CACHED" in result
+        assert "Original cached content" in result
+
+        # Cleanup
+        degradation._network_available = True
+        degradation._update_mode()
+
+    def test_web_fetch_returns_cached_on_http_error(self):
+        """Test that web_fetch returns cached content on HTTP errors."""
+        from server.services.degradation import get_degradation_service
+
+        degradation = get_degradation_service()
+        degradation.clear_cache()
+
+        # First, cache some content
+        mock_response_ok = MagicMock()
+        mock_response_ok.status_code = 200
+        mock_response_ok.text = "Good content before error"
+        mock_response_ok.reason_phrase = "OK"
+        mock_response_ok.headers = {"content-type": "text/html"}
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.return_value = mock_response_ok
+            web_fetch("https://example.com/error-fallback", use_cache=True)
+
+        # Now simulate HTTP error
+        mock_response_error = MagicMock()
+        mock_response_error.status_code = 500
+        mock_response_error.reason_phrase = "Internal Server Error"
+        mock_response_error.headers = {}
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.return_value = mock_response_error
+            result = web_fetch("https://example.com/error-fallback", use_cache=True)
+
+        assert "[CACHED FALLBACK" in result
+        assert "Good content before error" in result
+
+    def test_web_fetch_returns_cached_on_timeout(self):
+        """Test that web_fetch returns cached content on timeout."""
+        import httpx
+        from server.services.degradation import get_degradation_service
+
+        degradation = get_degradation_service()
+        degradation.clear_cache()
+
+        # First, cache some content
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "Content before timeout"
+        mock_response.reason_phrase = "OK"
+        mock_response.headers = {"content-type": "text/html"}
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+            web_fetch("https://example.com/timeout-test", use_cache=True)
+
+        # Now simulate timeout
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.side_effect = httpx.TimeoutException("timeout")
+            result = web_fetch("https://example.com/timeout-test", use_cache=True)
+
+        assert "[CACHED FALLBACK - Timeout]" in result
+        assert "Content before timeout" in result
+
+    def test_web_fetch_returns_cached_on_network_error(self):
+        """Test that web_fetch returns cached content on network errors."""
+        import httpx
+        from server.services.degradation import get_degradation_service
+
+        degradation = get_degradation_service()
+        degradation.clear_cache()
+
+        # First, cache some content
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "Content before network error"
+        mock_response.reason_phrase = "OK"
+        mock_response.headers = {"content-type": "text/html"}
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+            web_fetch("https://example.com/network-error", use_cache=True)
+
+        # Now simulate network error
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.side_effect = httpx.RequestError("Connection refused")
+            result = web_fetch("https://example.com/network-error", use_cache=True)
+
+        assert "[CACHED FALLBACK - Network Error]" in result
+        assert "Content before network error" in result
+
+    def test_web_fetch_with_cache_disabled(self):
+        """Test that web_fetch doesn't cache when use_cache=False."""
+        from server.services.degradation import get_degradation_service
+
+        degradation = get_degradation_service()
+        initial_cache_count = len(degradation._tool_cache)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "No cache content"
+        mock_response.reason_phrase = "OK"
+        mock_response.headers = {"content-type": "text/html"}
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+            result = web_fetch("https://example.com/nocache", use_cache=False)
+
+        assert "No cache content" in result
+        # Cache should not have grown
+        assert len(degradation._tool_cache) == initial_cache_count
+
+    def test_web_fetch_cache_key_includes_max_length(self):
+        """Test that different max_length values use different cache keys."""
+        from server.services.degradation import get_degradation_service
+        from server.services.tools import _compute_cache_key
+
+        # Verify cache keys differ for same URL with different max_length
+        key1 = _compute_cache_key("https://example.com/test", 4000)
+        key2 = _compute_cache_key("https://example.com/test", 8000)
+        assert key1 != key2
+
+    def test_web_fetch_no_cached_returns_error_on_failure(self):
+        """Test that web_fetch returns error when no cached content exists."""
+        import httpx
+        from server.services.degradation import get_degradation_service
+
+        degradation = get_degradation_service()
+        degradation.clear_cache()
+
+        # Simulate network error without prior cache
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.side_effect = httpx.RequestError("Connection refused")
+            result = web_fetch("https://example.com/never-cached", use_cache=True)
+
+        assert "Error" in result
+        assert "Failed to fetch URL" in result
+        assert "[CACHED" not in result
