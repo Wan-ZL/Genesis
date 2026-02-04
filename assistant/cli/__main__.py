@@ -7,6 +7,10 @@ Usage:
     python -m assistant.cli alerts list
     python -m assistant.cli alerts list --severity error --limit 50
     python -m assistant.cli alerts stats
+    python -m assistant.cli backup create --output backup.tar.gz
+    python -m assistant.cli backup restore --input backup.tar.gz
+    python -m assistant.cli backup list
+    python -m assistant.cli backup verify --input backup.tar.gz
 """
 import argparse
 import asyncio
@@ -20,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from assistant.server.services.memory import MemoryService
 from assistant.server.services.alerts import AlertService, AlertSeverity, AlertType
+from assistant.server.services.backup import BackupService, BackupStatus
 import assistant.config as config
 
 
@@ -168,6 +173,160 @@ async def alerts_clear_command(args):
     print(f"Deleted {deleted} alerts older than {args.days} days.")
 
 
+async def backup_create_command(args):
+    """Create a backup of all assistant data."""
+    memory_dir = config.DATABASE_PATH.parent
+    service = BackupService(memory_dir, max_backups=args.keep)
+
+    output_path = Path(args.output) if args.output else None
+
+    print("Creating backup...")
+    result = await service.create_backup(
+        output_path=output_path,
+        include_benchmarks=args.include_benchmarks,
+    )
+
+    if result.status == BackupStatus.SUCCESS:
+        print(f"Backup created successfully: {result.output_path}")
+        print(f"  Files included: {', '.join(result.metadata.files_included)}")
+        print(f"  Total size: {result.metadata.total_size_bytes:,} bytes")
+        print(f"  Version: {result.metadata.version}")
+    elif result.status == BackupStatus.PARTIAL:
+        print(f"Backup created with warnings: {result.output_path}")
+        for error in result.errors:
+            print(f"  Warning: {error}")
+    else:
+        print(f"Backup failed: {result.message}", file=sys.stderr)
+        for error in result.errors:
+            print(f"  Error: {error}", file=sys.stderr)
+        sys.exit(1)
+
+
+async def backup_restore_command(args):
+    """Restore from a backup file."""
+    memory_dir = config.DATABASE_PATH.parent
+    service = BackupService(memory_dir)
+
+    input_path = Path(args.input)
+    if not input_path.exists():
+        print(f"Error: Backup file not found: {input_path}", file=sys.stderr)
+        sys.exit(1)
+
+    # Preview mode
+    if args.preview:
+        try:
+            preview = await service.preview_restore(input_path)
+            print("Restore Preview")
+            print("=" * 40)
+            print(f"Backup version: {preview.metadata.version}")
+            print(f"Created at: {preview.metadata.created_at}")
+            print(f"Assistant version: {preview.metadata.assistant_version}")
+            print(f"Total size: {preview.total_size_bytes:,} bytes")
+            print(f"Compatible: {'Yes' if preview.is_compatible else 'No'}")
+            if not preview.is_compatible:
+                print(f"  {preview.compatibility_message}")
+            print()
+            print("Files to restore:")
+            for f in preview.files_to_restore:
+                print(f"  {f}")
+            if preview.existing_files_to_overwrite:
+                print()
+                print("Files that will be overwritten:")
+                for f in preview.existing_files_to_overwrite:
+                    print(f"  {f}")
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    # Actual restore
+    print("Restoring from backup...")
+    result = await service.restore(input_path, force=args.force)
+
+    if result.status == BackupStatus.SUCCESS:
+        print(f"Restore completed successfully")
+        print(f"  Files restored: {', '.join(result.files_restored)}")
+    elif result.status == BackupStatus.PARTIAL:
+        print(f"Restore completed with warnings")
+        print(f"  Files restored: {', '.join(result.files_restored)}")
+        for error in result.errors:
+            print(f"  Warning: {error}")
+    else:
+        print(f"Restore failed: {result.message}", file=sys.stderr)
+        for error in result.errors:
+            print(f"  Error: {error}", file=sys.stderr)
+        sys.exit(1)
+
+
+async def backup_list_command(args):
+    """List available backups."""
+    memory_dir = config.DATABASE_PATH.parent
+    service = BackupService(memory_dir)
+
+    backups = await service.list_backups()
+
+    if args.json:
+        print(json.dumps(backups, indent=2))
+        return
+
+    if not backups:
+        print("No backups found.")
+        return
+
+    print("Available Backups")
+    print("=" * 60)
+    for backup in backups:
+        size_kb = backup['size_bytes'] / 1024
+        created = backup.get('created_at', 'Unknown')[:16] if backup.get('created_at') else 'Unknown'
+        print(f"  {backup['filename']}")
+        print(f"    Created: {created} | Size: {size_kb:.1f} KB | Files: {backup['files_count']}")
+
+
+async def backup_verify_command(args):
+    """Verify backup integrity."""
+    memory_dir = config.DATABASE_PATH.parent
+    service = BackupService(memory_dir)
+
+    input_path = Path(args.input)
+    if not input_path.exists():
+        print(f"Error: Backup file not found: {input_path}", file=sys.stderr)
+        sys.exit(1)
+
+    is_valid, message = await service.verify_backup(input_path)
+
+    if is_valid:
+        print(f"Backup verified: {message}")
+    else:
+        print(f"Backup invalid: {message}", file=sys.stderr)
+        sys.exit(1)
+
+
+async def backup_schedule_command(args):
+    """Show backup schedule configuration."""
+    memory_dir = config.DATABASE_PATH.parent
+    service = BackupService(memory_dir)
+
+    schedule_config = await service.schedule_daily_backup(
+        hour=args.hour,
+        minute=args.minute,
+    )
+
+    if args.json:
+        print(json.dumps(schedule_config, indent=2))
+        return
+
+    print("Backup Schedule Configuration")
+    print("=" * 40)
+    print(f"Schedule: Daily at {args.hour:02d}:{args.minute:02d}")
+    print(f"Cron expression: {schedule_config['schedule']['cron']}")
+    print()
+    print("Command:")
+    print(f"  {schedule_config['command']}")
+    print()
+    print("To enable automatic backups, add to crontab:")
+    print(f"  {schedule_config['schedule']['cron']} cd {memory_dir.parent} && {schedule_config['command']}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="assistant.cli",
@@ -256,6 +415,79 @@ def main():
         help="Delete alerts older than N days (default: 30)"
     )
 
+    # Backup command with subcommands
+    backup_parser = subparsers.add_parser("backup", help="Backup and restore assistant data")
+    backup_subparsers = backup_parser.add_subparsers(dest="backup_command", help="Backup commands")
+
+    # backup create
+    backup_create_parser = backup_subparsers.add_parser("create", help="Create a backup")
+    backup_create_parser.add_argument(
+        "--output", "-o",
+        help="Output file path (default: memory/backups/backup_TIMESTAMP.tar.gz)"
+    )
+    backup_create_parser.add_argument(
+        "--include-benchmarks", "-b",
+        action="store_true",
+        help="Include benchmark data in backup"
+    )
+    backup_create_parser.add_argument(
+        "--keep", "-k",
+        type=int, default=10,
+        help="Number of backups to keep for rotation (default: 10)"
+    )
+
+    # backup restore
+    backup_restore_parser = backup_subparsers.add_parser("restore", help="Restore from a backup")
+    backup_restore_parser.add_argument(
+        "--input", "-i",
+        required=True,
+        help="Input backup file path"
+    )
+    backup_restore_parser.add_argument(
+        "--preview", "-p",
+        action="store_true",
+        help="Preview what would be restored without making changes"
+    )
+    backup_restore_parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="Force restore, overwriting existing files"
+    )
+
+    # backup list
+    backup_list_parser = backup_subparsers.add_parser("list", help="List available backups")
+    backup_list_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
+    # backup verify
+    backup_verify_parser = backup_subparsers.add_parser("verify", help="Verify backup integrity")
+    backup_verify_parser.add_argument(
+        "--input", "-i",
+        required=True,
+        help="Backup file to verify"
+    )
+
+    # backup schedule
+    backup_schedule_parser = backup_subparsers.add_parser("schedule", help="Show backup schedule configuration")
+    backup_schedule_parser.add_argument(
+        "--hour", "-H",
+        type=int, default=3,
+        help="Hour to run backup (0-23, default: 3)"
+    )
+    backup_schedule_parser.add_argument(
+        "--minute", "-M",
+        type=int, default=0,
+        help="Minute to run backup (0-59, default: 0)"
+    )
+    backup_schedule_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
     args = parser.parse_args()
 
     if args.command == "export":
@@ -273,6 +505,20 @@ def main():
             asyncio.run(alerts_clear_command(args))
         else:
             alerts_parser.print_help()
+            sys.exit(1)
+    elif args.command == "backup":
+        if args.backup_command == "create":
+            asyncio.run(backup_create_command(args))
+        elif args.backup_command == "restore":
+            asyncio.run(backup_restore_command(args))
+        elif args.backup_command == "list":
+            asyncio.run(backup_list_command(args))
+        elif args.backup_command == "verify":
+            asyncio.run(backup_verify_command(args))
+        elif args.backup_command == "schedule":
+            asyncio.run(backup_schedule_command(args))
+        else:
+            backup_parser.print_help()
             sys.exit(1)
     else:
         parser.print_help()

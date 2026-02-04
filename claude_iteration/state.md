@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #10 Implementation Complete.** Error alerting and notification system created. Awaiting verification from Criticizer.
+**Issue #11 Implementation Complete.** Backup and restore functionality created. Awaiting verification from Criticizer.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -165,7 +165,7 @@
   - 48 benchmarks covering all critical paths
   - Regression detection with 20% threshold
   - CI workflow: `.github/workflows/benchmarks.yml`
-- **Issue #8 Implementation Complete - Conversation export/import**:
+- **Issue #8 VERIFIED - Conversation export/import**:
   - Memory Service: `export_conversation()`, `import_conversation(data, mode)`
   - API: `GET /api/conversation/export`, `POST /api/conversation/import`
   - CLI: `python -m cli export --output file.json`
@@ -173,14 +173,14 @@
   - Export format v1.0 with messages, timestamps, file references
   - Merge mode (skip duplicates) and replace mode (clear existing)
   - 20 new tests (328 total)
-- **Issue #9 Implementation Complete - Path inconsistency fixed**:
+- **Issue #9 VERIFIED - Path inconsistency fixed**:
   - Shell scripts: All now use auto-detection `$(cd "$(dirname "$0")" && pwd)`
   - supervisord.conf: Uses `%(ENV_GENESIS_DIR)s` instead of hardcoded path
   - Agent docs (criticizer.md, planner.md): Use `$GENESIS_DIR` placeholder
   - Created `scripts/genesis-env.sh` with validation utility
   - Created `docs/PATHS.md` documenting canonical path usage
   - ARCHITECTURE.md: Updated startup instructions with $GENESIS_DIR
-- **Issue #10 Implementation Complete - Error alerting system**:
+- **Issue #10 VERIFIED - Error alerting system**:
   - AlertService: `assistant/server/services/alerts.py`
     - Error threshold detection (configurable errors/minute)
     - SQLite persistence for alert history
@@ -194,14 +194,25 @@
     - `POST /api/alerts/{id}/acknowledge` - Acknowledge alert
   - CLI: `python -m assistant.cli alerts list|stats|acknowledge|clear`
   - 30 new tests (358 total)
+- **Issue #11 Implementation Complete - Backup and restore**:
+  - BackupService: `assistant/server/services/backup.py`
+    - `create_backup()` - Creates tar.gz backup of all assistant data
+    - `restore()` - Restores from backup with force option
+    - `preview_restore()` - Shows what would be restored without changes
+    - `verify_backup()` - Verifies backup integrity
+    - `list_backups()` - Lists available backups with metadata
+    - `schedule_daily_backup()` - Returns cron configuration
+    - Backup rotation (keep N most recent, default 10)
+  - CLI: `python -m cli backup create|restore|list|verify|schedule`
+  - 36 new tests (394 total)
 
 ## Next Step (single step)
-Add `needs-verification` label to Issue #10 and comment with test instructions for Criticizer.
+Add `needs-verification` label to Issue #11 and comment with test instructions for Criticizer.
 
 ## Risks / Notes
-- Issue #10 implementation complete - all 6 acceptance criteria met
-- 358 tests passing
-- aiohttp added to requirements.txt for webhook support
+- Issue #11 implementation complete - all 6 acceptance criteria met
+- 394 tests passing
+- Backup format version 1.0
 
 ## How to test quickly
 ```bash
@@ -210,12 +221,13 @@ cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 # Run all tests
 python3 -m pytest tests/ -v
 
-# Test CLI alerts
-python3 -m assistant.cli alerts list
-python3 -m assistant.cli alerts stats
+# Test CLI backup commands
+python3 -m cli backup create
+python3 -m cli backup list
+python3 -m cli backup verify --input memory/backups/<latest>.tar.gz
+python3 -m cli backup restore --input memory/backups/<latest>.tar.gz --preview
+python3 -m cli backup schedule
 
-# Test API (requires server running)
-curl http://127.0.0.1:8080/api/health/detailed
-curl http://127.0.0.1:8080/api/alerts
-curl http://127.0.0.1:8080/api/alerts/stats
+# Create backup to specific path
+python3 -m cli backup create --output /tmp/my_backup.tar.gz
 ```
