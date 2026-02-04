@@ -821,3 +821,81 @@ header {
         text-align: center;
     }
 }
+
+/* Streaming response styles */
+.message.streaming {
+    min-height: 40px;
+}
+
+.message.streaming .message-content {
+    display: inline;
+}
+
+.streaming-indicator {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.streaming-indicator .dot {
+    width: 6px;
+    height: 6px;
+    background-color: #666;
+    border-radius: 50%;
+    margin: 0 2px;
+    animation: streaming-pulse 1.4s ease-in-out infinite;
+}
+
+.streaming-indicator .dot:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.streaming-indicator .dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.streaming-indicator .dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes streaming-pulse {
+    0%, 60%, 100% {
+        opacity: 0.3;
+        transform: scale(1);
+    }
+    30% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+}
+
+/* Tool call indicators during streaming */
+.tool-indicator {
+    display: block;
+    font-size: 0.8rem;
+    color: #666;
+    padding: 4px 0;
+    margin: 8px 0;
+    border-left: 3px solid #007bff;
+    padding-left: 8px;
+    background: rgba(0, 123, 255, 0.05);
+}
+
+.tool-indicator.tool-success {
+    border-left-color: #28a745;
+    color: #28a745;
+    background: rgba(40, 167, 69, 0.05);
+}
+
+.tool-indicator.tool-error {
+    border-left-color: #dc3545;
+    color: #dc3545;
+    background: rgba(220, 53, 69, 0.05);
+}
+
+.tool-indicator.tool-permission {
+    border-left-color: #fd7e14;
+    color: #fd7e14;
+    background: rgba(253, 126, 20, 0.05);
+}

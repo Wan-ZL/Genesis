@@ -6,6 +6,8 @@
 let pendingFiles = []; // Files waiting to be sent with next message
 let isRecording = false;
 let speechRecognition = null;
+let useStreaming = true; // Enable streaming by default
+let activeStreamController = null; // Track active stream for cancellation
 
 // DOM Elements
 const messagesContainer = document.getElementById('messages');
@@ -310,12 +312,180 @@ async function sendMessage() {
     // Add user message to UI
     addMessageToUI('user', displayMessage);
 
-    // Add loading indicator
-    const loadingEl = addMessageToUI('loading', 'Thinking...');
-
     // Prepare file IDs
     const fileIds = pendingFiles.map(f => f.file_id);
     clearPendingFiles();
+
+    // Use streaming or regular endpoint based on setting
+    if (useStreaming) {
+        await sendMessageStreaming(message, fileIds);
+    } else {
+        await sendMessageRegular(message, fileIds);
+    }
+
+    sendBtn.disabled = false;
+    messageInput.focus();
+}
+
+async function sendMessageStreaming(message, fileIds) {
+    // Create message element for streaming response
+    const messageEl = document.createElement('div');
+    messageEl.className = 'message assistant streaming';
+
+    // Create content span for text
+    const contentSpan = document.createElement('span');
+    contentSpan.className = 'message-content';
+    messageEl.appendChild(contentSpan);
+
+    // Create progress indicator
+    const progressEl = document.createElement('span');
+    progressEl.className = 'streaming-indicator';
+    progressEl.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    messageEl.appendChild(progressEl);
+
+    messagesContainer.appendChild(messageEl);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    let accumulatedText = '';
+    let modelUsed = null;
+
+    try {
+        const response = await fetch('/api/chat/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: message || 'Please analyze the attached file(s).',
+                file_ids: fileIds.length > 0 ? fileIds : null
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Stream request failed');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Process complete SSE events in buffer
+            const events = buffer.split('\n\n');
+            buffer = events.pop(); // Keep incomplete event in buffer
+
+            for (const eventBlock of events) {
+                if (!eventBlock.trim()) continue;
+
+                const lines = eventBlock.split('\n');
+                let eventType = null;
+                let eventData = null;
+
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) {
+                        eventType = line.slice(7);
+                    } else if (line.startsWith('data: ')) {
+                        try {
+                            eventData = JSON.parse(line.slice(6));
+                        } catch (e) {
+                            console.error('Failed to parse SSE data:', line);
+                        }
+                    }
+                }
+
+                if (eventType && eventData) {
+                    handleStreamEvent(eventType, eventData, contentSpan, messageEl, (text) => {
+                        accumulatedText += text;
+                    }, (model) => {
+                        modelUsed = model;
+                    });
+                }
+            }
+
+            // Auto-scroll while streaming
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+    } catch (error) {
+        console.error('Streaming error:', error);
+        contentSpan.textContent = `Error: ${error.message}`;
+        messageEl.classList.add('error');
+        messageEl.classList.remove('streaming');
+    }
+
+    // Finalize the message
+    messageEl.classList.remove('streaming');
+    progressEl.remove();
+
+    // Add model badge if we know the model
+    if (modelUsed) {
+        const modelBadge = document.createElement('span');
+        modelBadge.className = 'model-badge';
+        modelBadge.textContent = modelUsed.includes('claude') ? 'Claude' : 'GPT-4o';
+        messageEl.appendChild(modelBadge);
+    }
+}
+
+function handleStreamEvent(eventType, data, contentSpan, messageEl, addText, setModel) {
+    switch (eventType) {
+        case 'start':
+            setModel(data.model);
+            break;
+
+        case 'token':
+            if (data.text) {
+                contentSpan.textContent += data.text;
+                addText(data.text);
+            }
+            break;
+
+        case 'tool_call':
+            // Show tool call indicator
+            const toolIndicator = document.createElement('div');
+            toolIndicator.className = 'tool-indicator';
+            toolIndicator.textContent = `🔧 Using tool: ${data.name}...`;
+            messageEl.insertBefore(toolIndicator, messageEl.querySelector('.streaming-indicator'));
+            break;
+
+        case 'tool_result':
+            // Update or remove tool indicator
+            const indicators = messageEl.querySelectorAll('.tool-indicator');
+            const lastIndicator = indicators[indicators.length - 1];
+            if (lastIndicator) {
+                if (data.success) {
+                    lastIndicator.textContent = `✓ ${data.name} completed`;
+                    lastIndicator.classList.add('tool-success');
+                } else if (data.permission_escalation) {
+                    lastIndicator.textContent = `⚠️ ${data.name} requires permission`;
+                    lastIndicator.classList.add('tool-permission');
+                } else {
+                    lastIndicator.textContent = `✗ ${data.name} failed`;
+                    lastIndicator.classList.add('tool-error');
+                }
+            }
+            break;
+
+        case 'done':
+            if (data.model) {
+                setModel(data.model);
+            }
+            break;
+
+        case 'error':
+            contentSpan.textContent = `Error: ${data.message}`;
+            messageEl.classList.add('error');
+            break;
+    }
+}
+
+async function sendMessageRegular(message, fileIds) {
+    // Add loading indicator
+    const loadingEl = addMessageToUI('loading', 'Thinking...');
 
     try {
         const response = await fetch('/api/chat', {
@@ -342,9 +512,6 @@ async function sendMessage() {
         loadingEl.remove();
         addMessageToUI('error', `Error: ${error.message}`);
     }
-
-    sendBtn.disabled = false;
-    messageInput.focus();
 }
 
 function addMessageToUI(role, content, model = null) {

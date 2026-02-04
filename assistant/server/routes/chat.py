@@ -3,11 +3,13 @@ import logging
 import base64
 import json
 import time
+import asyncio
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, AsyncGenerator
 from pathlib import Path
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 import config
 from server.services.memory import MemoryService, DEFAULT_CONVERSATION_ID
@@ -404,6 +406,546 @@ async def call_openai_api(messages: list, file_ids: list, user_message: str, sys
 
     # If we exit the loop, return what we have
     return "I apologize, I couldn't complete the task after multiple tool attempts.", config.OPENAI_MODEL, None
+
+
+# ============================================================================
+# Streaming API Support
+# ============================================================================
+
+
+class StreamEvent(BaseModel):
+    """SSE event for streaming responses."""
+    event: str  # "start", "token", "tool_call", "tool_result", "done", "error"
+    data: dict
+
+
+def format_sse(event: str, data: dict) -> str:
+    """Format data as Server-Sent Event."""
+    json_data = json.dumps(data, ensure_ascii=False)
+    return f"event: {event}\ndata: {json_data}\n\n"
+
+
+async def stream_claude_response(
+    messages: list,
+    file_ids: list,
+    user_message: str,
+    system_prompt: str = ""
+) -> AsyncGenerator[str, None]:
+    """Stream response from Claude API with tool call support.
+
+    Yields SSE-formatted events:
+    - start: Initial metadata (model info)
+    - token: Text content chunk
+    - tool_call: Tool is being called
+    - tool_result: Tool execution result
+    - done: Stream complete with final metadata
+    - error: Error occurred
+    """
+    client = get_anthropic_client()
+    if not client:
+        yield format_sse("error", {"message": "Anthropic client not available"})
+        return
+
+    # Convert message history for Claude format
+    claude_messages = []
+    for msg in messages[:-1]:
+        claude_messages.append({
+            "role": msg["role"],
+            "content": msg["content"]
+        })
+
+    # Build the current message with multimodal content
+    if file_ids:
+        content_parts = [{"type": "text", "text": user_message}]
+        for file_id in file_ids:
+            file_content = load_file_for_claude(file_id)
+            if file_content:
+                content_parts.append(file_content)
+        claude_messages.append({"role": "user", "content": content_parts})
+    else:
+        claude_messages.append({"role": "user", "content": user_message})
+
+    # Get tools in Claude format
+    tools = tool_registry.to_claude_tools()
+
+    yield format_sse("start", {"model": config.CLAUDE_MODEL, "provider": "anthropic"})
+
+    # Track accumulated text and tool calls for the conversation loop
+    max_tool_iterations = 5
+    accumulated_text = ""
+
+    for iteration in range(max_tool_iterations):
+        api_kwargs = {
+            "model": config.CLAUDE_MODEL,
+            "max_tokens": 4096,
+            "messages": claude_messages,
+            "stream": True,  # Enable streaming
+        }
+        if system_prompt:
+            api_kwargs["system"] = system_prompt
+        if tools:
+            api_kwargs["tools"] = tools
+
+        try:
+            current_text = ""
+            tool_use_blocks = []
+            current_tool_use = None
+
+            with client.messages.stream(**api_kwargs) as stream:
+                for event in stream:
+                    # Handle different event types
+                    if event.type == "content_block_start":
+                        if hasattr(event.content_block, "type"):
+                            if event.content_block.type == "tool_use":
+                                current_tool_use = {
+                                    "id": event.content_block.id,
+                                    "name": event.content_block.name,
+                                    "input": ""
+                                }
+                    elif event.type == "content_block_delta":
+                        if hasattr(event.delta, "text"):
+                            # Text delta
+                            text_chunk = event.delta.text
+                            current_text += text_chunk
+                            yield format_sse("token", {"text": text_chunk})
+                        elif hasattr(event.delta, "partial_json"):
+                            # Tool input delta
+                            if current_tool_use:
+                                current_tool_use["input"] += event.delta.partial_json
+                    elif event.type == "content_block_stop":
+                        if current_tool_use:
+                            # Parse tool input and add to list
+                            try:
+                                current_tool_use["input"] = json.loads(current_tool_use["input"])
+                            except json.JSONDecodeError:
+                                current_tool_use["input"] = {}
+                            tool_use_blocks.append(current_tool_use)
+                            current_tool_use = None
+
+            accumulated_text += current_text
+
+            # If no tool calls, we're done
+            if not tool_use_blocks:
+                break
+
+            # Process tool calls
+            tool_results = []
+            for tool_block in tool_use_blocks:
+                tool_name = tool_block["name"]
+                tool_input = tool_block["input"]
+                tool_id = tool_block["id"]
+
+                yield format_sse("tool_call", {
+                    "name": tool_name,
+                    "input": tool_input
+                })
+
+                logger.info(f"Claude streaming: calling tool {tool_name}")
+                result = tool_registry.execute(tool_name, **tool_input)
+                metrics.record_tool_call(tool_name)
+
+                if result["success"]:
+                    tool_result_content = str(result["result"])
+                    yield format_sse("tool_result", {
+                        "name": tool_name,
+                        "success": True,
+                        "result": tool_result_content
+                    })
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": tool_result_content,
+                    })
+                elif "permission_escalation" in result:
+                    escalation = result["permission_escalation"]
+                    yield format_sse("tool_result", {
+                        "name": tool_name,
+                        "success": False,
+                        "permission_escalation": escalation
+                    })
+                    # Return escalation message
+                    escalation_msg = (
+                        f"I need elevated permissions to use the **{tool_name}** tool.\n\n"
+                        f"**Current permission level:** {escalation['current_level_name']}\n"
+                        f"**Required permission level:** {escalation['required_level_name']}"
+                    )
+                    yield format_sse("token", {"text": escalation_msg})
+                    accumulated_text += escalation_msg
+                    yield format_sse("done", {
+                        "total_text": accumulated_text,
+                        "model": config.CLAUDE_MODEL,
+                        "permission_escalation": escalation
+                    })
+                    return
+                else:
+                    error_content = f"Error: {result['error']}"
+                    yield format_sse("tool_result", {
+                        "name": tool_name,
+                        "success": False,
+                        "error": result["error"]
+                    })
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": error_content,
+                        "is_error": True,
+                    })
+
+            # Build response content including tool use blocks for conversation continuation
+            response_content = []
+            if current_text:
+                response_content.append({"type": "text", "text": current_text})
+            for tb in tool_use_blocks:
+                response_content.append({
+                    "type": "tool_use",
+                    "id": tb["id"],
+                    "name": tb["name"],
+                    "input": tb["input"]
+                })
+
+            # Add messages for next iteration
+            claude_messages.append({
+                "role": "assistant",
+                "content": response_content,
+            })
+            claude_messages.append({
+                "role": "user",
+                "content": tool_results,
+            })
+
+        except Exception as e:
+            logger.error(f"Claude streaming error: {e}")
+            yield format_sse("error", {"message": str(e)})
+            return
+
+    yield format_sse("done", {
+        "total_text": accumulated_text,
+        "model": config.CLAUDE_MODEL
+    })
+
+
+async def stream_openai_response(
+    messages: list,
+    file_ids: list,
+    user_message: str,
+    system_prompt: str = ""
+) -> AsyncGenerator[str, None]:
+    """Stream response from OpenAI API with tool call support.
+
+    Yields SSE-formatted events:
+    - start: Initial metadata (model info)
+    - token: Text content chunk
+    - tool_call: Tool is being called
+    - tool_result: Tool execution result
+    - done: Stream complete with final metadata
+    - error: Error occurred
+    """
+    client = get_openai_client()
+    if not client:
+        yield format_sse("error", {"message": "OpenAI client not available"})
+        return
+
+    # Inject system prompt at the beginning if provided
+    if system_prompt:
+        messages = [{"role": "system", "content": system_prompt}] + messages
+
+    # Build the current message with multimodal content
+    if file_ids:
+        content_parts = [{"type": "text", "text": user_message}]
+        for file_id in file_ids:
+            file_content = load_file_for_openai(file_id)
+            if file_content:
+                content_parts.append(file_content)
+        messages[-1] = {"role": "user", "content": content_parts}
+
+    # Get tools in OpenAI format
+    tools = tool_registry.to_openai_tools()
+
+    yield format_sse("start", {"model": config.OPENAI_MODEL, "provider": "openai"})
+
+    max_tool_iterations = 5
+    accumulated_text = ""
+
+    for iteration in range(max_tool_iterations):
+        api_kwargs = {
+            "model": config.OPENAI_MODEL,
+            "messages": messages,
+            "stream": True,
+        }
+        if tools:
+            api_kwargs["tools"] = tools
+
+        try:
+            current_text = ""
+            tool_calls = {}  # id -> {name, arguments}
+
+            stream = client.chat.completions.create(**api_kwargs)
+
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+
+                delta = chunk.choices[0].delta
+
+                # Handle text content
+                if delta.content:
+                    current_text += delta.content
+                    yield format_sse("token", {"text": delta.content})
+
+                # Handle tool calls
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        tc_id = tc.id or list(tool_calls.keys())[-1] if tool_calls else None
+                        if tc.id:
+                            # New tool call
+                            tool_calls[tc.id] = {
+                                "name": tc.function.name if tc.function else "",
+                                "arguments": tc.function.arguments if tc.function else ""
+                            }
+                        elif tc_id and tc.function:
+                            # Continuation of existing tool call
+                            if tc.function.name:
+                                tool_calls[tc_id]["name"] = tc.function.name
+                            if tc.function.arguments:
+                                tool_calls[tc_id]["arguments"] += tc.function.arguments
+
+            accumulated_text += current_text
+
+            # If no tool calls, we're done
+            if not tool_calls:
+                break
+
+            # Process tool calls
+            tool_call_list = []
+            for tc_id, tc_data in tool_calls.items():
+                try:
+                    tool_args = json.loads(tc_data["arguments"])
+                except json.JSONDecodeError:
+                    tool_args = {}
+
+                tool_call_list.append({
+                    "id": tc_id,
+                    "type": "function",
+                    "function": {
+                        "name": tc_data["name"],
+                        "arguments": tc_data["arguments"]
+                    }
+                })
+
+            # Add assistant message with tool calls
+            messages.append({
+                "role": "assistant",
+                "content": current_text or None,
+                "tool_calls": tool_call_list
+            })
+
+            # Execute tools and add results
+            for tc_id, tc_data in tool_calls.items():
+                tool_name = tc_data["name"]
+                try:
+                    tool_args = json.loads(tc_data["arguments"])
+                except json.JSONDecodeError:
+                    tool_args = {}
+
+                yield format_sse("tool_call", {
+                    "name": tool_name,
+                    "input": tool_args
+                })
+
+                logger.info(f"OpenAI streaming: calling tool {tool_name}")
+                result = tool_registry.execute(tool_name, **tool_args)
+                metrics.record_tool_call(tool_name)
+
+                if result["success"]:
+                    tool_result_content = str(result["result"])
+                    yield format_sse("tool_result", {
+                        "name": tool_name,
+                        "success": True,
+                        "result": tool_result_content
+                    })
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc_id,
+                        "content": tool_result_content,
+                    })
+                elif "permission_escalation" in result:
+                    escalation = result["permission_escalation"]
+                    yield format_sse("tool_result", {
+                        "name": tool_name,
+                        "success": False,
+                        "permission_escalation": escalation
+                    })
+                    escalation_msg = (
+                        f"I need elevated permissions to use the **{tool_name}** tool.\n\n"
+                        f"**Current permission level:** {escalation['current_level_name']}\n"
+                        f"**Required permission level:** {escalation['required_level_name']}"
+                    )
+                    yield format_sse("token", {"text": escalation_msg})
+                    accumulated_text += escalation_msg
+                    yield format_sse("done", {
+                        "total_text": accumulated_text,
+                        "model": config.OPENAI_MODEL,
+                        "permission_escalation": escalation
+                    })
+                    return
+                else:
+                    error_content = f"Error: {result['error']}"
+                    yield format_sse("tool_result", {
+                        "name": tool_name,
+                        "success": False,
+                        "error": result["error"]
+                    })
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc_id,
+                        "content": error_content,
+                    })
+
+        except Exception as e:
+            logger.error(f"OpenAI streaming error: {e}")
+            yield format_sse("error", {"message": str(e)})
+            return
+
+    yield format_sse("done", {
+        "total_text": accumulated_text,
+        "model": config.OPENAI_MODEL
+    })
+
+
+@router.post("/chat/stream")
+async def chat_stream(request: ChatMessage):
+    """Stream chat response using Server-Sent Events (SSE).
+
+    This endpoint provides real-time streaming of AI responses as they are generated.
+    It supports both Claude and OpenAI APIs with automatic fallback.
+
+    Event types:
+    - start: Stream started, includes model info
+    - token: Text chunk from the AI
+    - tool_call: Tool is being invoked
+    - tool_result: Result from tool execution
+    - done: Stream complete, includes total text
+    - error: An error occurred
+
+    All messages are stored in a single infinite conversation.
+    """
+    start_time = time.time()
+
+    # Build message content with attachments
+    file_refs = []
+    if request.file_ids:
+        for fid in request.file_ids:
+            file_refs.append(fid)
+
+    # Store message with file references
+    message_text = request.message
+    if file_refs:
+        message_text = f"{request.message}\n[Attached files: {', '.join(file_refs)}]"
+
+    await memory.add_to_conversation("user", message_text)
+
+    async def generate_response() -> AsyncGenerator[str, None]:
+        """Generate streaming response with error handling and memory persistence."""
+        accumulated_response = ""
+        model_used = None
+        has_error = False
+
+        try:
+            # Get conversation history
+            messages, context_meta = await memory.get_context_for_api()
+
+            if context_meta["summarized_count"] > 0:
+                logger.info(
+                    f"Context: {context_meta['total_messages']} total msgs, "
+                    f"{context_meta['summarized_count']} summarized, "
+                    f"{context_meta['verbatim_count']} verbatim"
+                )
+
+            # Analyze user message for relevant tool suggestions
+            suggestion_service = get_suggestion_service()
+            suggestions = suggestion_service.analyze_message(request.message)
+
+            # Build system prompt
+            system_parts = [
+                "You are a helpful AI assistant with access to various system tools.",
+                "Be proactive about suggesting tools when they would help the user's task.",
+            ]
+
+            if suggestions:
+                suggestion_text = suggestion_service.get_system_prompt_injection(suggestions)
+                system_parts.append(suggestion_text)
+                logger.info(f"Suggesting {len(suggestions)} relevant tools: {[s.name for s in suggestions]}")
+            else:
+                summary = suggestion_service.get_available_tools_summary()
+                if summary:
+                    system_parts.append(summary)
+
+            system_prompt = "\n".join(system_parts)
+
+            # Try Claude first, fallback to OpenAI
+            stream_generator = None
+
+            if config.USE_CLAUDE:
+                try:
+                    logger.info(f"Starting Claude stream with model {config.CLAUDE_MODEL}")
+                    stream_generator = stream_claude_response(
+                        messages, request.file_ids or [], request.message, system_prompt
+                    )
+                    model_used = config.CLAUDE_MODEL
+                except Exception as e:
+                    logger.warning(f"Claude streaming init failed: {e}")
+                    stream_generator = None
+
+            if stream_generator is None:
+                logger.info(f"Starting OpenAI stream with model {config.OPENAI_MODEL}")
+                stream_generator = stream_openai_response(
+                    messages, request.file_ids or [], request.message, system_prompt
+                )
+                model_used = config.OPENAI_MODEL
+
+            # Forward events from the stream
+            async for event_str in stream_generator:
+                yield event_str
+
+                # Extract accumulated text from done event for memory storage
+                if event_str.startswith("event: done"):
+                    try:
+                        data_line = event_str.split("data: ", 1)[1].split("\n")[0]
+                        done_data = json.loads(data_line)
+                        accumulated_response = done_data.get("total_text", "")
+                    except (IndexError, json.JSONDecodeError):
+                        pass
+                elif event_str.startswith("event: error"):
+                    has_error = True
+
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            yield format_sse("error", {"message": str(e)})
+            has_error = True
+
+        # Save assistant response to memory if we got something
+        if accumulated_response:
+            await memory.add_to_conversation("assistant", accumulated_response)
+            logger.info(f"Stream completed, saved {len(accumulated_response)} chars to memory")
+        elif has_error:
+            # Remove user message if streaming failed completely
+            await memory.remove_last_message_from_conversation()
+
+        # Record metrics
+        latency_ms = (time.time() - start_time) * 1000
+        metrics.record_request("/api/chat/stream", latency_ms, success=not has_error)
+        if has_error:
+            metrics.record_error("/api/chat/stream", "StreamError")
+
+    return StreamingResponse(
+        generate_response(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
 
 
 @router.post("/chat", response_model=ChatResponse)

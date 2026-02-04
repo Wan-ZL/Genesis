@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #2 COMPLETE.** All acceptance criteria met. Looking for next issue or backlog item.
+**Issue #6 Implementation Complete.** Streaming response support added. Awaiting verification from Criticizer.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -149,21 +149,29 @@
   - **System prompt injection with relevant tool suggestions**
   - **Chat response includes `suggested_tools` field**
   - 286 tests total (+30 new for tool suggestions)
+- **Issue #6 Implementation Complete - Streaming response support**:
+  - SSE endpoint `POST /api/chat/stream` with event-based responses
+  - Claude streaming: `stream=True` with message_delta events
+  - OpenAI streaming: `stream=True` with chunk deltas
+  - Tool call handling: stream pauses for tool, emits events, resumes
+  - Frontend: Real-time token display, animated progress indicator
+  - UI: Tool call progress indicators (success/error/permission states)
+  - Graceful error handling and fallback to regular endpoint
+  - Memory persistence after streaming completes
+  - 22 new tests (308 total)
 
 ## Next Step (single step)
-**AWAITING USER INPUT**: All development items complete. Waiting for:
-- New GitHub Issues, OR
-- User to add ANTHROPIC_API_KEY to activate Claude API, OR
-- User to prioritize items from Ideas section
+Add `needs-verification` label to Issue #6 and request Criticizer verification.
 
 ## Risks / Notes
-- Issue #2 COMPLETE - all 6 acceptance criteria met
-- 286 tests passing, CI workflow active
-- Tool suggestions are proactive (injected into system prompt)
+- Issue #6 implementation complete - all 6 acceptance criteria met
+- 308 tests passing, CI workflow active
+- Streaming uses native browser EventSource pattern
+- Tool calls during streaming emit separate events for progress tracking
 
 ## How to test quickly
 ```bash
-cd /Users/zelin/Startups/Genesis/assistant
+cd /Volumes/Storage/Server/Startup/Genesis/assistant
 
 # Option 1: Run directly
 pip3 install -r requirements.txt
@@ -179,8 +187,12 @@ python3 -m server.main
 # Run tests
 python3 -m pytest tests/ -v
 
-# Test tool suggestions
-# Send a message like "How do I commit with git?"
-# The AI will receive tool suggestions in its system prompt
-# and the response will include a suggested_tools field
+# Test streaming specifically
+python3 -m pytest tests/test_streaming.py -v
+
+# Manual streaming test (with server running)
+curl -X POST http://127.0.0.1:8080/api/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello, how are you?"}'
+# Should see SSE events: event: start, event: token, event: done
 ```
