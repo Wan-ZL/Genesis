@@ -599,6 +599,155 @@ class MemoryService:
             row = await cursor.fetchone()
             return row[0] if row else 0
 
+    async def export_conversation(self) -> dict:
+        """Export the single conversation in a portable format.
+
+        Returns:
+            Dict with version, metadata, and messages array
+        """
+        await self._ensure_initialized()
+        await self._ensure_default_conversation()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            # Get all messages with their timestamps
+            cursor = await db.execute(
+                """SELECT id, role, content, created_at
+                   FROM messages WHERE conversation_id = ?
+                   ORDER BY created_at""",
+                (DEFAULT_CONVERSATION_ID,)
+            )
+            messages_rows = await cursor.fetchall()
+
+            # Get file references for messages (if any)
+            cursor = await db.execute(
+                """SELECT id, original_filename, content_type, size, uploaded_at
+                   FROM files WHERE conversation_id = ?""",
+                (DEFAULT_CONVERSATION_ID,)
+            )
+            files_rows = await cursor.fetchall()
+
+        # Build messages list
+        messages = []
+        for msg_id, role, content, created_at in messages_rows:
+            messages.append({
+                "id": msg_id,
+                "role": role,
+                "content": content,
+                "timestamp": created_at,
+                "file_ids": []  # File association tracking not implemented yet
+            })
+
+        # Build files list (references only, not content)
+        files = []
+        for file_id, filename, content_type, size, uploaded_at in files_rows:
+            files.append({
+                "id": file_id,
+                "filename": filename,
+                "content_type": content_type,
+                "size": size,
+                "uploaded_at": uploaded_at
+            })
+
+        return {
+            "version": "1.0",
+            "exported_at": datetime.now().isoformat() + "Z",
+            "message_count": len(messages),
+            "messages": messages,
+            "files": files
+        }
+
+    async def import_conversation(
+        self,
+        data: dict,
+        mode: str = "merge"
+    ) -> dict:
+        """Import conversation from exported format.
+
+        Args:
+            data: Exported conversation data dict
+            mode: "merge" (skip duplicates) or "replace" (clear existing first)
+
+        Returns:
+            Dict with import statistics
+        """
+        await self._ensure_initialized()
+        await self._ensure_default_conversation()
+
+        # Validate format
+        if "version" not in data:
+            raise ValueError("Invalid export format: missing version")
+        if "messages" not in data:
+            raise ValueError("Invalid export format: missing messages")
+
+        version = data.get("version", "1.0")
+        if version not in ["1.0"]:
+            raise ValueError(f"Unsupported export version: {version}")
+
+        messages = data.get("messages", [])
+
+        # Get existing message timestamps for deduplication
+        existing_timestamps = set()
+        if mode == "merge":
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute(
+                    "SELECT created_at FROM messages WHERE conversation_id = ?",
+                    (DEFAULT_CONVERSATION_ID,)
+                )
+                rows = await cursor.fetchall()
+                existing_timestamps = {row[0] for row in rows}
+        elif mode == "replace":
+            # Clear existing messages and summaries
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "DELETE FROM messages WHERE conversation_id = ?",
+                    (DEFAULT_CONVERSATION_ID,)
+                )
+                await db.execute(
+                    "DELETE FROM message_summaries WHERE conversation_id = ?",
+                    (DEFAULT_CONVERSATION_ID,)
+                )
+                await db.commit()
+
+        # Import messages
+        imported_count = 0
+        skipped_count = 0
+
+        async with aiosqlite.connect(self.db_path) as db:
+            for msg in messages:
+                # Validate required fields
+                if "role" not in msg or "content" not in msg:
+                    skipped_count += 1
+                    continue
+
+                timestamp = msg.get("timestamp")
+                if not timestamp:
+                    # Generate timestamp if missing
+                    timestamp = datetime.now().isoformat()
+
+                # Skip duplicates in merge mode
+                if mode == "merge" and timestamp in existing_timestamps:
+                    skipped_count += 1
+                    continue
+
+                # Use existing ID or generate new one
+                msg_id = msg.get("id") or f"msg_{uuid.uuid4().hex[:12]}"
+
+                await db.execute(
+                    """INSERT INTO messages (id, conversation_id, role, content, created_at)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (msg_id, DEFAULT_CONVERSATION_ID, msg["role"], msg["content"], timestamp)
+                )
+                imported_count += 1
+
+            await db.commit()
+
+        return {
+            "imported_count": imported_count,
+            "skipped_count": skipped_count,
+            "total_in_file": len(messages),
+            "mode": mode
+        }
+
 
 def _create_text_summary(messages: list, max_length: int = 500) -> str:
     """Create a text-based summary of a batch of messages.

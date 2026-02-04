@@ -492,5 +492,118 @@ class TestMessageSearch:
         assert response.status_code == 200
 
 
+class TestExportImportEndpoints:
+    """Tests for conversation export/import API endpoints (Issue #8)."""
+
+    def test_export_endpoint_exists(self, client):
+        """Test that GET /api/conversation/export exists."""
+        response = client.get("/api/conversation/export")
+        assert response.status_code == 200
+
+    def test_export_returns_valid_format(self, client):
+        """Test that export returns valid JSON format."""
+        response = client.get("/api/conversation/export")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "version" in data
+        assert data["version"] == "1.0"
+        assert "exported_at" in data
+        assert "message_count" in data
+        assert "messages" in data
+        assert isinstance(data["messages"], list)
+
+    def test_import_endpoint_exists(self, client):
+        """Test that POST /api/conversation/import exists."""
+        response = client.post(
+            "/api/conversation/import",
+            json={
+                "version": "1.0",
+                "messages": [],
+                "mode": "merge"
+            }
+        )
+        assert response.status_code == 200
+
+    def test_import_returns_statistics(self, client):
+        """Test that import returns import statistics."""
+        response = client.post(
+            "/api/conversation/import",
+            json={
+                "version": "1.0",
+                "messages": [
+                    {"role": "user", "content": "Test import", "timestamp": "2026-01-01T10:00:00"}
+                ],
+                "mode": "merge"
+            }
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["success"] is True
+        assert "imported_count" in data
+        assert "skipped_count" in data
+        assert "mode" in data
+
+    def test_import_merge_mode(self, client):
+        """Test import with merge mode."""
+        response = client.post(
+            "/api/conversation/import",
+            json={
+                "version": "1.0",
+                "messages": [
+                    {"role": "user", "content": "Merge test", "timestamp": "2026-12-01T10:00:00"}
+                ],
+                "mode": "merge"
+            }
+        )
+        assert response.status_code == 200
+        assert response.json()["mode"] == "merge"
+
+    def test_import_replace_mode(self, client):
+        """Test import with replace mode."""
+        response = client.post(
+            "/api/conversation/import",
+            json={
+                "version": "1.0",
+                "messages": [
+                    {"role": "user", "content": "Replace test", "timestamp": "2026-12-02T10:00:00"}
+                ],
+                "mode": "replace"
+            }
+        )
+        assert response.status_code == 200
+        assert response.json()["mode"] == "replace"
+
+    def test_import_invalid_version_returns_400(self, client):
+        """Test that importing invalid version returns 400."""
+        response = client.post(
+            "/api/conversation/import",
+            json={
+                "version": "999.0",
+                "messages": []
+            }
+        )
+        assert response.status_code == 400
+
+    def test_export_import_roundtrip(self, client):
+        """Test that export and import work together."""
+        # First export
+        export_response = client.get("/api/conversation/export")
+        assert export_response.status_code == 200
+        export_data = export_response.json()
+
+        # Then import (should work even if no messages)
+        import_response = client.post(
+            "/api/conversation/import",
+            json={
+                "version": export_data["version"],
+                "messages": export_data["messages"],
+                "mode": "merge"
+            }
+        )
+        assert import_response.status_code == 200
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

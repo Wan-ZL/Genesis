@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #7 Implementation Complete.** Performance benchmarks and regression detection added. Awaiting verification from Criticizer.
+**Issue #8 Implementation Complete.** Conversation export/import functionality added. Awaiting verification from Criticizer.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -159,28 +159,29 @@
   - Graceful error handling and fallback to regular endpoint
   - Memory persistence after streaming completes
   - 22 new tests (308 total)
-- **Issue #7 Implementation Complete - Performance benchmarks**:
+- **Issue #7 VERIFIED - Performance benchmarks**:
   - Benchmark framework: `assistant/benchmarks/framework.py`
   - CLI runner: `python -m benchmarks`
-  - 48 benchmarks covering:
-    - Memory service (9 benchmarks)
-    - Tool registry (11 benchmarks)
-    - Settings service (6 benchmarks)
-    - File I/O (13 benchmarks)
-    - Chat API (9 benchmarks)
+  - 48 benchmarks covering all critical paths
   - Regression detection with 20% threshold
   - CI workflow: `.github/workflows/benchmarks.yml`
-  - Baseline documented: `assistant/memory/benchmarks/BASELINES.md`
-  - 308 tests + 48 benchmarks passing
+- **Issue #8 Implementation Complete - Conversation export/import**:
+  - Memory Service: `export_conversation()`, `import_conversation(data, mode)`
+  - API: `GET /api/conversation/export`, `POST /api/conversation/import`
+  - CLI: `python -m cli export --output file.json`
+  - CLI: `python -m cli import --input file.json --mode merge|replace`
+  - Export format v1.0 with messages, timestamps, file references
+  - Merge mode (skip duplicates) and replace mode (clear existing)
+  - 20 new tests (328 total)
 
 ## Next Step (single step)
-Add `needs-verification` label to Issue #7 and request Criticizer verification.
+Wait for Criticizer to verify Issue #8, then work on Issue #9 (path inconsistency tech debt).
 
 ## Risks / Notes
-- Issue #7 implementation complete - all 5 acceptance criteria met
-- 308 tests passing, 48 benchmarks passing
-- CI workflow runs benchmarks on PRs with caching
-- Regression threshold set at 20% (configurable)
+- Issue #8 implementation complete - all 7 acceptance criteria met
+- 328 tests passing (20 new tests)
+- CLI module created at `assistant/cli/`
+- Route ordering fixed to prevent `/conversation/export` matching dynamic route
 
 ## How to test quickly
 ```bash
@@ -189,18 +190,12 @@ cd /Volumes/Storage/Server/Startup/Genesis/assistant
 # Run all tests
 python3 -m pytest tests/ -v
 
-# Run benchmarks
-python3 -m benchmarks
+# Test CLI export
+python3 -m cli export --output /tmp/test.json
 
-# Run benchmarks with baseline comparison
-python3 -m benchmarks --compare
+# Test CLI import
+python3 -m cli import --input /tmp/test.json --mode merge
 
-# Save new baseline
-python3 -m benchmarks --save-baseline
-
-# CI mode (fails on regressions)
-python3 -m benchmarks --ci --threshold 20
-
-# View benchmark history
-python3 -m benchmarks --history
+# Test API (requires server running)
+curl http://127.0.0.1:8080/api/conversation/export
 ```

@@ -595,5 +595,210 @@ class TestContextSummarization:
         assert len(summary_messages) == 1
 
 
+class TestExportImport:
+    """Tests for conversation export/import functionality (Issue #8)."""
+
+    @pytest.mark.asyncio
+    async def test_export_empty_conversation(self, memory_service):
+        """Test exporting empty conversation returns valid structure."""
+        export_data = await memory_service.export_conversation()
+
+        assert "version" in export_data
+        assert export_data["version"] == "1.0"
+        assert "exported_at" in export_data
+        assert "message_count" in export_data
+        assert export_data["message_count"] == 0
+        assert "messages" in export_data
+        assert export_data["messages"] == []
+
+    @pytest.mark.asyncio
+    async def test_export_with_messages(self, memory_service):
+        """Test exporting conversation with messages."""
+        await memory_service.add_to_conversation("user", "Hello")
+        await memory_service.add_to_conversation("assistant", "Hi there!")
+        await memory_service.add_to_conversation("user", "How are you?")
+
+        export_data = await memory_service.export_conversation()
+
+        assert export_data["message_count"] == 3
+        assert len(export_data["messages"]) == 3
+        assert export_data["messages"][0]["role"] == "user"
+        assert export_data["messages"][0]["content"] == "Hello"
+        assert export_data["messages"][1]["role"] == "assistant"
+        assert export_data["messages"][2]["role"] == "user"
+
+    @pytest.mark.asyncio
+    async def test_export_includes_timestamps(self, memory_service):
+        """Test that export includes timestamps for each message."""
+        await memory_service.add_to_conversation("user", "Test message")
+
+        export_data = await memory_service.export_conversation()
+
+        assert "timestamp" in export_data["messages"][0]
+        assert export_data["messages"][0]["timestamp"] is not None
+
+    @pytest.mark.asyncio
+    async def test_import_basic(self, memory_service):
+        """Test basic import functionality."""
+        import_data = {
+            "version": "1.0",
+            "messages": [
+                {"role": "user", "content": "Imported message 1", "timestamp": "2026-01-01T10:00:00"},
+                {"role": "assistant", "content": "Imported response", "timestamp": "2026-01-01T10:00:01"}
+            ]
+        }
+
+        result = await memory_service.import_conversation(import_data)
+
+        assert result["imported_count"] == 2
+        assert result["skipped_count"] == 0
+
+        # Verify messages are in the database
+        messages = await memory_service.get_messages()
+        assert len(messages) == 3  # system + 2 imported
+
+    @pytest.mark.asyncio
+    async def test_import_merge_skips_duplicates(self, memory_service):
+        """Test that merge mode skips messages with existing timestamps."""
+        # Add initial message
+        await memory_service.add_to_conversation("user", "Original message")
+
+        # Export to get the timestamp
+        export_data = await memory_service.export_conversation()
+        original_timestamp = export_data["messages"][0]["timestamp"]
+
+        # Try to import a message with the same timestamp
+        import_data = {
+            "version": "1.0",
+            "messages": [
+                {"role": "user", "content": "Duplicate", "timestamp": original_timestamp},
+                {"role": "user", "content": "New message", "timestamp": "2099-01-01T10:00:00"}
+            ]
+        }
+
+        result = await memory_service.import_conversation(import_data, mode="merge")
+
+        assert result["imported_count"] == 1
+        assert result["skipped_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_import_replace_clears_existing(self, memory_service):
+        """Test that replace mode clears existing messages."""
+        # Add initial messages
+        await memory_service.add_to_conversation("user", "Original 1")
+        await memory_service.add_to_conversation("user", "Original 2")
+
+        # Import with replace mode
+        import_data = {
+            "version": "1.0",
+            "messages": [
+                {"role": "user", "content": "Replaced message", "timestamp": "2026-01-01T10:00:00"}
+            ]
+        }
+
+        result = await memory_service.import_conversation(import_data, mode="replace")
+
+        assert result["imported_count"] == 1
+        assert result["mode"] == "replace"
+
+        # Verify only new message exists
+        messages = await memory_service.get_messages()
+        assert len(messages) == 2  # system + 1 imported
+        assert messages[1]["content"] == "Replaced message"
+
+    @pytest.mark.asyncio
+    async def test_import_invalid_version(self, memory_service):
+        """Test that importing unsupported version raises error."""
+        import_data = {
+            "version": "999.0",
+            "messages": []
+        }
+
+        with pytest.raises(ValueError, match="Unsupported export version"):
+            await memory_service.import_conversation(import_data)
+
+    @pytest.mark.asyncio
+    async def test_import_missing_version(self, memory_service):
+        """Test that importing without version raises error."""
+        import_data = {
+            "messages": []
+        }
+
+        with pytest.raises(ValueError, match="missing version"):
+            await memory_service.import_conversation(import_data)
+
+    @pytest.mark.asyncio
+    async def test_import_missing_messages(self, memory_service):
+        """Test that importing without messages raises error."""
+        import_data = {
+            "version": "1.0"
+        }
+
+        with pytest.raises(ValueError, match="missing messages"):
+            await memory_service.import_conversation(import_data)
+
+    @pytest.mark.asyncio
+    async def test_import_skips_invalid_messages(self, memory_service):
+        """Test that import skips messages without required fields."""
+        import_data = {
+            "version": "1.0",
+            "messages": [
+                {"role": "user", "content": "Valid message", "timestamp": "2026-01-01T10:00:00"},
+                {"role": "user"},  # Missing content
+                {"content": "No role"},  # Missing role
+                {}  # Empty message
+            ]
+        }
+
+        result = await memory_service.import_conversation(import_data)
+
+        assert result["imported_count"] == 1
+        assert result["skipped_count"] == 3
+
+    @pytest.mark.asyncio
+    async def test_export_import_roundtrip(self, memory_service, tmp_path):
+        """Test that export -> import preserves messages."""
+        # Create original messages
+        await memory_service.add_to_conversation("user", "First message")
+        await memory_service.add_to_conversation("assistant", "First response")
+        await memory_service.add_to_conversation("user", "Second message")
+
+        # Export
+        export_data = await memory_service.export_conversation()
+
+        # Create new memory service and import
+        new_db_path = tmp_path / "new_memory.db"
+        new_service = MemoryService(new_db_path)
+
+        result = await new_service.import_conversation(export_data)
+
+        assert result["imported_count"] == 3
+
+        # Verify messages match
+        new_messages = await new_service.get_messages()
+        assert len(new_messages) == 4  # system + 3
+        assert new_messages[1]["content"] == "First message"
+        assert new_messages[2]["content"] == "First response"
+        assert new_messages[3]["content"] == "Second message"
+
+    @pytest.mark.asyncio
+    async def test_import_generates_timestamp_if_missing(self, memory_service):
+        """Test that import generates timestamp when missing."""
+        import_data = {
+            "version": "1.0",
+            "messages": [
+                {"role": "user", "content": "No timestamp message"}
+            ]
+        }
+
+        result = await memory_service.import_conversation(import_data)
+
+        assert result["imported_count"] == 1
+
+        # Message should have been imported
+        messages = await memory_service.get_messages()
+        assert len(messages) == 2
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

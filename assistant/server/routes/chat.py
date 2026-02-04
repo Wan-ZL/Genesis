@@ -1108,6 +1108,59 @@ async def list_conversations():
     return {"conversations": conversations}
 
 
+@router.get("/conversation/export")
+async def export_conversation():
+    """Export the conversation in a portable JSON format.
+
+    Returns a JSON object with:
+    - version: Export format version
+    - exported_at: ISO timestamp
+    - message_count: Number of messages
+    - messages: Array of message objects with role, content, timestamp
+    - files: Array of file references (metadata only, not content)
+
+    The export can be imported on another instance or after reinstall.
+    """
+    export_data = await memory.export_conversation()
+    return export_data
+
+
+class ImportRequest(BaseModel):
+    """Request body for importing conversation data."""
+    version: str = "1.0"
+    messages: list
+    mode: str = "merge"  # "merge" or "replace"
+
+
+@router.post("/conversation/import")
+async def import_conversation(request: ImportRequest):
+    """Import conversation from exported JSON format.
+
+    Args:
+        request: ImportRequest with:
+            - version: Export format version (must be "1.0")
+            - messages: Array of message objects
+            - mode: "merge" (default, skip duplicates) or "replace" (clear existing)
+
+    Returns:
+        Import statistics with counts of imported/skipped messages
+    """
+    try:
+        result = await memory.import_conversation(
+            data={
+                "version": request.version,
+                "messages": request.messages
+            },
+            mode=request.mode
+        )
+        return {
+            "success": True,
+            **result
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/conversation/{conversation_id}")
 async def get_conversation(conversation_id: str):
     """Get a conversation by ID (deprecated).
