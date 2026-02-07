@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #27 Implementation Complete - Needs Verification.** API keys from .env file now shown in Settings UI via config fallback logic.
+**Issue #28 Implementation Complete - Needs Verification.** Added GPT-5.2, GPT-4.5 Preview, o3-mini, and Claude Opus 4 to model selection dropdown.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -374,18 +374,24 @@
   - SQLite values take precedence (user preference via UI)
   - Read-only approach, no database writes on startup
   - 3 new tests for config fallback behavior (all passing)
+- **Issue #28 COMPLETE - Add GPT-5.2 and newer models to model selection (needs verification)**:
+  - Added GPT-5.2, GPT-4.5 Preview, o3-mini (OpenAI) to AVAILABLE_MODELS
+  - Added Claude Opus 4 (Anthropic) to AVAILABLE_MODELS
+  - Organized model list by provider with section comments
+  - Model routing verified: Claude models → Anthropic API, OpenAI models → OpenAI API
+  - 46/47 settings tests pass (1 pre-existing failure)
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #27 (priority-medium). Other open issues: #26 (priority-high, needs-verification), #28 (priority-medium), #29 (priority-high, needs-verification).
+Await Criticizer verification of Issue #28 (priority-medium). Other open issues: #26 (priority-high, needs-verification).
 
 ## Risks / Notes
-- Issue #27 implementation complete, awaiting verification (MEDIUM priority)
-- Issue #29 implementation complete, awaiting verification (HIGH priority)
+- Issue #28 implementation complete, awaiting verification (MEDIUM priority)
 - Issue #26 implementation complete, awaiting verification (HIGH priority)
 - Issue #31 implementation complete, awaiting verification
 - Issue #22 implementation complete, awaiting verification
 - Issues #24 and #25 verified and closed by Criticizer
-- API key fallback (Issue #27): SQLite takes precedence over .env, ensures UI shows accurate status
+- New models (GPT-5.2, GPT-4.5, o3-mini, Claude Opus 4) require valid API keys and provider support
+- o3-mini is a reasoning model - may behave differently from standard chat models
 - Markdown rendering uses CDN libraries (marked.js, DOMPurify) - requires internet for first load
 - DOMPurify sanitization is critical for security - do not remove or bypass
 - Database lock issue affected ALL concurrent requests (60-88% failure rate before fix, now 100% pass)
@@ -397,59 +403,23 @@ Await Criticizer verification of Issue #27 (priority-medium). Other open issues:
 ```bash
 cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 
-# Test Issue #27 - API key fallback
-python3 -m pytest tests/test_settings.py::TestSettingsService::test_display_settings_falls_back_to_config_module -v
-python3 -m pytest tests/test_settings.py::TestSettingsService::test_display_settings_sqlite_overrides_config -v
-# Expected: All pass
+# Test Issue #28 - New model selection
+python3 -m pytest tests/test_settings.py -k "model" -v
+# Expected: 3/3 pass
 
 # Manual test:
-# 1. Verify .env has API key: cat ../.claude/openai-key-secrets.env
-# 2. Clear SQLite: rm -f memory/conversations.db
-# 3. Start server: python3 -m server.main
-# 4. Open http://127.0.0.1:8080, click Settings
-# 5. Verify OpenAI API Key shows "Set" (not "Not set")
-
-# Test Issue #29 - Markdown rendering
-python3 -m pytest tests/test_markdown_ui.py -v
-# Expected: 11/11 tests pass
-
-# Manual test in browser:
 python3 -m server.main
 # Open http://127.0.0.1:8080
-# Send: "Show me a **bold** word and a `code` example"
-# Expect: Bold text and inline code with pink background
+# Click Settings → verify dropdown has GPT-5.2, GPT-4.5, o3-mini, Claude Opus 4
 
-# Test Issue #26 - Concurrent requests (manual test)
-python3 -m server.main &
-SERVER_PID=$!
-sleep 5
+# API test:
+curl http://127.0.0.1:8080/api/settings | python3 -m json.tool | grep -A2 "gpt-5.2"
+curl -X POST http://127.0.0.1:8080/api/settings \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-5.2"}'
+# Should succeed
 
-# Send 20 concurrent chat requests
-for i in {1..20}; do
-  curl -s -X POST http://127.0.0.1:8080/api/chat \
-    -H "Content-Type: application/json" \
-    -d '{"message": "test '$i'"}' > /tmp/test_$i.json &
-done
-wait
-
-# Check results - all should succeed now
-success=0; fail=0
-for i in {1..20}; do
-  if grep -q '"response"' /tmp/test_$i.json; then
-    success=$((success + 1))
-  else
-    fail=$((fail + 1))
-  fi
-done
-echo "Success: $success/20 ($((success * 100 / 20))%)"
-echo "Failed: $fail/20"
-
-kill $SERVER_PID
-rm /tmp/test_*.json
-
-# Run concurrency tests (automated)
-python3 -m pytest tests/test_memory_service.py::TestConcurrency -v
-
-# Run all memory service tests
-python3 -m pytest tests/test_memory_service.py -v
+# Run all settings tests
+python3 -m pytest tests/test_settings.py -v
+# Expected: 46/47 pass (1 pre-existing failure)
 ```
