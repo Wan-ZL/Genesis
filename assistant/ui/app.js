@@ -8,6 +8,9 @@ let isRecording = false;
 let speechRecognition = null;
 let useStreaming = true; // Enable streaming by default
 let activeStreamController = null; // Track active stream for cancellation
+let currentConversationId = 'main'; // Currently active conversation
+let sidebarCollapsed = false; // Sidebar visibility state
+let conversations = []; // Cached conversation list
 
 // DOM Elements
 const messagesContainer = document.getElementById('messages');
@@ -22,6 +25,11 @@ const lastRunEl = document.getElementById('last-run');
 const refreshMetricsBtn = document.getElementById('refresh-metrics-btn');
 const toggleStatusBtn = document.getElementById('toggle-status-btn');
 const statusPanel = document.querySelector('.status-panel');
+const sidebar = document.getElementById('conversation-sidebar');
+const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+const newConversationBtn = document.getElementById('new-conversation-btn');
+const conversationListEl = document.getElementById('conversation-list');
 
 // Settings elements
 const settingsBtn = document.getElementById('settings-btn');
@@ -39,13 +47,26 @@ const permissionSelect = document.getElementById('permission-select');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadStatus();
-    loadSingleConversation(); // Load the single infinite conversation
+    loadConversations(true); // Load sidebar and current conversation
     loadMetrics();
     setupEventListeners();
     initVoiceInput();
 
     // Refresh metrics every 30 seconds
     setInterval(loadMetrics, 30000);
+
+    // Check sidebar state from localStorage
+    const savedSidebarState = localStorage.getItem('sidebarCollapsed');
+    if (savedSidebarState === 'true') {
+        sidebarCollapsed = true;
+        sidebar.classList.add('collapsed');
+    }
+
+    // Check last active conversation from localStorage
+    const lastConv = localStorage.getItem('currentConversationId');
+    if (lastConv) {
+        currentConversationId = lastConv;
+    }
 });
 
 function setupEventListeners() {
@@ -100,11 +121,287 @@ function setupEventListeners() {
     if (settingsModal) {
         settingsModal.querySelector('.modal-backdrop').addEventListener('click', closeSettings);
     }
+
+    // Sidebar toggle
+    if (sidebarToggleBtn) {
+        sidebarToggleBtn.addEventListener('click', toggleSidebar);
+    }
+
+    // Sidebar overlay (close on mobile)
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', closeSidebar);
+    }
+
+    // New conversation button
+    if (newConversationBtn) {
+        newConversationBtn.addEventListener('click', createNewConversation);
+    }
 }
 
 function toggleStatusPanel() {
     statusPanel.classList.toggle('show');
     toggleStatusBtn.textContent = statusPanel.classList.contains('show') ? 'Close' : 'Menu';
+}
+
+// ============================================================================
+// Conversation Sidebar
+// ============================================================================
+
+function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed;
+    sidebar.classList.toggle('collapsed', sidebarCollapsed);
+    localStorage.setItem('sidebarCollapsed', sidebarCollapsed);
+
+    // On mobile/tablet, show overlay when sidebar is open
+    if (!sidebarCollapsed && window.innerWidth <= 900) {
+        sidebarOverlay.classList.add('active');
+    } else {
+        sidebarOverlay.classList.remove('active');
+    }
+}
+
+function closeSidebar() {
+    sidebarCollapsed = true;
+    sidebar.classList.add('collapsed');
+    sidebarOverlay.classList.remove('active');
+    localStorage.setItem('sidebarCollapsed', 'true');
+}
+
+async function loadConversations(loadMessages = true) {
+    try {
+        const response = await fetch('/api/conversations');
+        const data = await response.json();
+
+        if (response.ok) {
+            conversations = data.conversations || [];
+            renderConversationList();
+
+            if (loadMessages) {
+                // Load the current conversation
+                if (conversations.length > 0) {
+                    // Check if saved conversation still exists
+                    const savedConv = conversations.find(c => c.id === currentConversationId);
+                    if (!savedConv) {
+                        currentConversationId = conversations[0].id;
+                    }
+                }
+
+                await loadConversationMessages(currentConversationId);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load conversations:', error);
+        // Fallback to loading single conversation
+        if (loadMessages) {
+            await loadSingleConversation();
+        }
+    }
+}
+
+function renderConversationList() {
+    conversationListEl.innerHTML = '';
+
+    conversations.forEach(conv => {
+        const item = document.createElement('div');
+        item.className = 'conversation-item' + (conv.id === currentConversationId ? ' active' : '');
+        item.dataset.id = conv.id;
+
+        const content = document.createElement('div');
+        content.className = 'conversation-item-content';
+
+        const title = document.createElement('div');
+        title.className = 'conversation-item-title';
+        title.textContent = conv.title || 'Untitled';
+        content.appendChild(title);
+
+        if (conv.preview) {
+            const preview = document.createElement('div');
+            preview.className = 'conversation-item-preview';
+            preview.textContent = conv.preview;
+            content.appendChild(preview);
+        }
+
+        const meta = document.createElement('div');
+        meta.className = 'conversation-item-meta';
+
+        const date = document.createElement('span');
+        date.className = 'conversation-item-date';
+        date.textContent = formatConversationDate(conv.updated_at || conv.created_at);
+        meta.appendChild(date);
+
+        // Delete button (not for default conversation)
+        if (conv.id !== 'main') {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'conversation-item-delete';
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                confirmDeleteConversation(conv.id, conv.title);
+            });
+            meta.appendChild(deleteBtn);
+        }
+
+        content.appendChild(meta);
+        item.appendChild(content);
+
+        // Click to switch conversation
+        item.addEventListener('click', () => {
+            switchConversation(conv.id);
+        });
+
+        conversationListEl.appendChild(item);
+    });
+}
+
+function formatConversationDate(isoDate) {
+    if (!isoDate) return '';
+    try {
+        const date = new Date(isoDate);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else if (diffDays === 1) {
+            return 'Yesterday';
+        } else if (diffDays < 7) {
+            return date.toLocaleDateString([], { weekday: 'short' });
+        } else {
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
+    } catch {
+        return '';
+    }
+}
+
+async function switchConversation(conversationId) {
+    if (conversationId === currentConversationId) return;
+
+    currentConversationId = conversationId;
+    localStorage.setItem('currentConversationId', conversationId);
+
+    // Update active state in sidebar
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.id === conversationId);
+    });
+
+    // Load messages
+    await loadConversationMessages(conversationId);
+
+    // Close sidebar on mobile
+    if (window.innerWidth <= 900) {
+        closeSidebar();
+    }
+}
+
+async function loadConversationMessages(conversationId) {
+    try {
+        const url = conversationId === 'main'
+            ? '/api/conversation'
+            : `/api/conversations/${conversationId}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (response.ok) {
+            messagesContainer.innerHTML = '';
+            (data.messages || []).forEach(msg => {
+                addMessageToUI(msg.role, msg.content);
+            });
+        }
+    } catch (error) {
+        console.error('Failed to load conversation messages:', error);
+    }
+}
+
+async function createNewConversation() {
+    try {
+        const response = await fetch('/api/conversations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: null })
+        });
+
+        if (response.ok) {
+            const newConv = await response.json();
+            currentConversationId = newConv.id;
+            localStorage.setItem('currentConversationId', newConv.id);
+
+            // Reload sidebar and switch to new conversation
+            await loadConversations();
+
+            // Focus input
+            messageInput.focus();
+
+            // Close sidebar on mobile
+            if (window.innerWidth <= 900) {
+                closeSidebar();
+            }
+        } else {
+            const error = await response.json();
+            console.error('Failed to create conversation:', error);
+        }
+    } catch (error) {
+        console.error('Failed to create conversation:', error);
+    }
+}
+
+function confirmDeleteConversation(conversationId, title) {
+    // Create confirmation dialog
+    const dialog = document.createElement('div');
+    dialog.className = 'delete-confirm-dialog';
+    dialog.innerHTML = `
+        <div class="delete-confirm-backdrop"></div>
+        <div class="delete-confirm-content">
+            <h3>Delete Conversation?</h3>
+            <p>Are you sure you want to delete "${title || 'Untitled'}"? This action cannot be undone.</p>
+            <div class="delete-confirm-buttons">
+                <button class="btn-danger" id="confirm-delete-yes">Delete</button>
+                <button class="btn-secondary" id="confirm-delete-no">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(dialog);
+
+    // Handle confirmation
+    document.getElementById('confirm-delete-yes').addEventListener('click', async () => {
+        await deleteConversation(conversationId);
+        dialog.remove();
+    });
+
+    document.getElementById('confirm-delete-no').addEventListener('click', () => {
+        dialog.remove();
+    });
+
+    dialog.querySelector('.delete-confirm-backdrop').addEventListener('click', () => {
+        dialog.remove();
+    });
+}
+
+async function deleteConversation(conversationId) {
+    try {
+        const response = await fetch(`/api/conversations/${conversationId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            // If we deleted the current conversation, switch to main
+            if (conversationId === currentConversationId) {
+                currentConversationId = 'main';
+                localStorage.setItem('currentConversationId', 'main');
+            }
+
+            // Reload sidebar
+            await loadConversations();
+        } else {
+            const error = await response.json();
+            console.error('Failed to delete conversation:', error);
+        }
+    } catch (error) {
+        console.error('Failed to delete conversation:', error);
+    }
 }
 
 // Voice input using Web Speech API
@@ -323,6 +620,9 @@ async function sendMessage() {
         await sendMessageRegular(message, fileIds);
     }
 
+    // Refresh sidebar to update conversation titles and order (without reloading messages)
+    loadConversations(false).catch(console.error);
+
     sendBtn.disabled = false;
     messageInput.focus();
 }
@@ -355,6 +655,7 @@ async function sendMessageStreaming(message, fileIds) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: message || 'Please analyze the attached file(s).',
+                conversation_id: currentConversationId,
                 file_ids: fileIds.length > 0 ? fileIds : null
             })
         });
@@ -504,6 +805,7 @@ async function sendMessageRegular(message, fileIds) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: message || 'Please analyze the attached file(s).',
+                conversation_id: currentConversationId,
                 file_ids: fileIds.length > 0 ? fileIds : null
             })
         });

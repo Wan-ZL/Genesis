@@ -102,8 +102,8 @@ class TestChatEndpoint:
         # Both messages use the same single conversation
         assert response2.json()["conversation_id"] == conv_id == "main"
 
-    def test_chat_ignores_conversation_id_parameter(self, client, mock_openai_response):
-        """Test that conversation_id parameter is ignored (single conversation model)."""
+    def test_chat_rejects_nonexistent_conversation_id(self, client, mock_openai_response):
+        """Test that passing a non-existent conversation_id returns 404."""
         with patch('server.routes.chat.get_openai_client') as mock_get_client:
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_openai_response
@@ -116,13 +116,34 @@ class TestChatEndpoint:
                 mock_config.DATABASE_PATH = Path(tempfile.gettempdir()) / "test_chat.db"
                 mock_config.FILES_PATH = Path(tempfile.gettempdir()) / "test_files"
 
-                # Even with a fake conversation_id, should use single conversation
+                # Non-existent conversation_id should be rejected
                 response = client.post("/api/chat", json={
                     "message": "Hello",
                     "conversation_id": "conv_nonexistent123"
                 })
 
-        # Should succeed and use "main" conversation
+        # Should return 404 for non-existent conversation
+        assert response.status_code == 404
+
+    def test_chat_defaults_to_main_conversation(self, client, mock_openai_response):
+        """Test that omitting conversation_id defaults to 'main'."""
+        with patch('server.routes.chat.get_openai_client') as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_openai_response
+            mock_get_client.return_value = mock_client
+
+            with patch('server.routes.chat.config') as mock_config:
+                mock_config.USE_CLAUDE = False
+                mock_config.OPENAI_API_KEY = "test-key"
+                mock_config.OPENAI_MODEL = "gpt-4o-mini"
+                mock_config.DATABASE_PATH = Path(tempfile.gettempdir()) / "test_chat.db"
+                mock_config.FILES_PATH = Path(tempfile.gettempdir()) / "test_files"
+
+                # No conversation_id should default to "main"
+                response = client.post("/api/chat", json={
+                    "message": "Hello"
+                })
+
         assert response.status_code == 200
         assert response.json()["conversation_id"] == "main"
 
@@ -193,8 +214,8 @@ class TestConversationsEndpoint:
         assert isinstance(data["conversations"], list)
 
     def test_get_conversation_by_id(self, client, mock_openai_response):
-        """Test getting conversation by ID (deprecated, uses single conv)."""
-        # First create a conversation
+        """Test getting conversation by ID."""
+        # First create a conversation via chat
         with patch('server.routes.chat.get_openai_client') as mock_get_client:
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_openai_response
@@ -210,8 +231,8 @@ class TestConversationsEndpoint:
                 chat_response = client.post("/api/chat", json={"message": "Hello"})
                 conv_id = chat_response.json()["conversation_id"]
 
-        # Get the conversation by ID (deprecated endpoint)
-        response = client.get(f"/api/conversation/{conv_id}")
+        # Get the conversation by ID (new endpoint path)
+        response = client.get(f"/api/conversations/{conv_id}")
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == conv_id
@@ -220,7 +241,7 @@ class TestConversationsEndpoint:
 
     def test_get_nonexistent_conversation(self, client):
         """Test getting a non-existent conversation returns 404."""
-        response = client.get("/api/conversation/conv_doesnotexist")
+        response = client.get("/api/conversations/conv_doesnotexist")
         assert response.status_code == 404
 
 

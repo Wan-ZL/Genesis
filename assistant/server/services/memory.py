@@ -597,14 +597,21 @@ class MemoryService:
             await db.commit()
 
     async def list_conversations(self) -> list[dict]:
-        """List all conversations with metadata."""
+        """List all conversations with metadata, sorted by most recently active.
+
+        Includes the last user message as a preview snippet.
+        """
         await self._ensure_initialized()
 
         async with self._get_connection() as db:
             cursor = await db.execute(
-                "SELECT c.id, c.title, c.created_at, c.updated_at, COUNT(m.id) as message_count "
-                "FROM conversations c LEFT JOIN messages m ON c.id = m.conversation_id "
-                "GROUP BY c.id ORDER BY c.updated_at DESC"
+                """SELECT c.id, c.title, c.created_at, c.updated_at,
+                          COUNT(m.id) as message_count,
+                          (SELECT content FROM messages
+                           WHERE conversation_id = c.id AND role = 'user'
+                           ORDER BY created_at DESC LIMIT 1) as last_preview
+                   FROM conversations c LEFT JOIN messages m ON c.id = m.conversation_id
+                   GROUP BY c.id ORDER BY c.updated_at DESC"""
             )
             rows = await cursor.fetchall()
             return [
@@ -613,7 +620,8 @@ class MemoryService:
                     "title": row[1],
                     "created_at": row[2],
                     "updated_at": row[3],
-                    "message_count": row[4]
+                    "message_count": row[4],
+                    "preview": (row[5][:80] + "...") if row[5] and len(row[5]) > 80 else (row[5] or "")
                 }
                 for row in rows
             ]
@@ -650,6 +658,94 @@ class MemoryService:
             ]
 
             return conversation
+
+    async def delete_conversation(self, conversation_id: str) -> bool:
+        """Delete a conversation and all its messages.
+
+        Args:
+            conversation_id: The conversation to delete
+
+        Returns:
+            True if the conversation was deleted, False if it didn't exist
+        """
+        await self._ensure_initialized()
+
+        async with self._get_connection() as db:
+            # Check if conversation exists
+            cursor = await db.execute(
+                "SELECT 1 FROM conversations WHERE id = ?",
+                (conversation_id,)
+            )
+            if not await cursor.fetchone():
+                return False
+
+            # Delete messages first (foreign key)
+            await db.execute(
+                "DELETE FROM messages WHERE conversation_id = ?",
+                (conversation_id,)
+            )
+            # Delete summaries
+            await db.execute(
+                "DELETE FROM message_summaries WHERE conversation_id = ?",
+                (conversation_id,)
+            )
+            # Delete conversation
+            await db.execute(
+                "DELETE FROM conversations WHERE id = ?",
+                (conversation_id,)
+            )
+            await db.commit()
+            return True
+
+    async def rename_conversation(self, conversation_id: str, title: str) -> bool:
+        """Rename a conversation.
+
+        Args:
+            conversation_id: The conversation to rename
+            title: The new title
+
+        Returns:
+            True if the conversation was renamed, False if it didn't exist
+        """
+        await self._ensure_initialized()
+
+        async with self._get_connection() as db:
+            cursor = await db.execute(
+                "SELECT 1 FROM conversations WHERE id = ?",
+                (conversation_id,)
+            )
+            if not await cursor.fetchone():
+                return False
+
+            await db.execute(
+                "UPDATE conversations SET title = ? WHERE id = ?",
+                (title, conversation_id)
+            )
+            await db.commit()
+            return True
+
+    async def auto_title_conversation(self, conversation_id: str, first_message: str):
+        """Auto-generate a conversation title from the first user message.
+
+        Takes the first ~50 characters of the first user message.
+
+        Args:
+            conversation_id: The conversation to title
+            first_message: The first user message content
+        """
+        if not first_message:
+            return
+
+        # Take first 50 chars, trim to last word boundary if possible
+        title = first_message[:50].strip()
+        if len(first_message) > 50:
+            # Try to trim to last word boundary
+            last_space = title.rfind(' ')
+            if last_space > 20:
+                title = title[:last_space]
+            title += "..."
+
+        await self.rename_conversation(conversation_id, title)
 
     async def save_file_metadata(self, metadata: dict):
         """Save file metadata to database."""

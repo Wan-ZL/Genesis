@@ -41,6 +41,253 @@ main {
     min-height: 0;
 }
 
+/* Header left section with sidebar toggle */
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Sidebar toggle button */
+.sidebar-toggle {
+    background: none;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 6px 8px;
+    cursor: pointer;
+    color: #555;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.sidebar-toggle:hover {
+    background-color: #f0f0f0;
+}
+
+/* Sidebar overlay for mobile */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 199;
+}
+
+.sidebar-overlay.active {
+    display: block;
+}
+
+/* Conversation Sidebar */
+.conversation-sidebar {
+    width: 280px;
+    min-width: 280px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: margin-left 0.3s ease, opacity 0.3s ease;
+}
+
+.conversation-sidebar.collapsed {
+    margin-left: -300px;
+    opacity: 0;
+    min-width: 0;
+    width: 0;
+    overflow: hidden;
+}
+
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid #eee;
+}
+
+.sidebar-header h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+}
+
+.new-conversation-btn {
+    padding: 6px 14px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.new-conversation-btn:hover {
+    background-color: #0056b3;
+}
+
+.conversation-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.conversation-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    margin-bottom: 4px;
+    position: relative;
+}
+
+.conversation-item:hover {
+    background-color: #f0f2f5;
+}
+
+.conversation-item.active {
+    background-color: #e3f2fd;
+    border-left: 3px solid #007bff;
+}
+
+.conversation-item-content {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.conversation-item-title {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.conversation-item-preview {
+    font-size: 0.8rem;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.conversation-item-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.conversation-item-date {
+    font-size: 0.7rem;
+    color: #aaa;
+}
+
+.conversation-item-delete {
+    display: none;
+    background: none;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    transition: background-color 0.15s;
+}
+
+.conversation-item:hover .conversation-item-delete {
+    display: inline-block;
+}
+
+.conversation-item-delete:hover {
+    background-color: #f8d7da;
+}
+
+/* Delete confirmation dialog */
+.delete-confirm-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.delete-confirm-dialog.hidden {
+    display: none;
+}
+
+.delete-confirm-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.delete-confirm-content {
+    position: relative;
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    max-width: 360px;
+    width: 90%;
+    text-align: center;
+}
+
+.delete-confirm-content h3 {
+    margin: 0 0 12px 0;
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.delete-confirm-content p {
+    margin: 0 0 20px 0;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.delete-confirm-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.delete-confirm-buttons button {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+}
+
 /* Chat container */
 .chat-container {
     flex: 1;
@@ -50,6 +297,7 @@ main {
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     overflow: hidden;
+    min-width: 0;
 }
 
 .messages {
@@ -599,6 +847,32 @@ header {
     .message {
         max-width: 90%;
     }
+
+    /* Sidebar becomes overlay on tablet */
+    .conversation-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 200;
+        border-radius: 0;
+        width: 300px;
+        min-width: 300px;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+
+    .conversation-sidebar.collapsed {
+        margin-left: 0;
+        width: 300px;
+        min-width: 300px;
+        opacity: 1;
+        transform: translateX(-100%);
+    }
+
+    .conversation-sidebar:not(.collapsed) {
+        transform: translateX(0);
+    }
 }
 
 /* Responsive - Mobile */
@@ -647,6 +921,40 @@ header {
     main {
         flex-direction: column;
         gap: 12px;
+    }
+
+    /* Sidebar on mobile - slide-out drawer */
+    .conversation-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 200;
+        border-radius: 0;
+        width: 85vw;
+        max-width: 320px;
+        min-width: auto;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        padding-top: env(safe-area-inset-top);
+    }
+
+    .conversation-sidebar.collapsed {
+        margin-left: 0;
+        width: 85vw;
+        max-width: 320px;
+        min-width: auto;
+        opacity: 1;
+        transform: translateX(-100%);
+    }
+
+    .conversation-sidebar:not(.collapsed) {
+        transform: translateX(0);
+    }
+
+    .sidebar-toggle {
+        min-height: 44px;
+        min-width: 44px;
     }
 
     /* Status panel - hidden by default on mobile, slides in */

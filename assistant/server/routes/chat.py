@@ -37,8 +37,8 @@ memory = MemoryService(config.DATABASE_PATH)
 class ChatMessage(BaseModel):
     """Chat message request model."""
     message: str
-    # Deprecated: conversation_id is kept for backward compatibility but ignored
-    # All messages now go to the single infinite conversation
+    # conversation_id specifies which conversation to add the message to.
+    # Defaults to DEFAULT_CONVERSATION_ID ("main") for backward compatibility.
     conversation_id: Optional[str] = None
     file_ids: Optional[List[str]] = None
 
@@ -65,7 +65,7 @@ class SuggestedTool(BaseModel):
 class ChatResponse(BaseModel):
     """Chat response model."""
     response: str
-    # Always returns DEFAULT_CONVERSATION_ID for the single infinite conversation
+    # The conversation_id the message was added to
     conversation_id: str
     timestamp: str
     model: str  # Which model was used
@@ -1229,9 +1229,21 @@ async def chat_stream(request: ChatMessage):
     - done: Stream complete, includes total text
     - error: An error occurred
 
-    All messages are stored in a single infinite conversation.
+    Messages are stored in the specified conversation (defaults to "main").
     """
     start_time = time.time()
+
+    # Use specified conversation_id or default to "main"
+    conversation_id = request.conversation_id or DEFAULT_CONVERSATION_ID
+
+    # Ensure the conversation exists
+    if conversation_id == DEFAULT_CONVERSATION_ID:
+        await memory._ensure_initialized()
+        await memory._ensure_default_conversation()
+    else:
+        exists = await memory.conversation_exists(conversation_id)
+        if not exists:
+            raise HTTPException(status_code=404, detail="Conversation not found")
 
     # Build message content with attachments
     file_refs = []
@@ -1244,7 +1256,12 @@ async def chat_stream(request: ChatMessage):
     if file_refs:
         message_text = f"{request.message}\n[Attached files: {', '.join(file_refs)}]"
 
-    await memory.add_to_conversation("user", message_text)
+    await memory.add_message(conversation_id, "user", message_text)
+
+    # Auto-title conversation from first user message
+    conv = await memory.get_conversation(conversation_id)
+    if conv and conv.get("title") in ("New Conversation", "New conversation") and len(conv.get("messages", [])) == 1:
+        await memory.auto_title_conversation(conversation_id, request.message)
 
     async def generate_response() -> AsyncGenerator[str, None]:
         """Generate streaming response with error handling and memory persistence."""
@@ -1254,7 +1271,11 @@ async def chat_stream(request: ChatMessage):
 
         try:
             # Get conversation history
-            messages, context_meta = await memory.get_context_for_api()
+            if conversation_id == DEFAULT_CONVERSATION_ID:
+                messages, context_meta = await memory.get_context_for_api()
+            else:
+                messages = await memory.get_conversation_messages(conversation_id)
+                context_meta = {"total_messages": len(messages) - 1, "summarized_count": 0, "verbatim_count": len(messages) - 1}
 
             if context_meta["summarized_count"] > 0:
                 logger.info(
@@ -1390,11 +1411,11 @@ async def chat_stream(request: ChatMessage):
 
         # Save assistant response to memory if we got something
         if accumulated_response:
-            await memory.add_to_conversation("assistant", accumulated_response)
+            await memory.add_message(conversation_id, "assistant", accumulated_response)
             logger.info(f"Stream completed, saved {len(accumulated_response)} chars to memory")
         elif has_error:
             # Remove user message if streaming failed completely
-            await memory.remove_last_message_from_conversation()
+            await memory.remove_last_message(conversation_id)
 
         # Record metrics
         latency_ms = (time.time() - start_time) * 1000
@@ -1417,13 +1438,22 @@ async def chat_stream(request: ChatMessage):
 async def chat(request: ChatMessage):
     """Send a message and get AI response (Claude primary, OpenAI fallback).
 
-    All messages are stored in a single infinite conversation.
-    The conversation_id parameter is deprecated and ignored.
+    Messages are stored in the specified conversation (defaults to "main").
+    The first user message in a new conversation auto-generates its title.
     """
     start_time = time.time()
 
-    # Single infinite conversation - always use the default
-    # Note: conversation_id in request is ignored (kept for backward compatibility)
+    # Use specified conversation_id or default to "main"
+    conversation_id = request.conversation_id or DEFAULT_CONVERSATION_ID
+
+    # Ensure the conversation exists
+    if conversation_id == DEFAULT_CONVERSATION_ID:
+        await memory._ensure_initialized()
+        await memory._ensure_default_conversation()
+    else:
+        exists = await memory.conversation_exists(conversation_id)
+        if not exists:
+            raise HTTPException(status_code=404, detail="Conversation not found")
 
     # Build message content with attachments
     file_refs = []
@@ -1436,11 +1466,21 @@ async def chat(request: ChatMessage):
     if file_refs:
         message_text = f"{request.message}\n[Attached files: {', '.join(file_refs)}]"
 
-    await memory.add_to_conversation("user", message_text)
+    await memory.add_message(conversation_id, "user", message_text)
+
+    # Auto-title conversation from first user message if it's a non-default conversation
+    # with the default "New Conversation" title
+    conv = await memory.get_conversation(conversation_id)
+    if conv and conv.get("title") in ("New Conversation", "New conversation") and len(conv.get("messages", [])) == 1:
+        await memory.auto_title_conversation(conversation_id, request.message)
 
     try:
-        # Get conversation history with automatic summarization for long conversations
-        messages, context_meta = await memory.get_context_for_api()
+        # Get conversation history
+        if conversation_id == DEFAULT_CONVERSATION_ID:
+            messages, context_meta = await memory.get_context_for_api()
+        else:
+            messages = await memory.get_conversation_messages(conversation_id)
+            context_meta = {"total_messages": len(messages) - 1, "summarized_count": 0, "verbatim_count": len(messages) - 1}
 
         if context_meta["summarized_count"] > 0:
             logger.info(
@@ -1568,9 +1608,9 @@ async def chat(request: ChatMessage):
             raise last_error or ValueError("No API available")
 
         # Save assistant response
-        await memory.add_to_conversation("assistant", assistant_message)
+        await memory.add_message(conversation_id, "assistant", assistant_message)
 
-        logger.info(f"Chat completed in single conversation using {model_used}")
+        logger.info(f"Chat completed in conversation {conversation_id} using {model_used}")
 
         # Record successful request metrics
         latency_ms = (time.time() - start_time) * 1000
@@ -1604,7 +1644,7 @@ async def chat(request: ChatMessage):
 
         return ChatResponse(
             response=assistant_message,
-            conversation_id=DEFAULT_CONVERSATION_ID,
+            conversation_id=conversation_id,
             timestamp=datetime.now().isoformat(),
             model=model_used,
             permission_escalation=escalation_model,
@@ -1619,16 +1659,16 @@ async def chat(request: ChatMessage):
         metrics.record_error("/api/chat", type(e).__name__)
 
         # Remove the user message if API call failed
-        await memory.remove_last_message_from_conversation()
+        await memory.remove_last_message(conversation_id)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/conversation")
 async def get_the_conversation():
-    """Get the single infinite conversation with messages.
+    """Get the default 'main' conversation with messages.
 
-    In the single-conversation model, there is only one conversation
-    that grows forever. This endpoint returns all messages.
+    This endpoint returns messages from the default conversation.
+    For backward compatibility with single-conversation clients.
     """
     conversation = await memory.get_conversation(DEFAULT_CONVERSATION_ID)
     if not conversation:
@@ -1640,18 +1680,96 @@ async def get_the_conversation():
 
 @router.get("/conversations")
 async def list_conversations():
-    """List all conversations (deprecated).
+    """List all conversations with metadata.
 
-    In the single-conversation model, this returns only the default conversation.
-    Kept for backward compatibility.
+    Returns conversations sorted by most recently active, including:
+    - id, title, created_at, updated_at, message_count, preview
     """
+    # Ensure default conversation exists
+    await memory._ensure_initialized()
+    await memory._ensure_default_conversation()
+
     conversations = await memory.list_conversations()
     return {"conversations": conversations}
 
 
+class CreateConversationRequest(BaseModel):
+    """Request body for creating a new conversation."""
+    title: Optional[str] = None
+
+
+@router.post("/conversations")
+async def create_conversation(request: CreateConversationRequest = None):
+    """Create a new conversation.
+
+    Args:
+        request: Optional body with title field
+
+    Returns:
+        The newly created conversation object
+    """
+    title = None
+    if request and request.title:
+        title = request.title
+
+    conversation_id = await memory.create_conversation(title=title or "New Conversation")
+    conversation = await memory.get_conversation(conversation_id)
+    return conversation
+
+
+class RenameConversationRequest(BaseModel):
+    """Request body for renaming a conversation."""
+    title: str
+
+
+@router.put("/conversations/{conversation_id}")
+async def rename_conversation(conversation_id: str, request: RenameConversationRequest):
+    """Rename a conversation.
+
+    Args:
+        conversation_id: The conversation to rename
+        request: Body with new title
+
+    Returns:
+        The updated conversation object
+    """
+    if not request.title or not request.title.strip():
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+
+    success = await memory.rename_conversation(conversation_id, request.title.strip())
+    if not success:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    conversation = await memory.get_conversation(conversation_id)
+    return conversation
+
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """Delete a conversation and all its messages.
+
+    Args:
+        conversation_id: The conversation to delete
+
+    Returns:
+        Success confirmation
+    """
+    if conversation_id == DEFAULT_CONVERSATION_ID:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete the default conversation. Use clear instead."
+        )
+
+    success = await memory.delete_conversation(conversation_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    return {"success": True, "deleted": conversation_id}
+
+
 @router.get("/conversation/export")
 async def export_conversation():
-    """Export the conversation in a portable JSON format.
+    """Export the default conversation in a portable JSON format.
 
     Returns a JSON object with:
     - version: Export format version
@@ -1702,12 +1820,15 @@ async def import_conversation(request: ImportRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/conversation/{conversation_id}")
+@router.get("/conversations/{conversation_id}")
 async def get_conversation(conversation_id: str):
-    """Get a conversation by ID (deprecated).
+    """Get a conversation by ID with all its messages.
 
-    In the single-conversation model, only DEFAULT_CONVERSATION_ID is used.
-    Kept for backward compatibility.
+    Args:
+        conversation_id: The conversation to retrieve
+
+    Returns:
+        Conversation object with id, title, messages, timestamps
     """
     conversation = await memory.get_conversation(conversation_id)
     if not conversation:
