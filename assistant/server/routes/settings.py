@@ -34,6 +34,8 @@ class SettingsUpdate(BaseModel):
     # Repository analysis settings
     repository_paths: Optional[str] = None
     repository_max_file_size: Optional[int] = None
+    # System prompt
+    system_prompt: Optional[str] = None
 
 
 @router.get("/settings")
@@ -104,6 +106,15 @@ async def update_settings(update: SettingsUpdate):
                 detail="repository_max_file_size cannot exceed 100MB"
             )
         updates["repository_max_file_size"] = update.repository_max_file_size
+
+    # System prompt
+    if update.system_prompt is not None:
+        if len(update.system_prompt) > 4000:
+            raise HTTPException(
+                status_code=400,
+                detail="system_prompt cannot exceed 4000 characters"
+            )
+        updates["system_prompt"] = update.system_prompt
 
     if updates:
         await settings_service.set_multiple(updates)

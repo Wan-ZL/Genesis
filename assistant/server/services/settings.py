@@ -152,6 +152,8 @@ class SettingsService:
         # Repository analysis settings
         "repository_paths": "",  # Colon-separated allowed directories (empty = Genesis root)
         "repository_max_file_size": 1048576,  # 1MB default
+        # System prompt (custom instructions)
+        "system_prompt": "",  # Default system prompt for all conversations (max 4000 chars)
     }
 
     # Available models
@@ -409,6 +411,8 @@ class SettingsService:
             # Repository analysis settings
             "repository_paths": settings.get("repository_paths", ""),
             "repository_max_file_size": int(settings.get("repository_max_file_size", 1048576)),
+            # System prompt
+            "system_prompt": settings.get("system_prompt", ""),
         }
 
     def _parse_bool(self, value) -> bool:

@@ -26,12 +26,18 @@ from server.services.tool_suggestions import get_suggestion_service
 from server.services.degradation import get_degradation_service
 from server.services.encryption import is_encrypted, ENCRYPTED_PREFIX
 from server.services.ollama import get_ollama_client, OllamaStatus
+from server.services.persona import PersonaService
+from server.services.settings import SettingsService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Initialize memory service
 memory = MemoryService(config.DATABASE_PATH)
+# Initialize persona service
+persona_service = PersonaService(config.DATABASE_PATH)
+# Initialize settings service
+settings_service = SettingsService(config.DATABASE_PATH)
 
 
 class ChatMessage(BaseModel):
@@ -1284,15 +1290,22 @@ async def chat_stream(request: ChatMessage):
                     f"{context_meta['verbatim_count']} verbatim"
                 )
 
+            # Get default system prompt from settings
+            settings = await settings_service.get_all()
+            default_system_prompt = settings.get("system_prompt", "")
+
+            # Get effective system prompt for this conversation
+            base_system_prompt = await persona_service.get_active_system_prompt(
+                conversation_id=conversation_id,
+                default_system_prompt=default_system_prompt
+            )
+
             # Analyze user message for relevant tool suggestions
             suggestion_service = get_suggestion_service()
             suggestions = suggestion_service.analyze_message(request.message)
 
-            # Build system prompt
-            system_parts = [
-                "You are a helpful AI assistant with access to various system tools.",
-                "Be proactive about suggesting tools when they would help the user's task.",
-            ]
+            # Build system prompt (base + tool suggestions)
+            system_parts = [base_system_prompt]
 
             if suggestions:
                 suggestion_text = suggestion_service.get_system_prompt_injection(suggestions)
@@ -1303,7 +1316,7 @@ async def chat_stream(request: ChatMessage):
                 if summary:
                     system_parts.append(summary)
 
-            system_prompt = "\n".join(system_parts)
+            system_prompt = "\n\n".join(system_parts)
 
             # Smart API selection using degradation service
             degradation = get_degradation_service()
@@ -1489,15 +1502,22 @@ async def chat(request: ChatMessage):
                 f"{context_meta['verbatim_count']} verbatim"
             )
 
+        # Get default system prompt from settings
+        settings = await settings_service.get_all()
+        default_system_prompt = settings.get("system_prompt", "")
+
+        # Get effective system prompt for this conversation
+        base_system_prompt = await persona_service.get_active_system_prompt(
+            conversation_id=conversation_id,
+            default_system_prompt=default_system_prompt
+        )
+
         # Analyze user message for relevant tool suggestions
         suggestion_service = get_suggestion_service()
         suggestions = suggestion_service.analyze_message(request.message)
 
-        # Build system prompt with tool suggestions
-        system_parts = [
-            "You are a helpful AI assistant with access to various system tools.",
-            "Be proactive about suggesting tools when they would help the user's task.",
-        ]
+        # Build system prompt (base + tool suggestions)
+        system_parts = [base_system_prompt]
 
         if suggestions:
             suggestion_text = suggestion_service.get_system_prompt_injection(suggestions)
@@ -1509,7 +1529,7 @@ async def chat(request: ChatMessage):
             if summary:
                 system_parts.append(summary)
 
-        system_prompt = "\n".join(system_parts)
+        system_prompt = "\n\n".join(system_parts)
 
         # Smart API selection using degradation service
         degradation = get_degradation_service()

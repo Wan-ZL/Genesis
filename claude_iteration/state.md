@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #33 Implementation Complete - Needs Verification.** Dark mode and UI visual refresh. CSS custom properties for theming, dark/light toggle with sun/moon icons, localStorage persistence, system preference detection, Genesis branding, typography improvements, smooth transitions. 25 new tests.
+**Issue #34 Implementation Complete - Needs Verification.** Custom system prompt and persona customization. PersonaService with 3 built-in personas (Default, Code Expert, Creative Writer), custom persona CRUD, per-conversation override, system prompt integration in chat API. 32 new tests. Backend complete, frontend UI not yet implemented.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -402,9 +402,18 @@
   - Smooth 0.3s transitions between themes
   - All components themed: sidebar, chat, status, settings, metrics, code blocks
   - 25 new tests in test_dark_mode.py (912 total passing)
+- **Issue #34 COMPLETE - Custom system prompt and persona customization (needs verification)**:
+  - PersonaService: Built-in personas (Default, Code Expert, Creative Writer) + custom persona CRUD
+  - Persona API: /api/personas endpoints for CRUD, /api/conversations/{id}/persona for override
+  - Settings: Added system_prompt field (max 4000 chars)
+  - Chat API integration: System prompt priority chain (conversation custom > persona > settings > fallback)
+  - System prompt prepended to both Claude and OpenAI API calls
+  - Per-conversation override support
+  - 32 new tests in test_persona.py (944 total passing)
+  - Backend complete; frontend UI for persona selector not yet implemented
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #33. Then proceed to next Phase 6 issue (Issue #34: System prompt customization).
+Add needs-verification label to Issue #34 and await Criticizer verification. Then proceed to next Phase 6 issue.
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)
