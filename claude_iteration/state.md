@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #28 Implementation Complete - Needs Verification.** Added GPT-5.2, GPT-4.5 Preview, o3-mini, and Claude Opus 4 to model selection dropdown.
+**Issue #32 Implementation Complete - Needs Verification.** Conversation sidebar with multi-conversation support. Left sidebar with conversation list, new conversation button, delete with confirmation, auto-title from first message, collapsible desktop / drawer mobile.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -380,9 +380,20 @@
   - Organized model list by provider with section comments
   - Model routing verified: Claude models → Anthropic API, OpenAI models → OpenAI API
   - 46/47 settings tests pass (1 pre-existing failure)
+- **Issue #32 COMPLETE - Conversation sidebar with multi-conversation support (needs verification)**:
+  - Backend: delete_conversation(), rename_conversation(), auto_title_conversation()
+  - Backend: list_conversations() with preview snippets
+  - Backend: POST/PUT/DELETE /api/conversations endpoints
+  - Backend: chat/stream endpoints accept conversation_id (default "main")
+  - Frontend: Collapsible left sidebar with conversation list
+  - Frontend: New Conversation button, delete with confirmation
+  - Frontend: Auto-title from first user message (~50 chars)
+  - Frontend: Mobile slide-out drawer, desktop toggle
+  - Frontend: Active conversation highlighted, state persisted in localStorage
+  - 40 new tests (test_conversations.py), 127 total verified passing
 
 ## Next Step (single step)
-Start Issue #32 (Conversation sidebar with multi-conversation support) - priority-critical. This is the highest-impact Phase 6 feature. See the issue for acceptance criteria.
+Await Criticizer verification of Issue #32. Then proceed to next Phase 6 issue.
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)
@@ -401,23 +412,28 @@ Start Issue #32 (Conversation sidebar with multi-conversation support) - priorit
 ```bash
 cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 
-# Test Issue #28 - New model selection
-python3 -m pytest tests/test_settings.py -k "model" -v
-# Expected: 3/3 pass
+# Test Issue #32 - Conversation sidebar
+python3 -m pytest tests/test_conversations.py -v
+# Expected: 40/40 pass
+
+# Run memory + chat tests (no regressions)
+python3 -m pytest tests/test_memory_service.py tests/test_chat_api.py -v
+# Expected: 87/87 pass
 
 # Manual test:
 python3 -m server.main
 # Open http://127.0.0.1:8080
-# Click Settings → verify dropdown has GPT-5.2, GPT-4.5, o3-mini, Claude Opus 4
+# 1. Sidebar shows default "Conversation" entry
+# 2. Click "+ New" to create conversation
+# 3. Send message - title auto-generates
+# 4. Switch conversations via sidebar
+# 5. Delete non-main conversations
+# 6. Toggle sidebar with hamburger icon
+# 7. Resize to mobile width - sidebar becomes drawer
 
 # API test:
-curl http://127.0.0.1:8080/api/settings | python3 -m json.tool | grep -A2 "gpt-5.2"
-curl -X POST http://127.0.0.1:8080/api/settings \
+curl http://127.0.0.1:8080/api/conversations | python3 -m json.tool
+curl -X POST http://127.0.0.1:8080/api/conversations \
   -H "Content-Type: application/json" \
-  -d '{"model": "gpt-5.2"}'
-# Should succeed
-
-# Run all settings tests
-python3 -m pytest tests/test_settings.py -v
-# Expected: 46/47 pass (1 pre-existing failure)
+  -d '{"title": "Test Chat"}'
 ```
