@@ -1,7 +1,7 @@
 # Genesis Roadmap
 
 > **Owned by: Planner**
-> Last updated: 2026-02-04 (evening)
+> Last updated: 2026-02-07 (Phase 6 planning)
 
 ## Vision
 
@@ -78,7 +78,7 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 
 **Outcome**: Robust 24/7 operation with monitoring, alerting, backup, and security features. 675 tests passing.
 
-## Phase 5: External Integration - NEAR COMPLETE
+## Phase 5: External Integration - COMPLETE
 
 **Goal**: Connect to external systems and enable advanced automation.
 
@@ -91,32 +91,46 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 - [x] Local model fallback with Ollama (Issue #20 - VERIFIED)
 - [x] Calendar integration via CalDAV (Issue #21 - VERIFIED)
 - [x] Bug fix: Ollama status consistency (Issue #23 - VERIFIED)
+- [x] Code repository analysis (Issue #24 - VERIFIED)
+- [x] Pydantic ConfigDict migration (Issue #22 - VERIFIED)
+- [x] Concurrent request fix (Issue #26 - VERIFIED)
+- [x] Model selection update (Issue #28 - VERIFIED)
+- [x] Markdown rendering (Issue #29 - VERIFIED)
+- [x] API key sync fix (Issue #27 - VERIFIED)
 
-**In Progress**:
-- [ ] Code repository analysis (Issue #24 - HIGH, self-improvement enabler)
-- [ ] Pydantic ConfigDict migration (Issue #22 - LOW, trivial tech debt)
+**Outcome**: Full external integration capabilities with 800+ tests passing.
 
-**Remaining Integration Candidates** (not yet created as issues):
+## Phase 6: From Tool to Teammate - IN PROGRESS
 
-| Integration | Priority | Value | Effort | Notes |
-|-------------|----------|-------|--------|-------|
-| Slack/Discord bot | MEDIUM | Medium | Medium | Alternative interface |
-| Email summarization | MEDIUM | Medium | High | Privacy considerations |
-| Task/todo integration | LOW | Medium | Low | Overlaps with scheduler |
+**Goal**: Transform Genesis from a capable tool into a product users love.
 
-## Phase 6: Intelligence Enhancement - PROPOSED
+**Theme**: UX polish, conversation management, customization, and distinctive identity.
 
-**Goal**: Make the assistant smarter and more proactive.
+**Decision**: ADR-002 (see `planner_iteration/decisions/ADR-002-phase6-from-tool-to-teammate.md`)
+
+**Features**:
+- [ ] Conversation sidebar with multi-conversation support (Issue #32 - CRITICAL)
+- [ ] Dark mode and UI visual refresh (Issue #33 - HIGH)
+- [ ] Custom system prompt and persona customization (Issue #34 - HIGH)
+- [ ] Bundle markdown libraries locally (Issue #35 - MEDIUM)
+- [ ] Keyboard shortcuts for power users (Issue #36 - MEDIUM)
+- [ ] Fix pre-existing settings test failure (Issue #37 - LOW)
+
+**Dependencies**: Builds on Phase 5 stable foundation.
+
+## Phase 7: Proactive Intelligence - PROPOSED
+
+**Goal**: Make the assistant anticipate and proactively serve user needs.
 
 **Potential Features**:
-- [ ] Context-aware tool selection - Improve accuracy of tool suggestions
-- [ ] Long-term memory patterns - Learn user preferences over time
-- [ ] Proactive suggestions - Anticipate needs based on context/time
-- [ ] Multi-turn planning - Handle complex multi-step tasks autonomously
-- [ ] Conversation summarization improvements - Better context compression
-- [ ] Knowledge base integration - Store and retrieve domain knowledge
+- [ ] Proactive suggestions based on calendar/schedule
+- [ ] Long-term memory patterns - Learn user preferences
+- [ ] Context-aware tool selection improvements
+- [ ] Multi-turn planning for complex tasks
+- [ ] Slack/Discord bot integration
+- [ ] Email summarization
 
-**Dependencies**: Requires stable Phase 5 foundation (complete)
+**Dependencies**: Requires Phase 6 multi-conversation model and polished UX.
 
 ## Milestones
 
@@ -136,24 +150,31 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 | M6.6: Authentication | Week 6 | COMPLETE (#15) |
 | M6.7: Scheduled tasks | Week 6 | COMPLETE (#16) |
 | M6.8: Encryption + bug fixes | Week 6 | COMPLETE (#17, #18, #19) |
-| M7: External integrations | Week 7 | NEAR COMPLETE |
+| M7: External integrations | Week 7 | COMPLETE |
 | M7.1: Ollama integration | Week 7 | COMPLETE (#20, #23) |
 | M7.2: Calendar integration | Week 7 | COMPLETE (#21) |
-| M7.3: Code repository analysis | Week 7 | IN PROGRESS (#24) |
-| M7.4: Tech debt cleanup | Week 7 | PENDING (#22) |
-| M8: Intelligence enhancement | Week 8+ | PROPOSED |
+| M7.3: Code repository analysis | Week 7 | COMPLETE (#24) |
+| M7.4: Tech debt cleanup | Week 7 | COMPLETE (#22) |
+| M7.5: Concurrency + models + markdown | Week 7 | COMPLETE (#26, #28, #29) |
+| M8: From Tool to Teammate | Week 8 | IN PROGRESS |
+| M8.1: Conversation sidebar | Week 8 | PENDING (#32) |
+| M8.2: Dark mode + UI refresh | Week 8 | PENDING (#33) |
+| M8.3: System prompt customization | Week 8 | PENDING (#34) |
+| M8.4: Bundle dependencies | Week 8 | PENDING (#35) |
+| M8.5: Keyboard shortcuts | Week 9 | PENDING (#36) |
+| M9: Proactive Intelligence | Week 10+ | PROPOSED |
 
 ## Statistics
 
 | Metric | Value |
 |--------|-------|
-| Total issues created | 24 |
-| Issues verified and closed | 22 |
-| Issues open | 2 |
+| Total issues created | 37 |
+| Issues verified and closed | 31 |
+| Issues open | 6 |
 | Bugs found by Criticizer | 3 |
-| Total tests | 745 |
-| Service modules | 17+ |
-| Phases completed | 4.9 of 5 |
+| Total tests | 800+ |
+| Service modules | 19+ |
+| Phases completed | 5 of 7 |
 
 ## Principles
 

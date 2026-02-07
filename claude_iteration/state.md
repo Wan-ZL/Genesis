@@ -382,7 +382,7 @@
   - 46/47 settings tests pass (1 pre-existing failure)
 
 ## Next Step (single step)
-All open issues verified and closed. Check backlog or wait for new GitHub Issues.
+Start Issue #32 (Conversation sidebar with multi-conversation support) - priority-critical. This is the highest-impact Phase 6 feature. See the issue for acceptance criteria.
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)

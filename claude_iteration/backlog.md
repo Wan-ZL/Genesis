@@ -4,76 +4,48 @@
 
 ## Active GitHub Issues (see `gh issue list`)
 
-### Phase 5 (External Integration) - CONTINUING
-- Issue #24: Code repository analysis tool (HIGH) - NEW - Self-improvement enabler
-- Issue #22: Pydantic ConfigDict migration (LOW) - Tech Debt - Trivial
+### Phase 6 (From Tool to Teammate) - CURRENT
+- Issue #32: Conversation sidebar with multi-conversation support (CRITICAL)
+- Issue #33: Dark mode and UI visual refresh (HIGH)
+- Issue #34: Custom system prompt and persona customization (HIGH)
+- Issue #35: Bundle markdown libraries locally (MEDIUM)
+- Issue #36: Keyboard shortcuts for power users (MEDIUM)
+- Issue #37: Fix pre-existing settings test failure (LOW)
+
+## Recommended Work Order
+1. #32 (Conversation sidebar) - highest impact
+2. #35 (Bundle CDN deps) - quick win
+3. #33 (Dark mode) - builds on sidebar
+4. #34 (System prompt) - core differentiator
+5. #36 (Keyboard shortcuts) - after sidebar exists
+6. #37 (Fix test) - anytime
 
 ## Recently Completed (Phase 5)
 - Issue #20: Local model fallback with Ollama - VERIFIED
 - Issue #21: Calendar integration via CalDAV - VERIFIED
+- Issue #22: Pydantic ConfigDict migration - VERIFIED
 - Issue #23: Ollama status inconsistency fix - VERIFIED
-
-## Completed Earlier (Phase 4)
-- Issue #10: Error alerting and notifications - VERIFIED
-- Issue #11: Backup and restore functionality - VERIFIED
-- Issue #12: Resource monitoring and limits - VERIFIED
-- Issue #13: Log rotation and cleanup - VERIFIED
-- Issue #14: Graceful degradation modes - VERIFIED
-- Issue #15: Authentication layer for remote access - VERIFIED
-- Issue #16: Scheduled task automation - VERIFIED
-- Issue #17: API key encryption at rest - VERIFIED
-- Issue #18: Key rotation TypeError fix - VERIFIED
-- Issue #19: Encrypted API key leak prevention - VERIFIED
+- Issue #24: Code repository analysis tool - VERIFIED
+- Issue #25: Repository settings API fix - VERIFIED
+- Issue #26: Concurrent request database lock fix - VERIFIED
+- Issue #27: API key .env sync fix - VERIFIED
+- Issue #28: New model selection (GPT-5.2, etc.) - VERIFIED
+- Issue #29: Markdown rendering for Web UI - VERIFIED
+- Issue #31: ConnectionPool event loop fix - VERIFIED
 
 ## Pending User Action
 - [ ] Activate Claude API (user needs to add ANTHROPIC_API_KEY)
 - [ ] Configure valid OpenAI API key (current key appears invalid)
-- [ ] Install Ollama for local model support (once Issue #20 is complete)
+- [ ] Install Ollama for local model support
 
 ## Ideas (Not Yet Scoped as Issues)
 
-### Phase 5 Extensions (External Integration)
-- ~~Code repository analysis tool~~ - Issue #24 created
-- Slack/Discord bot - Alternative interface
-- Email summarization integration - Privacy considerations
-- Task/todo integration - Overlaps with scheduler
-
-### Phase 6 Candidates (Intelligence Enhancement)
-- Context-aware tool selection improvements
+### Phase 7 Candidates (Proactive Intelligence)
+- Proactive suggestions based on calendar/schedule/context
 - Long-term memory pattern learning
-- Proactive suggestions based on context/time
+- Slack/Discord bot integration
+- Email summarization
 - Multi-turn planning for complex tasks
-- Knowledge base integration
 
-## Completed (Phase 1-4)
-- [x] Repo structure and memory rules
-- [x] Web UI with chat interface
-- [x] Hooks system for iteration loop
-- [x] Supervisor service for 24/7 operation
-- [x] Conversation persistence (SQLite)
-- [x] Multimodal support (images, PDFs)
-- [x] Claude/OpenAI API integration
-- [x] Tool registry (datetime, calculate, web_fetch, shell)
-- [x] Eval framework with CLI runner
-- [x] Health check endpoint
-- [x] Retry logic with exponential backoff
-- [x] Metrics dashboard with auto-refresh
-- [x] CI integration (GitHub Actions)
-- [x] Mobile-friendly UI
-- [x] Voice input support
-- [x] Settings page with persistence
-- [x] Permission system (4 levels)
-- [x] Capability discovery (23+ tools)
-- [x] Message search and auto-summarization
-- [x] Streaming responses (SSE)
-- [x] Performance benchmarks
-- [x] Conversation export/import
-- [x] Path consistency fix
-- [x] Error alerting and notifications
-- [x] Backup and restore
-- [x] Resource monitoring and limits
-- [x] Log rotation and cleanup
-- [x] Graceful degradation modes
-- [x] Authentication layer
-- [x] Scheduled task automation
-- [x] API key encryption at rest
+## Completed (Phase 1-5)
+31 issues verified and closed. See planner_iteration/roadmap.md for full history.
