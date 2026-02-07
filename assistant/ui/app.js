@@ -1,5 +1,5 @@
 /**
- * AI Assistant - Frontend Logic
+ * Genesis AI Assistant - Frontend Logic
  */
 
 // State
@@ -31,6 +31,9 @@ const sidebarOverlay = document.getElementById('sidebar-overlay');
 const newConversationBtn = document.getElementById('new-conversation-btn');
 const conversationListEl = document.getElementById('conversation-list');
 
+// Theme toggle
+const themeToggleBtn = document.getElementById('theme-toggle-btn');
+
 // Settings elements
 const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
@@ -44,8 +47,62 @@ const anthropicKeyStatus = document.getElementById('anthropic-key-status');
 const modelSelect = document.getElementById('model-select');
 const permissionSelect = document.getElementById('permission-select');
 
+// ============================================================================
+// Theme (Dark Mode) Management
+// ============================================================================
+
+/**
+ * Initialize theme based on: localStorage > system preference > light default
+ */
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme');
+
+    if (savedTheme) {
+        // User has explicitly chosen a theme
+        setTheme(savedTheme);
+    } else {
+        // Detect system preference
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        setTheme(prefersDark ? 'dark' : 'light');
+    }
+
+    // Listen for system preference changes (only when user has not set a preference)
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('theme')) {
+            setTheme(e.matches ? 'dark' : 'light');
+        }
+    });
+}
+
+/**
+ * Set the theme on the document
+ */
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+}
+
+/**
+ * Toggle between light and dark themes
+ */
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+}
+
+/**
+ * Get the current theme name
+ */
+function getCurrentTheme() {
+    return document.documentElement.getAttribute('data-theme') || 'light';
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    // Apply theme immediately to prevent flash
+    initTheme();
+
     loadStatus();
     loadConversations(true); // Load sidebar and current conversation
     loadMetrics();
@@ -102,6 +159,11 @@ function setupEventListeners() {
     // Voice input
     if (voiceBtn) {
         voiceBtn.addEventListener('click', toggleVoiceInput);
+    }
+
+    // Theme toggle
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', toggleTheme);
     }
 
     // Settings
