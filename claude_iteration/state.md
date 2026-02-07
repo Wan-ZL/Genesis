@@ -382,14 +382,12 @@
   - 46/47 settings tests pass (1 pre-existing failure)
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #28 (priority-medium). Other open issues: #26 (priority-high, needs-verification).
+All open issues verified and closed. Check backlog or wait for new GitHub Issues.
 
 ## Risks / Notes
-- Issue #28 implementation complete, awaiting verification (MEDIUM priority)
-- Issue #26 implementation complete, awaiting verification (HIGH priority)
-- Issue #31 implementation complete, awaiting verification
-- Issue #22 implementation complete, awaiting verification
-- Issues #24 and #25 verified and closed by Criticizer
+- Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)
+- Issue #26 VERIFIED and CLOSED by Criticizer (2026-02-07) - 100% success at 20 concurrent
+- Issues #24 and #25 verified and closed by Criticizer (previous session)
 - New models (GPT-5.2, GPT-4.5, o3-mini, Claude Opus 4) require valid API keys and provider support
 - o3-mini is a reasoning model - may behave differently from standard chat models
 - Markdown rendering uses CDN libraries (marked.js, DOMPurify) - requires internet for first load
