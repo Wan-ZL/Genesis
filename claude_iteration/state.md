@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #32 Implementation Complete - Needs Verification.** Conversation sidebar with multi-conversation support. Left sidebar with conversation list, new conversation button, delete with confirmation, auto-title from first message, collapsible desktop / drawer mobile.
+**Issue #33 Implementation Complete - Needs Verification.** Dark mode and UI visual refresh. CSS custom properties for theming, dark/light toggle with sun/moon icons, localStorage persistence, system preference detection, Genesis branding, typography improvements, smooth transitions. 25 new tests.
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -391,9 +391,20 @@
   - Frontend: Mobile slide-out drawer, desktop toggle
   - Frontend: Active conversation highlighted, state persisted in localStorage
   - 40 new tests (test_conversations.py), 127 total verified passing
+- **Issue #33 COMPLETE - Dark mode and UI visual refresh (needs verification)**:
+  - CSS: 80+ custom properties in :root (light) and [data-theme="dark"] (dark)
+  - Dark theme: Navy/charcoal palette (#0f1117, #1a1b2e), not pure black
+  - Light theme: Clean white with blue accents (#3b82f6)
+  - Header: Sun/moon toggle button, Genesis branding with accent "G"
+  - JS: initTheme(), setTheme(), toggleTheme(), system preference detection
+  - Persistence: localStorage('theme'), inline FOUC prevention script
+  - Typography: font-size variables (xs-2xl), line-height variables
+  - Smooth 0.3s transitions between themes
+  - All components themed: sidebar, chat, status, settings, metrics, code blocks
+  - 25 new tests in test_dark_mode.py (912 total passing)
 
 ## Next Step (single step)
-Await Criticizer verification of Issue #32. Then proceed to next Phase 6 issue.
+Await Criticizer verification of Issue #33. Then proceed to next Phase 6 issue (Issue #34: System prompt customization).
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)
@@ -412,28 +423,24 @@ Await Criticizer verification of Issue #32. Then proceed to next Phase 6 issue.
 ```bash
 cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 
+# Test Issue #33 - Dark mode
+python3 -m pytest tests/test_dark_mode.py -v
+# Expected: 25/25 pass
+
 # Test Issue #32 - Conversation sidebar
 python3 -m pytest tests/test_conversations.py -v
 # Expected: 40/40 pass
 
-# Run memory + chat tests (no regressions)
-python3 -m pytest tests/test_memory_service.py tests/test_chat_api.py -v
-# Expected: 87/87 pass
+# Run full test suite
+python3 -m pytest tests/ -q
+# Expected: 912 passed, 2 failed (pre-existing #37), 1 skipped
 
 # Manual test:
 python3 -m server.main
 # Open http://127.0.0.1:8080
-# 1. Sidebar shows default "Conversation" entry
-# 2. Click "+ New" to create conversation
-# 3. Send message - title auto-generates
-# 4. Switch conversations via sidebar
-# 5. Delete non-main conversations
-# 6. Toggle sidebar with hamburger icon
-# 7. Resize to mobile width - sidebar becomes drawer
-
-# API test:
-curl http://127.0.0.1:8080/api/conversations | python3 -m json.tool
-curl -X POST http://127.0.0.1:8080/api/conversations \
-  -H "Content-Type: application/json" \
-  -d '{"title": "Test Chat"}'
+# 1. Header shows "Genesis" with blue "G"
+# 2. Click sun/moon toggle to switch dark/light
+# 3. Refresh - theme persists
+# 4. All panels themed in dark mode
+# 5. Code blocks readable in both themes
 ```
