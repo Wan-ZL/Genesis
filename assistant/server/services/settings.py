@@ -156,10 +156,17 @@ class SettingsService:
 
     # Available models
     AVAILABLE_MODELS = [
+        # OpenAI models
+        {"id": "gpt-5.2", "name": "GPT-5.2 (OpenAI)", "provider": "openai"},
+        {"id": "gpt-4.5-preview", "name": "GPT-4.5 Preview (OpenAI)", "provider": "openai"},
         {"id": "gpt-4o", "name": "GPT-4o (OpenAI)", "provider": "openai"},
         {"id": "gpt-4o-mini", "name": "GPT-4o Mini (OpenAI)", "provider": "openai"},
+        {"id": "o3-mini", "name": "o3-mini (OpenAI)", "provider": "openai"},
+        # Anthropic models
+        {"id": "claude-opus-4-20250918", "name": "Claude Opus 4 (Anthropic)", "provider": "anthropic"},
         {"id": "claude-sonnet-4-20250514", "name": "Claude Sonnet 4 (Anthropic)", "provider": "anthropic"},
         {"id": "claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku (Anthropic)", "provider": "anthropic"},
+        # Local models (via Ollama)
         {"id": "ollama:llama3.2:3b", "name": "Llama 3.2 3B (Local)", "provider": "ollama"},
         {"id": "ollama:llama3.2:70b", "name": "Llama 3.2 70B (Local)", "provider": "ollama"},
         {"id": "ollama:mistral", "name": "Mistral (Local)", "provider": "ollama"},
