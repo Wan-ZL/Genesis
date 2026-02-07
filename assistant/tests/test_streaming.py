@@ -166,10 +166,15 @@ class TestStreamingEndpoint:
         """Test that streaming response is stored in memory."""
         with patch('server.routes.chat.memory') as mock_memory:
             mock_memory.add_to_conversation = AsyncMock()
+            mock_memory.add_message = AsyncMock()
             mock_memory.get_context_for_api = AsyncMock(return_value=(
                 [{"role": "user", "content": "Hello"}],
                 {"summarized_count": 0, "verbatim_count": 1, "total_messages": 1}
             ))
+            mock_memory._ensure_initialized = AsyncMock()
+            mock_memory._ensure_default_conversation = AsyncMock()
+            mock_memory.get_conversation = AsyncMock(return_value={"title": "Existing", "messages": [{"role": "user"}]})
+            mock_memory.auto_title_conversation = AsyncMock()
 
             with patch('server.routes.chat.get_openai_client') as mock_get_client:
                 mock_client = MagicMock()
@@ -194,7 +199,7 @@ class TestStreamingEndpoint:
                     content = response.content.decode()
 
             # User message should have been stored
-            mock_memory.add_to_conversation.assert_called()
+            mock_memory.add_message.assert_called()
 
 
 class TestStreamingWithTools:
