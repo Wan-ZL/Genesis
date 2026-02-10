@@ -413,7 +413,7 @@
   - Backend complete; frontend UI for persona selector not yet implemented
 
 ## Next Step (single step)
-Add needs-verification label to Issue #34 and await Criticizer verification. Then proceed to next Phase 6 issue.
+Test self-healing mechanism: Run start-multi-agent-loop.sh and verify heartbeat/circuit breaker work correctly.
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)

@@ -1,6 +1,7 @@
 #!/bin/bash
-# Genesis Multi-Agent Loop
+# Genesis Multi-Agent Loop with Self-Healing
 # Coordinates Builder -> Criticizer -> Planner
+# Features: Heartbeat detection, Circuit breaker, Zombie cleanup
 
 set -e
 
@@ -8,35 +9,258 @@ set -e
 GENESIS_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOOP_FLAG_FILE="$GENESIS_DIR/hooks/loop_multi_agent.txt"
 LOG_DIR="$GENESIS_DIR/orchestration_logs"
+ORCHESTRATOR_DIR="$GENESIS_DIR/orchestrator"
+CB_FILE="$ORCHESTRATOR_DIR/.circuit_breaker.json"
+HEARTBEAT_FILE="/tmp/genesis_heartbeat.json"
 ITERATION_COUNT=0
+
+# Configuration
+HEARTBEAT_STALE_MINUTES=15      # Minutes before considering agent stuck
+HEARTBEAT_CHECK_INTERVAL=60     # Seconds between heartbeat checks
+CB_WARNING_THRESHOLD=3          # Iterations without progress before warning
+CB_STOP_THRESHOLD=5             # Iterations without progress before stopping
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Create log directory
+# Create directories
 mkdir -p "$LOG_DIR"
+mkdir -p "$ORCHESTRATOR_DIR"
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}   Genesis Multi-Agent Loop Starting   ${NC}"
+echo -e "${BLUE}   (with Self-Healing Mechanisms)      ${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 echo "Project: $GENESIS_DIR"
 echo "Logs: $LOG_DIR"
+echo "Heartbeat timeout: ${HEARTBEAT_STALE_MINUTES} minutes"
+echo "Circuit breaker threshold: ${CB_STOP_THRESHOLD} iterations"
 echo "Stop: Create $LOOP_FLAG_FILE with content 'false' or Ctrl+C"
 echo ""
 
 # Initialize loop flag
 echo "true" > "$LOOP_FLAG_FILE"
 
+#=============================================================================
+# CIRCUIT BREAKER FUNCTIONS
+#=============================================================================
+
+init_circuit_breaker() {
+    if [ ! -f "$CB_FILE" ]; then
+        echo '{"state":"CLOSED","no_progress_count":0,"last_progress_iteration":0}' > "$CB_FILE"
+    fi
+}
+
+check_circuit_breaker() {
+    local iteration=$1
+
+    # Check if there are uncommitted changes (sign of progress)
+    cd "$GENESIS_DIR"
+    local has_changes="no"
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+        has_changes="yes"
+    fi
+    # Also check for untracked files (new files = progress)
+    if [ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ]; then
+        has_changes="yes"
+    fi
+
+    # Read current state
+    local state=$(jq -r '.state' "$CB_FILE" 2>/dev/null || echo "CLOSED")
+    local no_progress=$(jq -r '.no_progress_count' "$CB_FILE" 2>/dev/null || echo "0")
+
+    if [ "$has_changes" = "yes" ]; then
+        # Progress detected, reset circuit breaker
+        echo "{\"state\":\"CLOSED\",\"no_progress_count\":0,\"last_progress_iteration\":$iteration}" > "$CB_FILE"
+        echo -e "${GREEN}[CIRCUIT BREAKER]${NC} Progress detected, state: CLOSED"
+        return 0
+    else
+        # No progress
+        no_progress=$((no_progress + 1))
+
+        if [ $no_progress -ge $CB_STOP_THRESHOLD ]; then
+            echo "{\"state\":\"OPEN\",\"no_progress_count\":$no_progress,\"last_progress_iteration\":$iteration}" > "$CB_FILE"
+            echo -e "${RED}[CIRCUIT BREAKER] OPEN - No progress for $no_progress iterations. Stopping loop.${NC}"
+            return 1  # Signal to stop loop
+        elif [ $no_progress -ge $CB_WARNING_THRESHOLD ]; then
+            echo "{\"state\":\"HALF_OPEN\",\"no_progress_count\":$no_progress,\"last_progress_iteration\":$iteration}" > "$CB_FILE"
+            echo -e "${YELLOW}[CIRCUIT BREAKER] WARNING - No progress for $no_progress iterations${NC}"
+            return 0  # Continue but warn
+        else
+            echo "{\"state\":\"CLOSED\",\"no_progress_count\":$no_progress,\"last_progress_iteration\":$iteration}" > "$CB_FILE"
+            echo -e "${CYAN}[CIRCUIT BREAKER]${NC} No changes this iteration (count: $no_progress)"
+            return 0
+        fi
+    fi
+}
+
+#=============================================================================
+# HEARTBEAT FUNCTIONS
+#=============================================================================
+
+check_heartbeat_stale() {
+    local max_stale_minutes=${1:-$HEARTBEAT_STALE_MINUTES}
+
+    if [ ! -f "$HEARTBEAT_FILE" ]; then
+        return 0  # No heartbeat file yet, assume OK (just starting)
+    fi
+
+    local last_timestamp=$(jq -r '.timestamp' "$HEARTBEAT_FILE" 2>/dev/null)
+    if [ -z "$last_timestamp" ] || [ "$last_timestamp" = "null" ]; then
+        return 0  # Can't parse, assume OK
+    fi
+
+    # Parse ISO 8601 timestamp and compare with now
+    # macOS date -j -f doesn't handle ISO 8601 well, so use a workaround
+    local last_epoch
+    # Try to extract just the datetime part and convert
+    local datetime_part=$(echo "$last_timestamp" | sed 's/+.*//' | sed 's/T/ /')
+    last_epoch=$(date -j -f "%Y-%m-%d %H:%M:%S" "$datetime_part" "+%s" 2>/dev/null || echo "0")
+
+    if [ "$last_epoch" = "0" ]; then
+        # Fallback: try stat on the file
+        last_epoch=$(stat -f %m "$HEARTBEAT_FILE" 2>/dev/null || echo "0")
+    fi
+
+    local now_epoch=$(date "+%s")
+    local diff_seconds=$((now_epoch - last_epoch))
+    local diff_minutes=$((diff_seconds / 60))
+
+    if [ $diff_minutes -ge $max_stale_minutes ]; then
+        echo -e "${RED}[HEARTBEAT]${NC} Stale! Last update: $diff_minutes minutes ago"
+        return 1  # Heartbeat is stale
+    fi
+
+    return 0  # Heartbeat is fresh
+}
+
+#=============================================================================
+# ZOMBIE CLEANUP FUNCTION
+#=============================================================================
+
+cleanup_zombie_processes() {
+    echo -e "${CYAN}[CLEANUP]${NC} Checking for zombie processes..."
+
+    # Kill potentially stuck test servers
+    local killed_count=0
+
+    # Python server processes
+    if pkill -f "python.*-m server.main" 2>/dev/null; then
+        echo -e "${CYAN}[CLEANUP]${NC} Killed stuck server process"
+        killed_count=$((killed_count + 1))
+    fi
+
+    # Stuck pytest processes
+    if pkill -f "python.*pytest" 2>/dev/null; then
+        echo -e "${CYAN}[CLEANUP]${NC} Killed stuck pytest process"
+        killed_count=$((killed_count + 1))
+    fi
+
+    # Release port 8080 if occupied
+    local port_pid=$(lsof -ti :8080 2>/dev/null || true)
+    if [ -n "$port_pid" ]; then
+        echo -e "${CYAN}[CLEANUP]${NC} Killing process on port 8080: $port_pid"
+        kill -9 $port_pid 2>/dev/null || true
+        killed_count=$((killed_count + 1))
+    fi
+
+    if [ $killed_count -gt 0 ]; then
+        sleep 2  # Give processes time to clean up
+    fi
+
+    echo -e "${CYAN}[CLEANUP]${NC} Done (killed $killed_count processes)"
+}
+
+#=============================================================================
+# AGENT RUNNER WITH HEARTBEAT MONITORING
+#=============================================================================
+
+run_agent_with_heartbeat() {
+    local agent_name=$1
+    local prompt=$2
+    local log_file=$3
+    local color=$4
+
+    # Pre-flight cleanup
+    cleanup_zombie_processes
+
+    # Set agent name for heartbeat script
+    export GENESIS_AGENT="$agent_name"
+
+    # Clear old heartbeat
+    rm -f "$HEARTBEAT_FILE"
+
+    # Start Claude in background
+    cd "$GENESIS_DIR"
+    claude --dangerously-skip-permissions "$prompt" > "$log_file" 2>&1 &
+    local claude_pid=$!
+
+    echo -e "${color}[$agent_name]${NC} Started with PID $claude_pid"
+    echo -e "${color}[$agent_name]${NC} Log: $log_file"
+
+    # Monitor loop: check heartbeat while Claude is running
+    while kill -0 $claude_pid 2>/dev/null; do
+        sleep $HEARTBEAT_CHECK_INTERVAL
+
+        # Check if Claude is still running
+        if ! kill -0 $claude_pid 2>/dev/null; then
+            break
+        fi
+
+        # Check heartbeat
+        if ! check_heartbeat_stale $HEARTBEAT_STALE_MINUTES; then
+            echo -e "${RED}[$agent_name] STUCK - No heartbeat for ${HEARTBEAT_STALE_MINUTES}+ minutes${NC}"
+            echo -e "${RED}[$agent_name] Terminating PID $claude_pid${NC}"
+
+            # Graceful kill first
+            kill $claude_pid 2>/dev/null || true
+            sleep 5
+
+            # Force kill if still alive
+            if kill -0 $claude_pid 2>/dev/null; then
+                kill -9 $claude_pid 2>/dev/null || true
+            fi
+
+            # Cleanup any zombies left behind
+            cleanup_zombie_processes
+
+            # Show last 50 lines of log for debugging
+            echo -e "${RED}[$agent_name] Last 50 lines of log:${NC}"
+            tail -50 "$log_file" 2>/dev/null || true
+
+            return 124  # Exit code for timeout
+        fi
+
+        echo -e "${color}[$agent_name]${NC} Heartbeat OK (checking every ${HEARTBEAT_CHECK_INTERVAL}s)"
+    done
+
+    # Wait for Claude to finish
+    wait $claude_pid 2>/dev/null
+    local exit_code=$?
+
+    # Show log
+    cat "$log_file"
+
+    echo -e "${color}[$agent_name]${NC} Completed with exit code: $exit_code"
+    return $exit_code
+}
+
+#=============================================================================
+# LEGACY AGENT RUNNERS (for comparison/fallback)
+#=============================================================================
+
 # Cleanup function
 cleanup() {
     echo ""
     echo -e "${YELLOW}Stopping multi-agent loop...${NC}"
     echo "false" > "$LOOP_FLAG_FILE"
+    cleanup_zombie_processes
     exit 0
 }
 
@@ -61,14 +285,7 @@ run_builder() {
     local timestamp=$(date +%Y-%m-%d_%H%M%S)
     local log_file="$LOG_DIR/builder_$timestamp.log"
 
-    echo -e "${GREEN}[Builder]${NC} Starting iteration..."
-    echo "[Builder] Log: $log_file"
-
-    cd "$GENESIS_DIR"
-
-    # Run Builder agent
-    claude --dangerously-skip-permissions \
-        "Use the builder agent to implement the highest priority issue.
+    local prompt="Use the builder agent to implement the highest priority issue.
 
          The builder agent will:
          1. Read claude_iteration/state.md and VISION.md for context
@@ -81,12 +298,10 @@ run_builder() {
          IMPORTANT:
          - Do NOT close issues - only Criticizer can do that
          - Do NOT modify VISION.md - that belongs to Planner
-         - Focus on ONE issue per iteration" \
-        2>&1 | tee "$log_file"
+         - Focus on ONE issue per iteration"
 
-    local exit_code=${PIPESTATUS[0]}
-    echo -e "${GREEN}[Builder]${NC} Completed with exit code: $exit_code"
-    return $exit_code
+    run_agent_with_heartbeat "Builder" "$prompt" "$log_file" "$GREEN"
+    return $?
 }
 
 # Run Criticizer
@@ -94,14 +309,7 @@ run_criticizer() {
     local timestamp=$(date +%Y-%m-%d_%H%M%S)
     local log_file="$LOG_DIR/criticizer_$timestamp.log"
 
-    echo -e "${YELLOW}[Criticizer]${NC} Starting verification..."
-    echo "[Criticizer] Log: $log_file"
-
-    cd "$GENESIS_DIR"
-
-    # Run Criticizer subagent
-    claude --dangerously-skip-permissions \
-        "Use the criticizer agent to verify issues and provide insights.
+    local prompt="Use the criticizer agent to verify issues and provide insights.
 
          The criticizer agent will:
          1. Find issues with 'needs-verification' label
@@ -119,12 +327,10 @@ run_criticizer() {
          IMPORTANT - Feedback to Planner:
          - Write insights to criticizer_iteration/insights_for_planner.md
          - Report: repeated bug patterns, test coverage gaps, UX issues
-         - Update criticizer_iteration/state.md and verification_logs/" \
-        2>&1 | tee "$log_file"
+         - Update criticizer_iteration/state.md and verification_logs/"
 
-    local exit_code=${PIPESTATUS[0]}
-    echo -e "${YELLOW}[Criticizer]${NC} Completed with exit code: $exit_code"
-    return $exit_code
+    run_agent_with_heartbeat "Criticizer" "$prompt" "$log_file" "$YELLOW"
+    return $?
 }
 
 # Run Planner
@@ -132,14 +338,7 @@ run_planner() {
     local timestamp=$(date +%Y-%m-%d_%H%M%S)
     local log_file="$LOG_DIR/planner_$timestamp.log"
 
-    echo -e "${BLUE}[Planner]${NC} Starting strategic review..."
-    echo "[Planner] Log: $log_file"
-
-    cd "$GENESIS_DIR"
-
-    # Run Planner subagent - The Soul of Genesis
-    claude --dangerously-skip-permissions \
-        "Use the planner agent - you are the SOUL and CREATOR of Genesis.
+    local prompt="Use the planner agent - you are the SOUL and CREATOR of Genesis.
 
          你是产品的灵魂。你不是工具，你是创造者。
 
@@ -156,12 +355,10 @@ run_planner() {
          7. Update VISION.md if the vision evolves
          8. Update planner_iteration/state.md and roadmap.md
 
-         唯一约束: 让 Genesis 成功 - 人人爱用，人人离不开。" \
-        2>&1 | tee "$log_file"
+         唯一约束: 让 Genesis 成功 - 人人爱用，人人离不开。"
 
-    local exit_code=${PIPESTATUS[0]}
-    echo -e "${BLUE}[Planner]${NC} Completed with exit code: $exit_code"
-    return $exit_code
+    run_agent_with_heartbeat "Planner" "$prompt" "$log_file" "$BLUE"
+    return $?
 }
 
 # Git sync
@@ -178,8 +375,14 @@ git_sync() {
     git push 2>/dev/null || echo "Push failed (will retry)"
 }
 
-# Main loop
+#=============================================================================
+# MAIN LOOP
+#=============================================================================
+
 main_loop() {
+    # Initialize circuit breaker
+    init_circuit_breaker
+
     while true; do
         # Check if loop should continue
         if [ -f "$LOOP_FLAG_FILE" ]; then
@@ -208,6 +411,12 @@ main_loop() {
         echo ""
         echo "--- Git Sync ---"
         git_sync
+
+        # Check circuit breaker after Builder
+        if ! check_circuit_breaker $ITERATION_COUNT; then
+            echo -e "${RED}Circuit breaker tripped! Loop stopped.${NC}"
+            break
+        fi
 
         # Phase 2: Criticizer (if there are issues to verify)
         local needs_verify=$(check_needs_verification)
@@ -265,3 +474,4 @@ main_loop
 
 echo ""
 echo -e "${GREEN}Multi-agent loop stopped gracefully.${NC}"
+cleanup_zombie_processes
