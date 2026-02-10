@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #35 Complete - Needs Verification.** Bundle markdown libraries locally instead of CDN. Vendor files (marked.js v11.1.1, DOMPurify v3.0.8) bundled in `assistant/ui/vendor/`, index.html references local paths, no external CDN requests. Fixed 2 test assertions in test_markdown_ui.py. 945 tests pass (2 pre-existing failures per Issue #37).
+**Issue #36 Complete - Needs Verification.** Keyboard shortcuts for power users. Implemented global shortcut handler (shortcuts.js) with 6 shortcuts: Cmd/Ctrl+N (new conversation), Cmd/Ctrl+K (quick switcher), Cmd/Ctrl+, (settings), Cmd/Ctrl+Shift+D (dark mode), Escape (close modals), Cmd/Ctrl+/ (help). Quick switcher is spotlight-style with search, arrow navigation, Enter to select. Cross-platform modifier detection, typing safety, XSS prevention. 22 new tests in test_keyboard_shortcuts.py. 967 tests pass (2 pre-existing failures per Issue #37).
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -411,9 +411,25 @@
   - Per-conversation override support
   - 32 new tests in test_persona.py (944 total passing)
   - Backend complete; frontend UI for persona selector not yet implemented
+- **Issue #35 COMPLETE - Bundle markdown libraries locally (needs verification)**:
+  - Vendor files: marked.js v11.1.1, DOMPurify v3.0.8 in `assistant/ui/vendor/`
+  - index.html updated to reference local paths instead of CDN
+  - No external CDN requests for markdown rendering
+  - Fixed 2 test assertions in test_markdown_ui.py
+  - 945 tests pass
+- **Issue #36 COMPLETE - Keyboard shortcuts for power users (needs verification)**:
+  - Global shortcut handler: `assistant/ui/shortcuts.js`
+  - 6 shortcuts: Cmd/Ctrl+N (new), Cmd/Ctrl+K (switcher), Cmd/Ctrl+, (settings), Cmd/Ctrl+Shift+D (dark mode), Escape (close), Cmd/Ctrl+/ (help)
+  - Quick switcher (Cmd+K): Spotlight-style overlay with search, arrow nav, Enter to select
+  - Shortcut help modal (Cmd+/): Grid layout showing all shortcuts
+  - Cross-platform: metaKey (Mac) || ctrlKey (Windows/Linux)
+  - Typing safety: Shortcuts disabled when typing in inputs (except Escape)
+  - Security: No XSS (uses textContent/createElement, not innerHTML)
+  - UI polish: Tooltips with shortcut hints, mobile-responsive modals
+  - 22 new tests in test_keyboard_shortcuts.py (967 total passing)
 
 ## Next Step (single step)
-Work on Issue #36 (Keyboard shortcuts for power users) — next available priority-medium enhancement.
+Check for more open issues or work on Issue #37 (Settings test fixes) if time permits.
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)
@@ -421,35 +437,37 @@ Work on Issue #36 (Keyboard shortcuts for power users) — next available priori
 - Issues #24 and #25 verified and closed by Criticizer (previous session)
 - New models (GPT-5.2, GPT-4.5, o3-mini, Claude Opus 4) require valid API keys and provider support
 - o3-mini is a reasoning model - may behave differently from standard chat models
-- Markdown rendering uses CDN libraries (marked.js, DOMPurify) - requires internet for first load
+- Markdown rendering now uses locally bundled libraries (no CDN dependency)
 - DOMPurify sanitization is critical for security - do not remove or bypass
 - Database lock issue affected ALL concurrent requests (60-88% failure rate before fix, now 100% pass)
 - Retry logic with exponential backoff + larger pools = robust concurrent handling
 - Encryption key salt must be backed up for data recovery
 - Other services (alerts, auth, scheduler, audit_log) still use direct aiosqlite.connect() - may need future fix if they have concurrency issues
+- Keyboard shortcuts may conflict with browser extensions - users can disable if needed
+- Quick switcher (Cmd+K) requires conversations to exist to show results
 
 ## How to test quickly
 ```bash
 cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 
-# Test Issue #33 - Dark mode
-python3 -m pytest tests/test_dark_mode.py -v
-# Expected: 25/25 pass
-
-# Test Issue #32 - Conversation sidebar
-python3 -m pytest tests/test_conversations.py -v
-# Expected: 40/40 pass
+# Test Issue #36 - Keyboard shortcuts
+python3 -m pytest tests/test_keyboard_shortcuts.py -v
+# Expected: 22/22 pass
 
 # Run full test suite
 python3 -m pytest tests/ -q
-# Expected: 912 passed, 2 failed (pre-existing #37), 1 skipped
+# Expected: 967 passed, 2 failed (pre-existing #37), 1 skipped
 
 # Manual test:
 python3 -m server.main
 # Open http://127.0.0.1:8080
-# 1. Header shows "Genesis" with blue "G"
-# 2. Click sun/moon toggle to switch dark/light
-# 3. Refresh - theme persists
-# 4. All panels themed in dark mode
-# 5. Code blocks readable in both themes
+# 1. Press Cmd+K (Mac) or Ctrl+K (Windows) - quick switcher appears
+# 2. Type to search conversations, arrow keys to navigate, Enter to select
+# 3. Press Cmd+N - new conversation created
+# 4. Press Cmd+, - settings modal opens
+# 5. Press Cmd+Shift+D - theme toggles
+# 6. Press Escape - any open modal closes
+# 7. Press Cmd+/ - keyboard shortcuts help appears
+# 8. Verify shortcuts work globally (not just when input focused)
+# 9. Type in textarea - shortcuts disabled (except Escape)
 ```
