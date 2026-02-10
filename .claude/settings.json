@@ -1,12 +1,34 @@
 {
   "hooks": {
-    "Stop": [
+    "PostToolUse": [
       {
         "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "bash /Volumes/Storage/Server/Startup/Genesis/hooks/8-SessionEnd-trigger-next.sh"
+            "command": "/Users/zelin/.local/bin/genesis-heartbeat.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Volumes/Storage/Server/Startup/Genesis/hooks/5-UserPromptSubmit-remind-state.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Volumes/Storage/Server/Startup/Genesis/hooks/6-SessionStart-init.sh"
           }
         ]
       }

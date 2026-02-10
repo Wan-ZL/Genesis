@@ -1,12 +1,12 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #34 Implementation Complete - Needs Verification.** Custom system prompt and persona customization. PersonaService with 3 built-in personas (Default, Code Expert, Creative Writer), custom persona CRUD, per-conversation override, system prompt integration in chat API. 32 new tests. Backend complete, frontend UI not yet implemented.
+**Issue #35 Complete - Needs Verification.** Bundle markdown libraries locally instead of CDN. Vendor files (marked.js v11.1.1, DOMPurify v3.0.8) bundled in `assistant/ui/vendor/`, index.html references local paths, no external CDN requests. Fixed 2 test assertions in test_markdown_ui.py. 945 tests pass (2 pre-existing failures per Issue #37).
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
 - Hooks system configured (5 hooks)
-- Auto-loop mechanism implemented (start-loop.sh + 8-Stop-trigger-next.sh)
+- Auto-loop mechanism implemented (start-multi-agent-loop.sh with self-healing)
 - AI Assistant architecture designed (assistant/ARCHITECTURE.md)
 - OpenAI API key configured (.claude/openai-key-secrets.env)
 - **Retry logic with exponential backoff** (assistant/server/services/retry.py):
@@ -413,7 +413,7 @@
   - Backend complete; frontend UI for persona selector not yet implemented
 
 ## Next Step (single step)
-Test self-healing mechanism: Run start-multi-agent-loop.sh and verify heartbeat/circuit breaker work correctly.
+Work on Issue #36 (Keyboard shortcuts for power users) — next available priority-medium enhancement.
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)

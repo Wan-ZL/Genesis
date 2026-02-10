@@ -9,19 +9,52 @@ UI_DIR = ASSISTANT_DIR / "ui"
 
 
 def test_index_html_has_markdown_libraries():
-    """Verify index.html includes marked.js and DOMPurify"""
+    """Verify index.html includes marked.js and DOMPurify from local vendor/"""
     index_path = UI_DIR / "index.html"
     assert index_path.exists(), "index.html not found"
 
     content = index_path.read_text()
 
-    # Check for marked.js CDN
+    # Check for marked.js local path (Issue #35: bundled locally)
     assert "marked" in content.lower(), "marked.js library not found in index.html"
-    assert "cdn.jsdelivr.net/npm/marked" in content, "marked.js CDN link missing"
+    assert "/static/vendor/marked.min.js" in content, "marked.js local path missing"
 
-    # Check for DOMPurify CDN
-    assert "dompurify" in content.lower(), "DOMPurify library not found in index.html"
-    assert "cdn.jsdelivr.net/npm/dompurify" in content, "DOMPurify CDN link missing"
+    # Check for DOMPurify local path (Issue #35: bundled locally)
+    assert "purify" in content.lower(), "DOMPurify library not found in index.html"
+    assert "/static/vendor/purify.min.js" in content, "DOMPurify local path missing"
+
+    # Verify NO external CDN links (local-first promise)
+    assert "cdn.jsdelivr.net" not in content or content.count("cdn.jsdelivr.net") == 0, \
+        "CDN links found - should use local vendor files"
+
+
+def test_vendor_libraries_exist_locally():
+    """Verify marked.js and DOMPurify are bundled in ui/vendor/ (Issue #35)"""
+    vendor_dir = UI_DIR / "vendor"
+    assert vendor_dir.exists(), "vendor directory not found"
+    assert vendor_dir.is_dir(), "vendor is not a directory"
+
+    # Check marked.min.js
+    marked_path = vendor_dir / "marked.min.js"
+    assert marked_path.exists(), "marked.min.js not found in vendor/"
+    assert marked_path.stat().st_size > 10000, "marked.min.js file too small (possibly empty)"
+
+    # Verify it's valid JavaScript (starts with comment or code)
+    marked_content = marked_path.read_text()
+    assert marked_content.startswith("/*") or marked_content.startswith("!function"), \
+        "marked.min.js doesn't look like valid minified JS"
+    assert "marked" in marked_content.lower(), "marked.min.js missing 'marked' identifier"
+
+    # Check purify.min.js
+    purify_path = vendor_dir / "purify.min.js"
+    assert purify_path.exists(), "purify.min.js not found in vendor/"
+    assert purify_path.stat().st_size > 10000, "purify.min.js file too small (possibly empty)"
+
+    # Verify it's valid JavaScript
+    purify_content = purify_path.read_text()
+    assert purify_content.startswith("/*") or purify_content.startswith("!function"), \
+        "purify.min.js doesn't look like valid minified JS"
+    assert "DOMPurify" in purify_content, "purify.min.js missing 'DOMPurify' identifier"
 
 
 def test_app_js_uses_markdown_rendering():
@@ -203,7 +236,7 @@ def test_markdown_libraries_loaded_before_app_js():
 
     # Find script tags
     marked_pos = content.find("marked")
-    dompurify_pos = content.find("dompurify")
+    dompurify_pos = content.find("purify.min.js")
     app_js_pos = content.find("/static/app.js")
 
     assert marked_pos > 0, "marked.js not found"
