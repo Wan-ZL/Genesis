@@ -30,7 +30,7 @@
                 <h1><span class="genesis-mark">G</span>enesis</h1>
             </div>
             <div class="header-buttons">
-                <button id="theme-toggle-btn" class="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">
+                <button id="theme-toggle-btn" class="theme-toggle" title="Toggle dark mode (Cmd/Ctrl+Shift+D)" aria-label="Toggle dark mode">
                     <!-- Moon icon (shown in light mode) -->
                     <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -48,7 +48,7 @@
                         <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
                     </svg>
                 </button>
-                <button id="settings-btn" title="Settings">&#9881;</button>
+                <button id="settings-btn" title="Settings (Cmd/Ctrl+,)">&#9881;</button>
                 <button id="toggle-status-btn" class="mobile-only" aria-label="Toggle status panel">Menu</button>
             </div>
         </header>
@@ -61,7 +61,7 @@
             <aside id="conversation-sidebar" class="conversation-sidebar">
                 <div class="sidebar-header">
                     <h2>Conversations</h2>
-                    <button id="new-conversation-btn" class="new-conversation-btn" title="New Conversation">+ New</button>
+                    <button id="new-conversation-btn" class="new-conversation-btn" title="New Conversation (Cmd/Ctrl+N)">+ New</button>
                 </div>
                 <div id="conversation-list" class="conversation-list">
                     <!-- Populated dynamically -->
@@ -201,10 +201,67 @@
         </div>
     </div>
 
+    <!-- Quick Switcher Modal (Cmd+K) -->
+    <div id="quick-switcher" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="quick-switcher-content">
+            <input
+                type="text"
+                id="quick-switcher-search"
+                class="quick-switcher-search"
+                placeholder="Search conversations..."
+                autocomplete="off"
+            />
+            <div id="quick-switcher-list" class="quick-switcher-list">
+                <!-- Populated by shortcuts.js -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Shortcut Help Modal (Cmd+/) -->
+    <div id="shortcut-help" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content shortcut-help-content">
+            <div class="modal-header">
+                <h2>Keyboard Shortcuts</h2>
+                <button class="modal-close" onclick="closeShortcutHelp()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="shortcut-grid">
+                    <div class="shortcut-item">
+                        <kbd class="shortcut-key">Cmd/Ctrl + N</kbd>
+                        <span class="shortcut-desc">New Conversation</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <kbd class="shortcut-key">Cmd/Ctrl + K</kbd>
+                        <span class="shortcut-desc">Quick Switcher</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <kbd class="shortcut-key">Cmd/Ctrl + ,</kbd>
+                        <span class="shortcut-desc">Open Settings</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <kbd class="shortcut-key">Cmd/Ctrl + Shift + D</kbd>
+                        <span class="shortcut-desc">Toggle Dark Mode</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <kbd class="shortcut-key">Escape</kbd>
+                        <span class="shortcut-desc">Close Modal/Overlay</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <kbd class="shortcut-key">Cmd/Ctrl + /</kbd>
+                        <span class="shortcut-desc">Show Shortcuts</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Markdown rendering libraries (bundled locally) -->
     <script src="/static/vendor/marked.min.js"></script>
     <script src="/static/vendor/purify.min.js"></script>
 
+    <script src="/static/shortcuts.js"></script>
     <script src="/static/app.js"></script>
 </body>
 </html>
