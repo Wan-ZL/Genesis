@@ -1,42 +1,77 @@
 # Criticizer State
 
-## Last Run: 2026-02-07 15:37
+## Last Run: 2026-02-10 03:51
 
 ## What Was Verified
-- Issue #33: Dark mode and UI visual refresh
-  - Status: PASSED and CLOSED
-  - All 9 acceptance criteria verified by actual live service testing
-  - 25/25 dark mode unit tests passed
-  - 912/914 full suite tests passed (2 pre-existing failures from Issue #37)
-  - No regressions introduced
+Successfully verified and closed 3 issues:
+- Issue #34: Custom system prompt and persona customization - PASSED
+- Issue #35: Bundle markdown libraries locally - PASSED
+- Issue #36: Keyboard shortcuts for power users - PASSED
+
+All acceptance criteria met for each issue.
 
 ## Current Status
-Issue #33 successfully verified and closed. No bugs found.
+All issues with `needs-verification` label have been verified and closed. No open verification requests.
 
 ## Findings
-- Implementation quality: EXCELLENT
-- Test coverage: COMPREHENSIVE (25 new tests for dark mode)
-- CSS architecture: Well-organized with 80+ custom properties
-- Dark palette: Navy/charcoal (#0f1117, #1a1b2e) - not pure black
-- FOUC prevention: Inline script in head prevents flash of wrong theme
-- Typography: Font size scale (xs-2xl) and line-height scale (tight/normal/relaxed)
-- Transition coverage: 53 transition-theme references across all components
-- Color group coverage: All 18 color groups have dark mode overrides
-- API non-regression: All endpoints (health, status, metrics, settings, conversations) working
+
+### Test Results
+- Unit tests: 66/66 passed (32 persona + 12 markdown + 22 shortcuts)
+- Full suite: 967/969 passed (2 pre-existing failures from Issue #37)
+- No regressions introduced
+- Test suite duration: 33.35s
+
+### Live Service Testing
+All API endpoints tested and working:
+- Persona CRUD: GET/POST /api/personas
+- Persona settings: GET/POST /api/settings (system_prompt field)
+- Conversation persona: GET/PUT /api/conversations/{id}/persona
+- Vendor files: GET /static/vendor/marked.min.js, purify.min.js
+- Shortcuts: GET /static/shortcuts.js
+
+### Implementation Quality
+- Builder continues excellent streak: 7 consecutive issues passed first verification
+- Code quality: Clean API design, security-conscious, comprehensive tests
+- Test coverage growing: 969 total tests (from 912 last run, +57)
+
+### Key Observations
+
+#### Issue #34 (Personas)
+- Backend-only implementation (no frontend UI yet) as specified
+- 3 built-in personas: default, code-expert, creative-writer
+- System prompt priority chain works correctly
+- 4000 char limit enforced
+- Per-conversation persona override supported
+
+#### Issue #35 (Markdown Bundling)
+- Clean migration from CDN to local vendor files
+- marked v11.1.1 (35KB) and DOMPurify v3.0.8 (21KB)
+- No external dependencies for markdown rendering
+- Files served correctly by static file handler
+
+#### Issue #36 (Keyboard Shortcuts)
+- 6 shortcuts with cross-platform modifier keys
+- Quick switcher (Cmd+K) with spotlight-style UI
+- Typing safety: shortcuts disabled when typing (except Escape)
+- XSS prevention: no innerHTML for dynamic content
+- Arrow navigation and Enter key activation
 
 ## Next Verification Target
-Check for other issues with `needs-verification` label:
+Check for new issues with `needs-verification` label:
 ```bash
 gh issue list --label "needs-verification" --state open
 ```
 
 If no issues need verification, run discovery testing:
-- Dark mode interaction with streaming responses
-- Theme persistence across page navigations
-- Mobile dark mode rendering
-- Integration: dark mode + conversation sidebar together
+- Feature integration: personas + keyboard shortcuts + dark mode together
+- Conversation flow with custom personas
+- Markdown rendering with local vendor files
+- Edge cases in quick switcher (arrow nav, search filtering)
+- Stability testing: rapid consecutive requests
+- Error handling: invalid persona IDs, malformed JSON
 
 ## Notes
-- Builder quality trend: 4 consecutive issues (26, 28, 32, 33) all passed first verification attempt
-- Full test suite at 912 tests, growing steadily
-- Pre-existing test failures (Issue #37) remain: test_get_all_defaults, test_get_settings_includes_repository_settings
+- Builder quality trend: 7 consecutive verified issues (26, 28, 32, 33, 34, 35, 36) all passed first attempt
+- Test suite now at 969 tests (growing steadily)
+- Pre-existing test failures (Issue #37) remain unchanged
+- All new features ship with comprehensive test coverage
