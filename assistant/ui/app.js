@@ -11,6 +11,8 @@ let activeStreamController = null; // Track active stream for cancellation
 let currentConversationId = 'main'; // Currently active conversation
 let sidebarCollapsed = false; // Sidebar visibility state
 let conversations = []; // Cached conversation list
+let personas = []; // Cached persona list
+let currentPersonaId = null; // Current persona for active conversation
 
 // DOM Elements
 const messagesContainer = document.getElementById('messages');
@@ -46,6 +48,23 @@ const openaiKeyStatus = document.getElementById('openai-key-status');
 const anthropicKeyStatus = document.getElementById('anthropic-key-status');
 const modelSelect = document.getElementById('model-select');
 const permissionSelect = document.getElementById('permission-select');
+
+// Persona elements
+const personaSelectorBtn = document.getElementById('persona-selector-btn');
+const createPersonaBtn = document.getElementById('create-persona-btn');
+const personaDropdown = document.getElementById('persona-dropdown');
+const personaList = document.getElementById('persona-list');
+const currentPersonaName = document.getElementById('current-persona-name');
+const personaModal = document.getElementById('persona-modal');
+const personaModalTitle = document.getElementById('persona-modal-title');
+const personaModalId = document.getElementById('persona-modal-id');
+const personaNameInput = document.getElementById('persona-name-input');
+const personaDescInput = document.getElementById('persona-description-input');
+const personaPromptInput = document.getElementById('persona-prompt-input');
+const personaPromptChars = document.getElementById('persona-prompt-chars');
+const personaSaveBtn = document.getElementById('persona-save-btn');
+const personaCancelBtn = document.getElementById('persona-cancel-btn');
+const personaModalClose = document.getElementById('persona-modal-close');
 
 // ============================================================================
 // Theme (Dark Mode) Management
@@ -106,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadStatus();
     loadConversations(true); // Load sidebar and current conversation
     loadMetrics();
+    loadPersonas(); // Load persona list
     setupEventListeners();
     initVoiceInput();
 
@@ -198,6 +218,38 @@ function setupEventListeners() {
     if (newConversationBtn) {
         newConversationBtn.addEventListener('click', createNewConversation);
     }
+
+    // Persona switcher
+    if (personaSelectorBtn) {
+        personaSelectorBtn.addEventListener('click', togglePersonaDropdown);
+    }
+    if (createPersonaBtn) {
+        createPersonaBtn.addEventListener('click', openCreatePersonaModal);
+    }
+    if (personaModalClose) {
+        personaModalClose.addEventListener('click', closePersonaModal);
+    }
+    if (personaCancelBtn) {
+        personaCancelBtn.addEventListener('click', closePersonaModal);
+    }
+    if (personaSaveBtn) {
+        personaSaveBtn.addEventListener('click', savePersona);
+    }
+    if (personaModal) {
+        personaModal.querySelector('.modal-backdrop').addEventListener('click', closePersonaModal);
+    }
+    if (personaPromptInput) {
+        personaPromptInput.addEventListener('input', updatePersonaCharCount);
+    }
+
+    // Close persona dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (personaDropdown && !personaDropdown.classList.contains('hidden')) {
+            if (!personaSelectorBtn.contains(e.target) && !personaDropdown.contains(e.target)) {
+                closePersonaDropdown();
+            }
+        }
+    });
 }
 
 function toggleStatusPanel() {
@@ -350,6 +402,9 @@ async function switchConversation(conversationId) {
 
     // Load messages
     await loadConversationMessages(conversationId);
+
+    // Load persona for this conversation
+    await loadConversationPersona();
 
     // Close sidebar on mobile
     if (window.innerWidth <= 900) {
@@ -1086,6 +1141,325 @@ async function loadMetrics() {
         successRateEl.textContent = '-';
         latencyEl.textContent = '-';
         messagesEl.textContent = '-';
+    }
+}
+
+// ============================================================================
+// Persona Switcher Functions
+// ============================================================================
+
+async function loadPersonas() {
+    try {
+        const response = await fetch('/api/personas');
+        const data = await response.json();
+
+        if (response.ok) {
+            personas = data.personas || [];
+            renderPersonaList();
+            await loadConversationPersona();
+        }
+    } catch (error) {
+        console.error('Failed to load personas:', error);
+    }
+}
+
+async function loadConversationPersona() {
+    try {
+        const response = await fetch(`/api/conversations/${currentConversationId}/persona`);
+        const data = await response.json();
+
+        if (response.ok) {
+            currentPersonaId = data.persona_id || 'default';
+            updateCurrentPersonaDisplay();
+        }
+    } catch (error) {
+        console.error('Failed to load conversation persona:', error);
+        currentPersonaId = 'default';
+        updateCurrentPersonaDisplay();
+    }
+}
+
+function updateCurrentPersonaDisplay() {
+    const persona = personas.find(p => p.id === currentPersonaId);
+    if (persona && currentPersonaName) {
+        currentPersonaName.textContent = persona.name;
+    } else if (currentPersonaName) {
+        currentPersonaName.textContent = 'Default Assistant';
+    }
+}
+
+function renderPersonaList() {
+    if (!personaList) return;
+    while (personaList.firstChild) {
+        personaList.removeChild(personaList.firstChild);
+    }
+
+    personas.forEach(persona => {
+        const item = document.createElement('div');
+        item.className = 'persona-item' + (persona.id === currentPersonaId ? ' active' : '');
+        item.dataset.id = persona.id;
+
+        const content = document.createElement('div');
+        content.className = 'persona-item-content';
+
+        const name = document.createElement('div');
+        name.className = 'persona-item-name';
+        name.textContent = persona.name;
+        content.appendChild(name);
+
+        if (persona.description) {
+            const desc = document.createElement('div');
+            desc.className = 'persona-item-description';
+            desc.textContent = persona.description;
+            content.appendChild(desc);
+        }
+
+        if (persona.is_builtin) {
+            const builtin = document.createElement('div');
+            builtin.className = 'persona-item-builtin';
+            builtin.textContent = 'Built-in';
+            content.appendChild(builtin);
+        }
+
+        item.appendChild(content);
+
+        if (!persona.is_builtin) {
+            const actions = document.createElement('div');
+            actions.className = 'persona-item-actions';
+
+            const editBtn = document.createElement('button');
+            editBtn.className = 'persona-item-action-btn edit';
+            editBtn.textContent = 'Edit';
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openEditPersonaModal(persona);
+            });
+            actions.appendChild(editBtn);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'persona-item-action-btn delete';
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                confirmDeletePersona(persona);
+            });
+            actions.appendChild(deleteBtn);
+
+            item.appendChild(actions);
+        }
+
+        item.addEventListener('click', () => {
+            switchPersona(persona.id);
+        });
+
+        personaList.appendChild(item);
+    });
+}
+
+function togglePersonaDropdown() {
+    const isHidden = personaDropdown.classList.contains('hidden');
+
+    if (isHidden) {
+        const rect = personaSelectorBtn.getBoundingClientRect();
+        personaDropdown.style.position = 'fixed';
+        personaDropdown.style.top = (rect.bottom + 4) + 'px';
+        personaDropdown.style.left = rect.left + 'px';
+        personaDropdown.style.width = Math.max(rect.width, 300) + 'px';
+
+        personaDropdown.classList.remove('hidden');
+        personaSelectorBtn.classList.add('active');
+    } else {
+        closePersonaDropdown();
+    }
+}
+
+function closePersonaDropdown() {
+    personaDropdown.classList.add('hidden');
+    personaSelectorBtn.classList.remove('active');
+}
+
+async function switchPersona(personaId) {
+    try {
+        const response = await fetch(`/api/conversations/${currentConversationId}/persona`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ persona_id: personaId })
+        });
+
+        if (response.ok) {
+            currentPersonaId = personaId;
+            updateCurrentPersonaDisplay();
+            renderPersonaList();
+            closePersonaDropdown();
+        } else {
+            const error = await response.json();
+            console.error('Failed to switch persona:', error);
+        }
+    } catch (error) {
+        console.error('Failed to switch persona:', error);
+    }
+}
+
+function openCreatePersonaModal() {
+    personaModalTitle.textContent = 'Create Custom Persona';
+    personaModalId.value = '';
+    personaNameInput.value = '';
+    personaDescInput.value = '';
+    personaPromptInput.value = '';
+    updatePersonaCharCount();
+    personaModal.classList.remove('hidden');
+    personaNameInput.focus();
+}
+
+function openEditPersonaModal(persona) {
+    personaModalTitle.textContent = 'Edit Custom Persona';
+    personaModalId.value = persona.id;
+    personaNameInput.value = persona.name;
+    personaDescInput.value = persona.description || '';
+    personaPromptInput.value = persona.system_prompt;
+    updatePersonaCharCount();
+    personaModal.classList.remove('hidden');
+    personaNameInput.focus();
+}
+
+function closePersonaModal() {
+    personaModal.classList.add('hidden');
+}
+
+function updatePersonaCharCount() {
+    const length = personaPromptInput.value.length;
+    personaPromptChars.textContent = length;
+
+    if (length > 4000) {
+        personaPromptChars.style.color = 'var(--color-btn-danger-bg)';
+    } else if (length > 3500) {
+        personaPromptChars.style.color = 'var(--color-warning)';
+    } else {
+        personaPromptChars.style.color = '';
+    }
+}
+
+async function savePersona() {
+    const name = personaNameInput.value.trim();
+    const description = personaDescInput.value.trim();
+    const systemPrompt = personaPromptInput.value.trim();
+    const personaId = personaModalId.value;
+
+    if (!name) {
+        alert('Name is required');
+        return;
+    }
+
+    if (!systemPrompt) {
+        alert('System prompt is required');
+        return;
+    }
+
+    if (systemPrompt.length > 4000) {
+        alert('System prompt must be 4000 characters or less');
+        return;
+    }
+
+    try {
+        personaSaveBtn.disabled = true;
+        personaSaveBtn.textContent = 'Saving...';
+
+        const isEdit = !!personaId;
+        const url = isEdit ? `/api/personas/${personaId}` : '/api/personas';
+        const method = isEdit ? 'PUT' : 'POST';
+
+        const payload = { name, description, system_prompt: systemPrompt };
+
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            await loadPersonas();
+            closePersonaModal();
+        } else {
+            const error = await response.json();
+            alert(`Failed to save persona: ${error.detail || 'Unknown error'}`);
+        }
+    } catch (error) {
+        console.error('Failed to save persona:', error);
+        alert(`Error: ${error.message}`);
+    } finally {
+        personaSaveBtn.disabled = false;
+        personaSaveBtn.textContent = 'Save Persona';
+    }
+}
+
+function confirmDeletePersona(persona) {
+    const dialog = document.createElement('div');
+    dialog.className = 'delete-confirm-dialog';
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'delete-confirm-backdrop';
+    dialog.appendChild(backdrop);
+
+    const content = document.createElement('div');
+    content.className = 'delete-confirm-content';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Delete Persona?';
+    content.appendChild(title);
+
+    const message = document.createElement('p');
+    message.textContent = 'Are you sure you want to delete "' + persona.name + '"? This action cannot be undone.';
+    content.appendChild(message);
+
+    const buttons = document.createElement('div');
+    buttons.className = 'delete-confirm-buttons';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn-danger';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', async () => {
+        await deletePersona(persona.id);
+        dialog.remove();
+    });
+    buttons.appendChild(deleteBtn);
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn-secondary';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', () => {
+        dialog.remove();
+    });
+    buttons.appendChild(cancelBtn);
+
+    content.appendChild(buttons);
+    dialog.appendChild(content);
+
+    backdrop.addEventListener('click', () => {
+        dialog.remove();
+    });
+
+    document.body.appendChild(dialog);
+}
+
+async function deletePersona(personaId) {
+    try {
+        const response = await fetch(`/api/personas/${personaId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            if (personaId === currentPersonaId) {
+                await switchPersona('default');
+            }
+            await loadPersonas();
+        } else {
+            const error = await response.json();
+            console.error('Failed to delete persona:', error);
+            alert(`Failed to delete: ${error.detail || 'Unknown error'}`);
+        }
+    } catch (error) {
+        console.error('Failed to delete persona:', error);
+        alert(`Error: ${error.message}`);
     }
 }
 

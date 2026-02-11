@@ -69,6 +69,16 @@
             </aside>
 
             <div class="chat-container">
+                <!-- Persona Selector Header -->
+                <div class="persona-header">
+                    <button id="persona-selector-btn" class="persona-selector-btn" title="Select persona">
+                        <span class="persona-icon">👤</span>
+                        <span id="current-persona-name" class="persona-name">Default Assistant</span>
+                        <span class="persona-arrow">▼</span>
+                    </button>
+                    <button id="create-persona-btn" class="create-persona-btn" title="Create custom persona">+ New Persona</button>
+                </div>
+
                 <div id="messages" class="messages"></div>
 
                 <div id="file-preview" class="file-preview"></div>
@@ -253,6 +263,44 @@
                         <span class="shortcut-desc">Show Shortcuts</span>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Persona Dropdown Menu -->
+    <div id="persona-dropdown" class="persona-dropdown hidden">
+        <div id="persona-list" class="persona-list">
+            <!-- Populated dynamically -->
+        </div>
+    </div>
+
+    <!-- Create/Edit Persona Modal -->
+    <div id="persona-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="persona-modal-title">Create Custom Persona</h2>
+                <button id="persona-modal-close" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="persona-modal-id">
+                <div class="settings-field">
+                    <label for="persona-name-input">Name</label>
+                    <input type="text" id="persona-name-input" placeholder="e.g., Tech Advisor" maxlength="50">
+                </div>
+                <div class="settings-field">
+                    <label for="persona-description-input">Short Description</label>
+                    <input type="text" id="persona-description-input" placeholder="e.g., Technical and concise" maxlength="100">
+                </div>
+                <div class="settings-field">
+                    <label for="persona-prompt-input">System Prompt</label>
+                    <textarea id="persona-prompt-input" rows="8" placeholder="You are a..." maxlength="4000"></textarea>
+                    <small><span id="persona-prompt-chars">0</span>/4000 characters</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="persona-save-btn" class="btn-primary">Save Persona</button>
+                <button id="persona-cancel-btn" class="btn-secondary">Cancel</button>
             </div>
         </div>
     </div>

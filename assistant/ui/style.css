@@ -1868,6 +1868,212 @@ main {
 }
 
 /* ============================================================================
+   Persona Switcher
+   ============================================================================ */
+
+.persona-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-border-secondary);
+    background: var(--color-bg-tertiary);
+    transition: background-color var(--transition-theme), border-color var(--transition-theme);
+}
+
+.persona-selector-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-normal), border-color var(--transition-theme);
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+}
+
+.persona-selector-btn:hover {
+    background: var(--color-bg-hover);
+    border-color: var(--color-accent-primary);
+}
+
+.persona-icon {
+    font-size: var(--font-size-lg);
+    flex-shrink: 0;
+}
+
+.persona-name {
+    flex: 1;
+    text-align: left;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.persona-arrow {
+    font-size: 0.8em;
+    color: var(--color-text-muted);
+    transition: transform var(--transition-fast);
+}
+
+.persona-selector-btn.active .persona-arrow {
+    transform: rotate(180deg);
+}
+
+.create-persona-btn {
+    padding: 8px 12px;
+    background: var(--color-accent-primary);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color var(--transition-normal);
+}
+
+.create-persona-btn:hover {
+    background: var(--color-accent-primary-hover);
+}
+
+/* Persona Dropdown Menu */
+.persona-dropdown {
+    position: absolute;
+    z-index: 500;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 12px var(--color-shadow-lg);
+    max-height: 400px;
+    overflow-y: auto;
+    min-width: 300px;
+    animation: dropdown-appear 0.15s ease-out;
+    transition: background-color var(--transition-theme), border-color var(--transition-theme);
+}
+
+@keyframes dropdown-appear {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.persona-dropdown.hidden {
+    display: none;
+}
+
+.persona-list {
+    padding: 4px;
+}
+
+.persona-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.persona-item:hover {
+    background: var(--color-bg-hover);
+}
+
+.persona-item.active {
+    background: var(--color-bg-active);
+}
+
+.persona-item.active::before {
+    content: '✓';
+    position: absolute;
+    left: 4px;
+    font-weight: bold;
+    color: var(--color-accent-primary);
+}
+
+.persona-item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.persona-item-name {
+    font-size: var(--font-size-base);
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: 2px;
+    transition: color var(--transition-theme);
+}
+
+.persona-item-description {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    transition: color var(--transition-theme);
+}
+
+.persona-item-builtin {
+    font-size: var(--font-size-xs);
+    color: var(--color-info);
+    margin-top: 2px;
+    transition: color var(--transition-theme);
+}
+
+.persona-item-actions {
+    display: none;
+    gap: 4px;
+    margin-left: 8px;
+}
+
+.persona-item:hover .persona-item-actions {
+    display: flex;
+}
+
+.persona-item-action-btn {
+    padding: 4px 8px;
+    font-size: var(--font-size-xs);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.persona-item-action-btn.edit {
+    color: var(--color-accent-primary);
+}
+
+.persona-item-action-btn.edit:hover {
+    background: var(--color-accent-primary-light);
+}
+
+.persona-item-action-btn.delete {
+    color: var(--color-btn-danger-bg);
+}
+
+.persona-item-action-btn.delete:hover {
+    background: var(--color-btn-danger-light);
+}
+
+/* Persona Modal */
+#persona-modal textarea {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-sm);
+    resize: vertical;
+    min-height: 150px;
+}
+
+/* ============================================================================
    Keyboard Shortcuts
    ============================================================================ */
 
@@ -2014,5 +2220,36 @@ main {
 
     .shortcut-desc {
         font-size: var(--font-size-sm);
+    }
+
+    /* Persona header on mobile */
+    .persona-header {
+        padding: 10px 12px;
+        flex-wrap: wrap;
+    }
+
+    .persona-selector-btn {
+        font-size: var(--font-size-sm);
+        padding: 10px;
+        min-height: 44px;
+    }
+
+    .create-persona-btn {
+        min-height: 44px;
+        flex: 1;
+        min-width: 100px;
+    }
+
+    .persona-dropdown {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 90vw;
+        max-height: 70vh;
+    }
+
+    #persona-modal textarea {
+        font-size: 16px; /* Prevent iOS zoom */
     }
 }

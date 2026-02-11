@@ -1,9 +1,22 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #37 Complete - Needs Verification.** Fixed two pre-existing settings test failures. Bug 1: `DEFAULTS["permission_level"]` was `3` (FULL) but architecture spec says `1` (LOCAL) — fixed to `1`. Bug 2: `TestSettingsAPI.app` fixture shared module singleton, causing test pollution — fixed with per-test service isolation. Full suite: 969 passed, 0 failed (first time zero failures).
+**Issue #38 COMPLETE - Needs Verification.** Implemented persona switcher UI in chat interface with full CRUD operations. Frontend-only implementation using existing backend API. Header shows current persona with dropdown selector, create/edit/delete modals for custom personas, mobile-responsive design, XSS-safe DOM manipulation. 25 new tests in test_persona_ui.py, all passing.
 
 ## Done
+- **Issue #38 COMPLETE - Persona switcher UI (needs verification)**:
+  - Frontend: Persona header with selector button and create button (index.html)
+  - Frontend: Persona dropdown menu with all available personas
+  - Frontend: Create/Edit persona modal with character counter (4000 char limit)
+  - Frontend: Delete confirmation dialog (safe DOM methods, no innerHTML)
+  - Frontend: CSS styles with light/dark mode support (style.css)
+  - Frontend: Mobile-responsive (44px touch targets, fixed positioning on mobile)
+  - Frontend: JavaScript integration (app.js) - loadPersonas(), switchPersona(), CRUD operations
+  - Frontend: Per-conversation persona persistence (loads on conversation switch)
+  - Frontend: Visual indicators (active persona, built-in badge, edit/delete actions)
+  - Frontend: XSS-safe implementation (createElement/textContent, no innerHTML)
+  - 25 new tests in test_persona_ui.py (994 total passing)
+  - Frontend integrates with existing backend API (no backend changes needed)
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
 - Hooks system configured (5 hooks)
 - Auto-loop mechanism implemented (start-multi-agent-loop.sh with self-healing)
@@ -417,7 +430,7 @@
   - No external CDN requests for markdown rendering
   - Fixed 2 test assertions in test_markdown_ui.py
   - 945 tests pass
-- **Issue #36 COMPLETE - Keyboard shortcuts for power users (needs verification)**:
+- **Issue #36 COMPLETE - Keyboard shortcuts for power users (verified)**:
   - Global shortcut handler: `assistant/ui/shortcuts.js`
   - 6 shortcuts: Cmd/Ctrl+N (new), Cmd/Ctrl+K (switcher), Cmd/Ctrl+, (settings), Cmd/Ctrl+Shift+D (dark mode), Escape (close), Cmd/Ctrl+/ (help)
   - Quick switcher (Cmd+K): Spotlight-style overlay with search, arrow nav, Enter to select
@@ -427,9 +440,13 @@
   - Security: No XSS (uses textContent/createElement, not innerHTML)
   - UI polish: Tooltips with shortcut hints, mobile-responsive modals
   - 22 new tests in test_keyboard_shortcuts.py (967 total passing)
+- **Issue #37 COMPLETE - Settings test failures fixed (needs verification)**:
+  - Fixed `DEFAULTS["permission_level"]` from 3 (FULL) to 1 (LOCAL) per architecture spec
+  - Fixed `TestSettingsAPI.app` fixture to create per-test service isolation
+  - All 969 tests passing (first time zero failures)
 
 ## Next Step (single step)
-Wait for Criticizer to verify Issue #37, then check backlog for next work item.
+Add `needs-verification` label to Issue #38 with test instructions, then wait for Criticizer verification.
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)
