@@ -207,6 +207,22 @@ class ProactiveService:
             except Exception as e:
                 logger.error(f"Notification callback error: {e}")
 
+        # Send push notification to PWA clients
+        try:
+            from server.services.push import get_push_service
+            push_service = get_push_service()
+            await push_service.send_notification(
+                title=notification.title,
+                body=notification.body,
+                tag=f"proactive-{notification.id}",
+                data={
+                    "notification_id": notification.id,
+                    "url": notification.action_url or "/"
+                }
+            )
+        except Exception as e:
+            logger.error(f"Failed to send push notification: {e}")
+
         return notification
 
     async def get_notifications(

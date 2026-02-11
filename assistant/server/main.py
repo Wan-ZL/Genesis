@@ -66,6 +66,11 @@ async def lifespan(app: FastAPI):
     await init_proactive()
     logger.info("Proactive service started")
 
+    # Initialize push notification service
+    from server.routes.push import init_push
+    init_push()
+    logger.info("Push notification service initialized")
+
     # Initialize degradation service and check actual Ollama availability
     from server.services.degradation import get_degradation_service
     degradation_svc = get_degradation_service()
@@ -177,7 +182,7 @@ async def auth_middleware(request: Request, call_next):
 
 
 # Import and include routers
-from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth, schedule, persona, notifications
+from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth, schedule, persona, notifications, push
 
 # Auth routes (always accessible)
 app.include_router(auth.router, prefix="/api", tags=["auth"])
@@ -195,6 +200,7 @@ app.include_router(degradation.router, prefix="/api", tags=["degradation"])
 app.include_router(schedule.router, prefix="/api", tags=["schedule"])
 app.include_router(persona.router, prefix="/api", tags=["persona"])
 app.include_router(notifications.router, prefix="/api", tags=["notifications"])
+app.include_router(push.router, prefix="/api", tags=["push"])
 
 # Serve static UI files (when they exist)
 UI_PATH = Path(__file__).parent.parent / "ui"
@@ -208,6 +214,29 @@ if UI_PATH.exists():
         if index_path.exists():
             return FileResponse(index_path)
         return {"message": "UI not yet implemented. Use /api/chat endpoint."}
+
+    @app.get("/manifest.json")
+    async def serve_manifest():
+        """Serve PWA manifest with proper MIME type."""
+        from fastapi.responses import JSONResponse
+        manifest_path = UI_PATH / "manifest.json"
+        if manifest_path.exists():
+            import json
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            return JSONResponse(content=manifest, media_type="application/manifest+json")
+        return {"error": "Manifest not found"}
+
+    @app.get("/sw.js")
+    async def serve_service_worker():
+        """Serve service worker with proper MIME type."""
+        from fastapi.responses import Response
+        sw_path = UI_PATH / "sw.js"
+        if sw_path.exists():
+            with open(sw_path) as f:
+                sw_content = f.read()
+            return Response(content=sw_content, media_type="application/javascript")
+        return {"error": "Service worker not found"}
 else:
     @app.get("/")
     async def root():

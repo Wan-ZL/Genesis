@@ -4,6 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Genesis</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+
+    <!-- Theme color for browser chrome -->
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="theme-color" content="#0f1117" media="(prefers-color-scheme: dark)">
+
+    <!-- iOS PWA Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Genesis">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+
+    <!-- Standard favicon -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/static/icons/icon-512x512.png">
+
     <link rel="stylesheet" href="/static/style.css">
     <!-- Syntax highlighting themes (light and dark) -->
     <link rel="stylesheet" href="/static/vendor/github.min.css" media="(prefers-color-scheme: light)">
@@ -360,6 +378,19 @@
         </div>
     </div>
 
+    <!-- PWA Install Banner -->
+    <div id="pwa-install-banner" class="pwa-install-banner hidden">
+        <div class="pwa-banner-content">
+            <div class="pwa-banner-icon">📱</div>
+            <div class="pwa-banner-text">
+                <div class="pwa-banner-title">Install Genesis</div>
+                <div class="pwa-banner-desc">Get quick access from your home screen</div>
+            </div>
+            <button id="pwa-install-btn" class="pwa-install-btn">Install</button>
+            <button id="pwa-dismiss-btn" class="pwa-dismiss-btn" aria-label="Dismiss">&times;</button>
+        </div>
+    </div>
+
     <!-- Markdown rendering libraries (bundled locally) -->
     <script src="/static/vendor/marked.min.js"></script>
     <script src="/static/vendor/purify.min.js"></script>
@@ -367,5 +398,6 @@
 
     <script src="/static/shortcuts.js"></script>
     <script src="/static/app.js"></script>
+    <script src="/static/pwa.js"></script>
 </body>
 </html>

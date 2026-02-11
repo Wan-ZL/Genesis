@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesis - Offline</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .offline-container {
+            text-align: center;
+            max-width: 500px;
+        }
+
+        .offline-icon {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 30px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        p {
+            font-size: 18px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+
+        .retry-btn {
+            background: #fff;
+            color: #667eea;
+            border: none;
+            padding: 15px 40px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .retry-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .retry-btn:active {
+            transform: translateY(0);
+        }
+
+        .cached-conversations {
+            margin-top: 40px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            text-align: left;
+        }
+
+        .cached-conversations h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .conversation-item {
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .conversation-item:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .conversation-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .conversation-preview {
+            font-size: 14px;
+            opacity: 0.8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <div class="offline-icon">
+            📡
+        </div>
+        <h1>You're Offline</h1>
+        <p>
+            <span class="status-indicator"></span>
+            Genesis is unable to connect to the server. Your conversations are cached and will sync when the connection is restored.
+        </p>
+        <button class="retry-btn" onclick="retryConnection()">Retry Connection</button>
+
+        <div class="cached-conversations">
+            <h2>Cached Conversations</h2>
+            <div id="cached-list">
+                <p style="text-align: center; opacity: 0.8;">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function retryConnection() {
+            window.location.href = '/';
+        }
+
+        // Load cached conversations from service worker cache
+        async function loadCachedConversations() {
+            const cachedListEl = document.getElementById('cached-list');
+
+            try {
+                // Try to get cached conversation data
+                const cache = await caches.open('genesis-v1-runtime');
+                const conversationResponse = await cache.match('/api/conversations');
+
+                if (conversationResponse) {
+                    const data = await conversationResponse.json();
+                    const conversations = data.conversations || [];
+
+                    if (conversations.length === 0) {
+                        const emptyMsg = document.createElement('p');
+                        emptyMsg.style.textAlign = 'center';
+                        emptyMsg.style.opacity = '0.8';
+                        emptyMsg.textContent = 'No cached conversations';
+                        cachedListEl.textContent = '';
+                        cachedListEl.appendChild(emptyMsg);
+                        return;
+                    }
+
+                    cachedListEl.textContent = '';
+                    conversations.slice(0, 5).forEach(conv => {
+                        const item = document.createElement('div');
+                        item.className = 'conversation-item';
+                        item.onclick = () => {
+                            // Store conversation ID and retry
+                            localStorage.setItem('pendingConversation', conv.id);
+                            retryConnection();
+                        };
+
+                        const title = document.createElement('div');
+                        title.className = 'conversation-title';
+                        title.textContent = conv.title || 'Untitled Conversation';
+
+                        const preview = document.createElement('div');
+                        preview.className = 'conversation-preview';
+                        preview.textContent = conv.preview || 'No preview available';
+
+                        item.appendChild(title);
+                        item.appendChild(preview);
+                        cachedListEl.appendChild(item);
+                    });
+                } else {
+                    const noCache = document.createElement('p');
+                    noCache.style.textAlign = 'center';
+                    noCache.style.opacity = '0.8';
+                    noCache.textContent = 'No cached conversations';
+                    cachedListEl.textContent = '';
+                    cachedListEl.appendChild(noCache);
+                }
+            } catch (error) {
+                console.error('Failed to load cached conversations:', error);
+                const errorMsg = document.createElement('p');
+                errorMsg.style.textAlign = 'center';
+                errorMsg.style.opacity = '0.8';
+                errorMsg.textContent = 'Unable to load cache';
+                cachedListEl.textContent = '';
+                cachedListEl.appendChild(errorMsg);
+            }
+        }
+
+        // Load on page load
+        loadCachedConversations();
+
+        // Auto-retry every 30 seconds
+        setInterval(() => {
+            fetch('/api/health', { method: 'HEAD', cache: 'no-cache' })
+                .then(response => {
+                    if (response.ok) {
+                        window.location.href = '/';
+                    }
+                })
+                .catch(() => {
+                    // Still offline
+                });
+        }, 30000);
+    </script>
+</body>
+</html>

@@ -1,9 +1,23 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #42 COMPLETE - Needs Verification.** Conversation search across all conversations. Extended search API with cross_conversation parameter, Quick Switcher (Cmd+K) now searches message content when query >= 2 chars, safe DOM-based highlighting, loading indicators, empty states. 17 new tests (10 memory service, 7 API endpoint), 1113 total tests passing.
+**Issue #44 COMPLETE - Needs Verification.** PWA Support: installable app, push notifications, offline access. Complete PWA infrastructure with manifest, service worker, 11 app icons, offline fallback page, push notification backend (PushService + VAPID), ProactiveService integration, iOS support. 10 new tests passing in test_pwa.py.
 
 ## Done
+- **Issue #44 COMPLETE - PWA Support (needs verification)**:
+  - Manifest: assistant/ui/manifest.json with all metadata, theme colors, icons, shortcuts
+  - Service Worker: assistant/ui/sw.js with cache-first (static) and network-first (API) strategies
+  - Offline fallback: assistant/ui/offline.html with cached conversations and auto-retry
+  - App Icons: 11 icons generated (72-512px + maskable + badge + apple-touch-icon)
+  - iOS Support: Meta tags for apple-mobile-web-app-capable, apple-touch-icon, theme-color
+  - Install Banner: Custom UI with dismiss and install actions, localStorage persistence
+  - Push Backend: PushService (server/services/push.py) with VAPID key generation
+  - Push API: /api/push/vapid-key, /api/push/subscribe, /api/push/unsubscribe, /api/push/send
+  - ProactiveService Integration: All notifications now trigger OS-level push notifications
+  - Frontend: pwa.js with service worker registration, push subscription, permission handling
+  - Main.py: Serve manifest and sw.js with proper MIME types, initialize push service
+  - Tests: 10 passing tests in test_pwa.py (manifest, service worker, push CRUD, integration)
+  - Dependencies: Installed Pillow (icon generation), pywebpush, py-vapid, cryptography
 - **Issue #42 COMPLETE - Conversation search across all conversations (needs verification)**:
   - API: GET /api/messages/search?q=X&cross_conversation=true (searches all conversations)
   - API: cross_conversation=false (default) searches only "main" conversation
@@ -517,7 +531,7 @@
   - All 969 tests passing (first time zero failures)
 
 ## Next Step (single step)
-Wait for Criticizer verification of Issue #42 (conversation search across all conversations).
+Wait for Criticizer verification of Issue #44 (PWA support: installable app, push notifications, offline access).
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)
