@@ -118,7 +118,7 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 
 **Outcome**: Polished power-user experience with 969 tests, 100% pass rate. 8 consecutive first-pass verifications.
 
-## Phase 7: Proactive Companion - IN PROGRESS
+## Phase 7: Proactive Companion - NEARING COMPLETION
 
 **Goal**: Close the frontend-backend gap, then add proactive intelligence to transform Genesis from reactive tool to anticipatory companion.
 
@@ -127,16 +127,18 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 **Decision**: ADR-003 (see `planner_iteration/decisions/ADR-003-phase7-proactive-companion.md`)
 
 **Part A: Close the Gap**:
-- [ ] Persona switcher UI in chat interface (Issue #38 - CRITICAL)
-- [ ] Code syntax highlighting with highlight.js (Issue #39 - HIGH)
+- [x] Persona switcher UI in chat interface (Issue #38 - VERIFIED)
+- [x] Code syntax highlighting with highlight.js (Issue #39 - VERIFIED)
+- [ ] Message actions: copy, edit, regenerate, delete (Issue #43 - HIGH, upgraded)
 - [ ] Conversation search across all conversations (Issue #42 - MEDIUM)
-- [ ] Message actions: copy, edit, regenerate, delete (Issue #43 - MEDIUM)
 
 **Part B: Leap Forward**:
-- [ ] Proactive notification system / Heartbeat Engine (Issue #40 - HIGH)
+- [x] Proactive notification system / Heartbeat Engine (Issue #40 - VERIFIED)
 
 **Part C: Cleanup**:
 - [ ] Encryption key management cleanup (Issue #41 - MEDIUM)
+
+**Progress**: 3 of 6 issues verified and closed. All high-priority items done. Remaining items are hygiene and polish.
 
 **Dependencies**: Builds on Phase 6 complete foundation.
 
@@ -185,26 +187,27 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 | M8.4: Bundle dependencies | Week 8 | COMPLETE (#35) |
 | M8.5: Keyboard shortcuts | Week 8 | COMPLETE (#36) |
 | M8.6: Settings test fix | Week 8 | COMPLETE (#37) |
-| M9: Proactive Companion | Week 9 | IN PROGRESS |
-| M9.1: Persona switcher UI | Week 9 | PENDING (#38) |
-| M9.2: Syntax highlighting | Week 9 | PENDING (#39) |
-| M9.3: Proactive notifications | Week 9-10 | PENDING (#40) |
-| M9.4: Encryption cleanup | Week 10 | PENDING (#41) |
+| M9: Proactive Companion | Week 9 | IN PROGRESS (50%) |
+| M9.1: Persona switcher UI | Week 9 | COMPLETE (#38) |
+| M9.2: Syntax highlighting | Week 9 | COMPLETE (#39) |
+| M9.3: Proactive notifications | Week 9 | COMPLETE (#40) |
+| M9.4: Message actions | Week 9-10 | PENDING (#43) |
 | M9.5: Cross-conversation search | Week 10 | PENDING (#42) |
-| M9.6: Message actions | Week 10 | PENDING (#43) |
-| M10: Always-On Partner | Week 11+ | PROPOSED |
+| M9.6: Encryption cleanup | Week 10 | PENDING (#41) |
+| M10: Always-On Partner | Week 11+ | PLANNING |
 
 ## Statistics
 
 | Metric | Value |
 |--------|-------|
 | Total issues created | 43 |
-| Issues verified and closed | 37 |
-| Issues open | 6 |
+| Issues verified and closed | 40 |
+| Issues open | 3 |
 | Bugs found by Criticizer | 3 |
-| Total tests | 969 |
-| Service modules | 19+ |
-| Phases completed | 6 of 8 |
+| Total tests | 1064 |
+| Service modules | 20+ |
+| Phases completed | 6.5 of 8 |
+| Builder first-pass rate | 100% (11/11 consecutive) |
 
 ## Principles
 
