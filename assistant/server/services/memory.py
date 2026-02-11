@@ -1040,6 +1040,36 @@ class MemoryService:
             "mode": mode
         }
 
+    @with_db_retry()
+    async def delete_message(self, conversation_id: str, message_id: str) -> bool:
+        """Delete a single message from a conversation.
+
+        Args:
+            conversation_id: The conversation containing the message
+            message_id: The message to delete
+
+        Returns:
+            True if the message was deleted, False if it didn't exist
+        """
+        await self._ensure_initialized()
+
+        async with self._get_connection() as db:
+            # Check if message exists
+            cursor = await db.execute(
+                "SELECT 1 FROM messages WHERE id = ? AND conversation_id = ?",
+                (message_id, conversation_id)
+            )
+            if not await cursor.fetchone():
+                return False
+
+            # Delete the message
+            await db.execute(
+                "DELETE FROM messages WHERE id = ? AND conversation_id = ?",
+                (message_id, conversation_id)
+            )
+            await db.commit()
+            return True
+
 
 def _create_text_summary(messages: list, max_length: int = 500) -> str:
     """Create a text-based summary of a batch of messages.

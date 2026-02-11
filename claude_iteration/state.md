@@ -1,9 +1,22 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #40 COMPLETE - Needs Verification.** Implemented proactive notification system (Heartbeat Engine). Backend: ProactiveService with notification CRUD, three built-in checks (calendar reminders, daily briefing, system health), quiet hours support, configurable intervals, SQLite persistence. API routes for notifications (list, unread count, mark read, delete, config). Frontend: Notification bell with badge, dropdown panel (already existed). 18 new tests in test_proactive.py, all passing (1065 total). Integrated with existing SchedulerService, CalendarService, ResourceService.
+**Issue #43 COMPLETE - Needs Verification.** Implemented message actions (copy, edit, regenerate, delete). Backend: DELETE /api/conversations/{id}/messages/{msg_id} endpoint, delete_message() method with retry logic. Frontend: Action bar on hover/tap with 4 buttons (copy, regenerate for assistant, edit for user, delete for all). Security: Safe DOM methods (createElement/textContent, no innerHTML), confirmation dialogs. Mobile: Always-visible 44px touch targets. Accessibility: Keyboard-navigable. 7 new tests (all passing). Code blocks already had copy buttons from Issue #39.
 
 ## Done
+- **Issue #43 COMPLETE - Message actions: copy, edit, regenerate, delete (needs verification)**:
+  - Backend: DELETE /api/conversations/{conversation_id}/messages/{message_id} endpoint
+  - Backend: MemoryService.delete_message() method with @with_db_retry() decorator
+  - Frontend: createMessageActionsBar() with 4 action buttons per message
+  - Copy: All messages - navigator.clipboard API with checkmark feedback
+  - Regenerate: Assistant messages only - deletes response and re-sends last user message
+  - Edit: User messages only - puts text in input, deletes all messages from that point forward
+  - Delete: All messages - confirmation dialog, API DELETE, UI removal
+  - Security: SVG icons created via createElementNS, no innerHTML for user data
+  - Mobile: Always-visible actions (@media hover:none), 44px touch targets
+  - Keyboard: Tab to buttons, Enter to activate
+  - Styling: Hover effects, smooth transitions, danger color for delete
+  - 7 new tests (4 API endpoint, 3 MemoryService unit tests)
 - **Issue #40 COMPLETE - Proactive notification system / Heartbeat Engine (needs verification)**:
   - ProactiveService: server/services/proactive.py with notification model, SQLite storage, CRUD operations
   - Notification model: id, type, title, body, priority, created_at, read_at, action_url, metadata
@@ -475,7 +488,7 @@
   - All 969 tests passing (first time zero failures)
 
 ## Next Step (single step)
-Add `needs-verification` label to Issue #39 with test instructions, then wait for Criticizer verification.
+Wait for Criticizer verification of Issue #43 (message actions).
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)

@@ -494,7 +494,7 @@ async function loadConversationMessages(conversationId) {
         if (response.ok) {
             messagesContainer.innerHTML = '';
             (data.messages || []).forEach(msg => {
-                addMessageToUI(msg.role, msg.content);
+                addMessageToUI(msg.role, msg.content, null, msg.id);
             });
         }
     } catch (error) {
@@ -1034,9 +1034,16 @@ async function sendMessageRegular(message, fileIds) {
     }
 }
 
-function addMessageToUI(role, content, model = null) {
+function addMessageToUI(role, content, model = null, messageId = null) {
     const messageEl = document.createElement('div');
     messageEl.className = `message ${role}`;
+    if (messageId) {
+        messageEl.dataset.messageId = messageId;
+    }
+
+    // Create content wrapper
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'message-content-wrapper';
 
     // Render markdown for assistant messages, plain text for user messages
     if (role === 'assistant' && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
@@ -1069,14 +1076,16 @@ function addMessageToUI(role, content, model = null) {
         // Parse markdown and sanitize HTML to prevent XSS
         const rawHtml = marked.parse(content);
         const cleanHtml = DOMPurify.sanitize(rawHtml);
-        messageEl.innerHTML = cleanHtml;
+        contentWrapper.innerHTML = cleanHtml;
 
         // Add copy buttons to code blocks
-        addCopyButtonsToCodeBlocks(messageEl);
+        addCopyButtonsToCodeBlocks(contentWrapper);
     } else {
         // Fallback to plain text for user messages or if libraries not loaded
-        messageEl.textContent = content;
+        contentWrapper.textContent = content;
     }
+
+    messageEl.appendChild(contentWrapper);
 
     // Add model badge for assistant messages
     if (role === 'assistant' && model) {
@@ -1084,6 +1093,12 @@ function addMessageToUI(role, content, model = null) {
         modelBadge.className = 'model-badge';
         modelBadge.textContent = model.includes('claude') ? 'Claude' : 'GPT-4o';
         messageEl.appendChild(modelBadge);
+    }
+
+    // Add message actions bar
+    if (role === 'user' || role === 'assistant') {
+        const actionsBar = createMessageActionsBar(role, content, messageId);
+        messageEl.appendChild(actionsBar);
     }
 
     messagesContainer.appendChild(messageEl);
@@ -1102,7 +1117,7 @@ async function loadSingleConversation() {
 
             // Display messages (most recent at bottom)
             data.messages.forEach(msg => {
-                addMessageToUI(msg.role, msg.content);
+                addMessageToUI(msg.role, msg.content, null, msg.id);
             });
         }
     } catch (error) {
@@ -1982,3 +1997,310 @@ function formatRelativeTime(isoString) {
 
 // Initialize notifications when page loads
 initNotifications();
+
+// ============================================================================
+// Message Actions (Copy, Edit, Regenerate, Delete)
+// ============================================================================
+
+/**
+ * Create message actions bar with copy, edit, regenerate, delete buttons
+ */
+function createMessageActionsBar(role, content, messageId) {
+    const actionsBar = document.createElement('div');
+    actionsBar.className = 'message-actions';
+
+    // Copy button (for all messages)
+    const copyBtn = createActionButton('Copy message', copyMessageIcon(), () => copyMessageText(content, copyBtn));
+    actionsBar.appendChild(copyBtn);
+
+    if (role === 'assistant') {
+        // Regenerate button (assistant messages only)
+        const regenBtn = createActionButton('Regenerate response', regenerateIcon(), () => regenerateMessage(messageId));
+        actionsBar.appendChild(regenBtn);
+    }
+
+    if (role === 'user') {
+        // Edit button (user messages only)
+        const editBtn = createActionButton('Edit message', editIcon(), () => editMessage(content, messageId));
+        actionsBar.appendChild(editBtn);
+    }
+
+    // Delete button (for all messages)
+    const deleteBtn = createActionButton('Delete message', deleteIcon(), () => deleteMessage(messageId));
+    deleteBtn.classList.add('message-action-delete');
+    actionsBar.appendChild(deleteBtn);
+
+    return actionsBar;
+}
+
+function createActionButton(title, iconSvg, onClick) {
+    const btn = document.createElement('button');
+    btn.className = 'message-action-btn';
+    btn.title = title;
+    btn.appendChild(iconSvg);
+    btn.addEventListener('click', onClick);
+    return btn;
+}
+
+function copyMessageIcon() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('fill', 'none');
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', '9');
+    rect.setAttribute('y', '9');
+    rect.setAttribute('width', '13');
+    rect.setAttribute('height', '13');
+    rect.setAttribute('rx', '2');
+    rect.setAttribute('ry', '2');
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1');
+
+    svg.appendChild(rect);
+    svg.appendChild(path);
+    return svg;
+}
+
+function regenerateIcon() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('fill', 'none');
+
+    const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    polyline.setAttribute('points', '23 4 23 10 17 10');
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M20.49 15a9 9 0 1 1-2.12-9.36L23 10');
+
+    svg.appendChild(polyline);
+    svg.appendChild(path);
+    return svg;
+}
+
+function editIcon() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('fill', 'none');
+
+    const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path1.setAttribute('d', 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7');
+
+    const path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path2.setAttribute('d', 'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z');
+
+    svg.appendChild(path1);
+    svg.appendChild(path2);
+    return svg;
+}
+
+function deleteIcon() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('fill', 'none');
+
+    const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    polyline.setAttribute('points', '3 6 5 6 21 6');
+
+    const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path1.setAttribute('d', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2');
+
+    svg.appendChild(polyline);
+    svg.appendChild(path1);
+    return svg;
+}
+
+function checkmarkIcon() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('fill', 'none');
+
+    const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    polyline.setAttribute('points', '20 6 9 17 4 12');
+
+    svg.appendChild(polyline);
+    return svg;
+}
+
+/**
+ * Copy message text to clipboard
+ */
+async function copyMessageText(text, button) {
+    try {
+        await navigator.clipboard.writeText(text);
+        const originalContent = button.firstChild;
+        button.removeChild(originalContent);
+        button.appendChild(checkmarkIcon());
+        button.classList.add('copied');
+        setTimeout(() => {
+            button.removeChild(button.firstChild);
+            button.appendChild(originalContent);
+            button.classList.remove('copied');
+        }, 2000);
+    } catch (err) {
+        console.error('Failed to copy:', err);
+    }
+}
+
+/**
+ * Regenerate assistant response (delete this message and re-send last user message)
+ */
+async function regenerateMessage(messageId) {
+    if (!messageId) {
+        console.error('Cannot regenerate: no message ID');
+        return;
+    }
+
+    // Find this message element
+    const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageEl) {
+        console.error('Cannot find message element');
+        return;
+    }
+
+    // Find the previous user message
+    let prevElement = messageEl.previousElementSibling;
+    while (prevElement && !prevElement.classList.contains('user')) {
+        prevElement = prevElement.previousElementSibling;
+    }
+
+    if (!prevElement || !prevElement.classList.contains('user')) {
+        console.error('Cannot find previous user message');
+        return;
+    }
+
+    const userMessageText = prevElement.querySelector('.message-content-wrapper').textContent;
+
+    // Delete the assistant message
+    try {
+        const response = await fetch(`/api/conversations/${currentConversationId}/messages/${messageId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            // Remove from UI
+            messageEl.remove();
+
+            // Re-send the user message
+            if (useStreaming) {
+                await sendMessageStreaming(userMessageText, []);
+            } else {
+                await sendMessageRegular(userMessageText, []);
+            }
+        } else {
+            console.error('Failed to delete message for regeneration');
+        }
+    } catch (error) {
+        console.error('Regenerate error:', error);
+    }
+}
+
+/**
+ * Edit user message (put text back in input, delete all messages from this point forward)
+ */
+async function editMessage(text, messageId) {
+    if (!messageId) {
+        console.error('Cannot edit: no message ID');
+        return;
+    }
+
+    // Find this message element
+    const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageEl) {
+        console.error('Cannot find message element');
+        return;
+    }
+
+    // Confirm edit action
+    if (!confirm('Editing this message will delete all messages from this point forward. Continue?')) {
+        return;
+    }
+
+    // Collect all messages to delete (this message and everything after it)
+    const messagesToDelete = [];
+    let currentEl = messageEl;
+    while (currentEl) {
+        const id = currentEl.dataset.messageId;
+        if (id) {
+            messagesToDelete.push(id);
+        }
+        currentEl = currentEl.nextElementSibling;
+    }
+
+    // Delete all messages
+    try {
+        for (const id of messagesToDelete) {
+            await fetch(`/api/conversations/${currentConversationId}/messages/${id}`, {
+                method: 'DELETE'
+            });
+        }
+
+        // Remove from UI
+        messagesToDelete.forEach(id => {
+            const el = document.querySelector(`[data-message-id="${id}"]`);
+            if (el) el.remove();
+        });
+
+        // Put text in input for user to edit and re-send
+        messageInput.value = text;
+        messageInput.focus();
+        messageInput.dispatchEvent(new Event('input')); // Trigger auto-resize
+    } catch (error) {
+        console.error('Edit error:', error);
+    }
+}
+
+/**
+ * Delete a single message with confirmation
+ */
+async function deleteMessage(messageId) {
+    if (!messageId) {
+        console.error('Cannot delete: no message ID');
+        return;
+    }
+
+    if (!confirm('Delete this message?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/conversations/${currentConversationId}/messages/${messageId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            // Remove from UI
+            const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+            if (messageEl) {
+                messageEl.remove();
+            }
+        } else {
+            const error = await response.json();
+            alert(`Failed to delete message: ${error.detail || 'Unknown error'}`);
+        }
+    } catch (error) {
+        console.error('Delete error:', error);
+        alert(`Error: ${error.message}`);
+    }
+}

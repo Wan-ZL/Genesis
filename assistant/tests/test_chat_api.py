@@ -626,5 +626,198 @@ class TestExportImportEndpoints:
         assert import_response.status_code == 200
 
 
+class TestMessageActions:
+    """Tests for message action endpoints (delete, edit, regenerate)."""
+
+    def test_delete_message_success(self, client, mock_openai_response):
+        """Test successful message deletion."""
+        with patch('server.routes.chat.get_openai_client') as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_openai_response
+            mock_get_client.return_value = mock_client
+
+            with patch('server.routes.chat.config') as mock_config:
+                mock_config.USE_CLAUDE = False
+                mock_config.OPENAI_API_KEY = "test-key"
+                mock_config.OPENAI_MODEL = "gpt-4o-mini"
+                mock_config.DATABASE_PATH = Path(tempfile.gettempdir()) / "test_delete.db"
+                mock_config.FILES_PATH = Path(tempfile.gettempdir()) / "test_files"
+
+                # Create a conversation with messages
+                response = client.post("/api/chat", json={"message": "Hello"})
+                assert response.status_code == 200
+
+                # Get conversation to find message IDs
+                conv_response = client.get("/api/conversation")
+                assert conv_response.status_code == 200
+                messages = conv_response.json()["messages"]
+                assert len(messages) > 0
+
+                # Delete the first message
+                message_id = messages[0]["id"]
+                delete_response = client.delete(f"/api/conversations/main/messages/{message_id}")
+                assert delete_response.status_code == 200
+                assert delete_response.json()["success"] is True
+                assert delete_response.json()["deleted"] == message_id
+
+                # Verify message was deleted
+                conv_response_after = client.get("/api/conversation")
+                messages_after = conv_response_after.json()["messages"]
+                assert len(messages_after) == len(messages) - 1
+                assert not any(msg["id"] == message_id for msg in messages_after)
+
+    def test_delete_message_not_found(self, client):
+        """Test deleting non-existent message returns 404."""
+        response = client.delete("/api/conversations/main/messages/nonexistent_id")
+        assert response.status_code == 404
+
+    def test_delete_message_wrong_conversation(self, client, mock_openai_response):
+        """Test deleting message from wrong conversation."""
+        with patch('server.routes.chat.get_openai_client') as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_openai_response
+            mock_get_client.return_value = mock_client
+
+            with patch('server.routes.chat.config') as mock_config:
+                mock_config.USE_CLAUDE = False
+                mock_config.OPENAI_API_KEY = "test-key"
+                mock_config.OPENAI_MODEL = "gpt-4o-mini"
+                mock_config.DATABASE_PATH = Path(tempfile.gettempdir()) / "test_wrong_conv.db"
+                mock_config.FILES_PATH = Path(tempfile.gettempdir()) / "test_files"
+
+                # Create a message in main conversation
+                response = client.post("/api/chat", json={"message": "Test"})
+                assert response.status_code == 200
+
+                # Get message ID
+                conv_response = client.get("/api/conversation")
+                messages = conv_response.json()["messages"]
+                message_id = messages[0]["id"]
+
+                # Try to delete from a different conversation
+                delete_response = client.delete(f"/api/conversations/other/messages/{message_id}")
+                assert delete_response.status_code == 404
+
+    def test_delete_multiple_messages(self, client, mock_openai_response):
+        """Test deleting multiple messages in sequence."""
+        with patch('server.routes.chat.get_openai_client') as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_openai_response
+            mock_get_client.return_value = mock_client
+
+            with patch('server.routes.chat.config') as mock_config:
+                mock_config.USE_CLAUDE = False
+                mock_config.OPENAI_API_KEY = "test-key"
+                mock_config.OPENAI_MODEL = "gpt-4o-mini"
+                mock_config.DATABASE_PATH = Path(tempfile.gettempdir()) / "test_multi_delete.db"
+                mock_config.FILES_PATH = Path(tempfile.gettempdir()) / "test_files"
+
+                # Create multiple messages
+                client.post("/api/chat", json={"message": "Message 1"})
+                client.post("/api/chat", json={"message": "Message 2"})
+                client.post("/api/chat", json={"message": "Message 3"})
+
+                # Get all messages
+                conv_response = client.get("/api/conversation")
+                messages = conv_response.json()["messages"]
+                initial_count = len(messages)
+                assert initial_count >= 3
+
+                # Delete first two messages
+                client.delete(f"/api/conversations/main/messages/{messages[0]['id']}")
+                client.delete(f"/api/conversations/main/messages/{messages[1]['id']}")
+
+                # Verify count decreased by 2
+                conv_response_after = client.get("/api/conversation")
+                messages_after = conv_response_after.json()["messages"]
+                assert len(messages_after) == initial_count - 2
+
+
+class TestMemoryServiceDelete:
+    """Unit tests for MemoryService.delete_message method."""
+
+    @pytest.mark.asyncio
+    async def test_delete_message_unit(self):
+        """Test delete_message method directly."""
+        from server.services.memory import MemoryService, DEFAULT_CONVERSATION_ID
+
+        # Create temporary database
+        temp_db = Path(tempfile.gettempdir()) / "test_delete_unit.db"
+        if temp_db.exists():
+            temp_db.unlink()
+
+        memory = MemoryService(temp_db)
+
+        # Add messages
+        msg_id_1 = await memory.add_to_conversation("user", "Hello")
+        await memory.add_to_conversation("assistant", "Hi there")
+
+        # Verify messages exist
+        messages = await memory.get_messages()
+        assert len(messages) == 3  # system + 2 messages
+
+        # Delete first message
+        success = await memory.delete_message(DEFAULT_CONVERSATION_ID, msg_id_1)
+        assert success is True
+
+        # Verify deletion
+        messages_after = await memory.get_messages()
+        assert len(messages_after) == 2  # system + 1 message
+        assert not any(msg.get("id") == msg_id_1 for msg in messages_after if "id" in msg)
+
+        # Clean up
+        if temp_db.exists():
+            temp_db.unlink()
+
+    @pytest.mark.asyncio
+    async def test_delete_nonexistent_message(self):
+        """Test deleting non-existent message returns False."""
+        from server.services.memory import MemoryService, DEFAULT_CONVERSATION_ID
+
+        temp_db = Path(tempfile.gettempdir()) / "test_delete_nonexist.db"
+        if temp_db.exists():
+            temp_db.unlink()
+
+        memory = MemoryService(temp_db)
+
+        # Try to delete non-existent message
+        success = await memory.delete_message(DEFAULT_CONVERSATION_ID, "nonexistent_id")
+        assert success is False
+
+        # Clean up
+        if temp_db.exists():
+            temp_db.unlink()
+
+    @pytest.mark.asyncio
+    async def test_delete_preserves_other_messages(self):
+        """Test that deleting one message doesn't affect others."""
+        from server.services.memory import MemoryService, DEFAULT_CONVERSATION_ID
+
+        temp_db = Path(tempfile.gettempdir()) / "test_delete_preserve.db"
+        if temp_db.exists():
+            temp_db.unlink()
+
+        memory = MemoryService(temp_db)
+
+        # Add multiple messages
+        await memory.add_to_conversation("user", "Message 1")
+        msg_id_2 = await memory.add_to_conversation("assistant", "Response 1")
+        await memory.add_to_conversation("user", "Message 2")
+
+        # Delete middle message
+        await memory.delete_message(DEFAULT_CONVERSATION_ID, msg_id_2)
+
+        # Verify other messages still exist with correct content
+        messages = await memory.get_messages()
+        user_messages = [m for m in messages if m.get("role") == "user"]
+        assert len(user_messages) == 2
+        assert any("Message 1" in m["content"] for m in user_messages)
+        assert any("Message 2" in m["content"] for m in user_messages)
+
+        # Clean up
+        if temp_db.exists():
+            temp_db.unlink()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

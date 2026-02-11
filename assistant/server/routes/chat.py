@@ -1894,3 +1894,21 @@ async def search_messages(
         "count": len(results),
         "results": results
     }
+
+
+@router.delete("/conversations/{conversation_id}/messages/{message_id}")
+async def delete_message(conversation_id: str, message_id: str):
+    """Delete a single message from a conversation.
+
+    Args:
+        conversation_id: The conversation containing the message
+        message_id: The message to delete
+
+    Returns:
+        Success confirmation
+    """
+    success = await memory.delete_message(conversation_id, message_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    return {"success": True, "deleted": message_id}
