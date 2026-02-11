@@ -1,5 +1,4 @@
 """Tests for Markdown rendering in Web UI (Issue #29)"""
-import os
 import re
 from pathlib import Path
 
@@ -97,7 +96,7 @@ def test_streaming_converts_to_markdown():
 
     # Should convert to markdown after streaming finishes
     # Look for markdown parsing after streaming is done
-    finalize_section = content.split("// Finalize the message")[1].split("function")[0]
+    finalize_section = content.split("// Finalize the message")[1].split("function handleStreamEvent")[0]
     assert "marked.parse" in finalize_section, "Streaming doesn't convert to markdown at end"
 
 

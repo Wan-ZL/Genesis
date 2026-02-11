@@ -1,9 +1,24 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #38 COMPLETE - Needs Verification.** Implemented persona switcher UI in chat interface with full CRUD operations. Frontend-only implementation using existing backend API. Header shows current persona with dropdown selector, create/edit/delete modals for custom personas, mobile-responsive design, XSS-safe DOM manipulation. 25 new tests in test_persona_ui.py, all passing.
+**Issue #39 COMPLETE - Needs Verification.** Implemented code syntax highlighting with highlight.js. Bundled library locally (119KB), two themes (GitHub light/dark) that switch dynamically with theme toggle. Integrated with marked.js via highlight callback, supports language tags and auto-detection, error handling with try-catch. Added copy-to-clipboard buttons (hover desktop, always mobile) with safe DOM methods. All markdown rendering now has syntax-highlighted code blocks. 21 new tests in test_syntax_highlight.py, all passing (1016 total).
 
 ## Done
+- **Issue #39 COMPLETE - Code syntax highlighting with highlight.js (needs verification)**:
+  - Downloaded highlight.js v11.9.0 core library (119KB) to ui/vendor/
+  - Downloaded GitHub light and dark themes (1.3KB each) to ui/vendor/
+  - index.html: Added theme CSS links with media queries, added highlight.js script
+  - app.js: Integrated highlight.js with marked.js via highlight callback in both regular and streaming rendering
+  - app.js: Language detection (tags like ```python) and auto-detection fallback
+  - app.js: Error handling with try-catch, console.error logging
+  - app.js: addCopyButtonsToCodeBlocks() function with navigator.clipboard API
+  - app.js: updateHighlightTheme() function for dynamic theme switching
+  - style.css: Copy button styles (positioned absolute, opacity on hover, always visible mobile)
+  - style.css: code-block-wrapper with padding-top for button, hover states, copied state
+  - Security: XSS-safe (DOMPurify still sanitizes, createElement/textContent for buttons)
+  - 21 new tests in test_syntax_highlight.py
+  - Fixed test_markdown_ui.py::test_streaming_converts_to_markdown (regex split issue)
+  - 1016 tests total collected (969 baseline + 21 new + 26 from other recent work)
 - **Issue #38 COMPLETE - Persona switcher UI (needs verification)**:
   - Frontend: Persona header with selector button and create button (index.html)
   - Frontend: Persona dropdown menu with all available personas
@@ -446,7 +461,7 @@
   - All 969 tests passing (first time zero failures)
 
 ## Next Step (single step)
-Add `needs-verification` label to Issue #38 with test instructions, then wait for Criticizer verification.
+Add `needs-verification` label to Issue #39 with test instructions, then wait for Criticizer verification.
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)

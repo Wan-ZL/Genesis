@@ -1793,6 +1793,11 @@ main {
     overflow-x: auto;
     margin: 0.5rem 0;
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
+    position: relative; /* For copy button positioning */
+}
+
+.message.assistant pre.code-block-wrapper {
+    padding-top: 2.5rem; /* Make room for copy button */
 }
 
 .message.assistant pre code {
@@ -1800,6 +1805,49 @@ main {
     padding: 0;
     color: inherit;
     border-radius: 0;
+    font-family: var(--font-family-mono);
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+/* Copy button for code blocks */
+.code-copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    font-size: var(--font-size-xs);
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    opacity: 0;
+    font-family: var(--font-family);
+}
+
+.code-copy-btn:hover {
+    background-color: var(--color-accent-primary);
+    color: #ffffff;
+    border-color: var(--color-accent-primary);
+}
+
+.code-copy-btn.copied {
+    background-color: var(--color-success);
+    color: #ffffff;
+    border-color: var(--color-success);
+}
+
+/* Show copy button on hover (desktop) or always (mobile) */
+.message.assistant pre:hover .code-copy-btn {
+    opacity: 1;
+}
+
+@media (max-width: 900px) {
+    .code-copy-btn {
+        opacity: 1; /* Always visible on mobile */
+    }
 }
 
 .message.assistant ul,

@@ -108,6 +108,7 @@ function toggleTheme() {
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
+    updateHighlightTheme();
 }
 
 /**
@@ -117,10 +118,79 @@ function getCurrentTheme() {
     return document.documentElement.getAttribute('data-theme') || 'light';
 }
 
+/**
+ * Add copy-to-clipboard buttons to all code blocks in a message
+ */
+function addCopyButtonsToCodeBlocks(messageElement) {
+    const codeBlocks = messageElement.querySelectorAll('pre code');
+
+    codeBlocks.forEach((codeBlock) => {
+        const pre = codeBlock.parentElement;
+
+        // Skip if already has a copy button
+        if (pre.querySelector('.code-copy-btn')) {
+            return;
+        }
+
+        // Create wrapper for positioning
+        if (!pre.classList.contains('code-block-wrapper')) {
+            pre.classList.add('code-block-wrapper');
+        }
+
+        // Create copy button
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'code-copy-btn';
+        copyBtn.textContent = 'Copy';
+        copyBtn.title = 'Copy code to clipboard';
+
+        // Copy functionality
+        copyBtn.addEventListener('click', async () => {
+            const code = codeBlock.textContent;
+            try {
+                await navigator.clipboard.writeText(code);
+                copyBtn.textContent = 'Copied!';
+                copyBtn.classList.add('copied');
+                setTimeout(() => {
+                    copyBtn.textContent = 'Copy';
+                    copyBtn.classList.remove('copied');
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                copyBtn.textContent = 'Failed';
+                setTimeout(() => {
+                    copyBtn.textContent = 'Copy';
+                }, 2000);
+            }
+        });
+
+        pre.appendChild(copyBtn);
+    });
+}
+
+/**
+ * Update highlight.js theme based on current theme
+ */
+function updateHighlightTheme() {
+    const currentTheme = getCurrentTheme();
+    const lightTheme = document.querySelector('link[href*="github.min.css"]');
+    const darkTheme = document.querySelector('link[href*="github-dark.min.css"]');
+
+    if (lightTheme && darkTheme) {
+        if (currentTheme === 'dark') {
+            lightTheme.disabled = true;
+            darkTheme.disabled = false;
+        } else {
+            lightTheme.disabled = false;
+            darkTheme.disabled = true;
+        }
+    }
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     // Apply theme immediately to prevent flash
     initTheme();
+    updateHighlightTheme();
 
     loadStatus();
     loadConversations(true); // Load sidebar and current conversation
@@ -845,10 +915,30 @@ async function sendMessageStreaming(message, fileIds) {
         marked.setOptions({
             breaks: true,
             gfm: true,
+            highlight: function(code, lang) {
+                if (typeof hljs !== 'undefined') {
+                    if (lang && hljs.getLanguage(lang)) {
+                        try {
+                            return hljs.highlight(code, { language: lang }).value;
+                        } catch (err) {
+                            console.error('Syntax highlighting error:', err);
+                        }
+                    }
+                    try {
+                        return hljs.highlightAuto(code).value;
+                    } catch (err) {
+                        console.error('Auto-detect highlighting error:', err);
+                    }
+                }
+                return code;
+            }
         });
         const rawHtml = marked.parse(accumulatedText);
         const cleanHtml = DOMPurify.sanitize(rawHtml);
         contentSpan.innerHTML = cleanHtml;
+
+        // Add copy buttons to code blocks in streamed content
+        addCopyButtonsToCodeBlocks(messageEl);
     }
 
     // Add model badge if we know the model
@@ -954,12 +1044,35 @@ function addMessageToUI(role, content, model = null) {
         marked.setOptions({
             breaks: true,  // Convert \n to <br>
             gfm: true,     // GitHub Flavored Markdown
+            highlight: function(code, lang) {
+                // Use highlight.js for syntax highlighting if available
+                if (typeof hljs !== 'undefined') {
+                    if (lang && hljs.getLanguage(lang)) {
+                        try {
+                            return hljs.highlight(code, { language: lang }).value;
+                        } catch (err) {
+                            console.error('Syntax highlighting error:', err);
+                        }
+                    }
+                    // Auto-detect language if no lang specified
+                    try {
+                        return hljs.highlightAuto(code).value;
+                    } catch (err) {
+                        console.error('Auto-detect highlighting error:', err);
+                    }
+                }
+                // Fallback to plain code
+                return code;
+            }
         });
 
         // Parse markdown and sanitize HTML to prevent XSS
         const rawHtml = marked.parse(content);
         const cleanHtml = DOMPurify.sanitize(rawHtml);
         messageEl.innerHTML = cleanHtml;
+
+        // Add copy buttons to code blocks
+        addCopyButtonsToCodeBlocks(messageEl);
     } else {
         // Fallback to plain text for user messages or if libraries not loaded
         messageEl.textContent = content;
