@@ -138,7 +138,7 @@ class SettingsService:
         "openai_api_key": "",
         "anthropic_api_key": "",
         "model": "gpt-4o",  # Default model
-        "permission_level": 3,  # FULL by default
+        "permission_level": 1,  # LOCAL by default (per architecture spec)
         "ollama_host": "http://localhost:11434",  # Default Ollama endpoint
         "ollama_model": "llama3.2:3b",  # Default local model
         "ollama_enabled": True,  # Enable Ollama fallback by default
@@ -393,7 +393,7 @@ class SettingsService:
             "openai_api_key_set": bool(openai_key),
             "anthropic_api_key_set": bool(anthropic_key),
             "model": settings.get("model", "gpt-4o"),
-            "permission_level": int(settings.get("permission_level", 1)),
+            "permission_level": int(settings.get("permission_level", self.DEFAULTS["permission_level"])),
             "available_models": self.AVAILABLE_MODELS,
             "encryption_enabled": self._encryption_available,
             # Ollama settings

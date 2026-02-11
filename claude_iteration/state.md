@@ -1,7 +1,7 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #36 Complete - Needs Verification.** Keyboard shortcuts for power users. Implemented global shortcut handler (shortcuts.js) with 6 shortcuts: Cmd/Ctrl+N (new conversation), Cmd/Ctrl+K (quick switcher), Cmd/Ctrl+, (settings), Cmd/Ctrl+Shift+D (dark mode), Escape (close modals), Cmd/Ctrl+/ (help). Quick switcher is spotlight-style with search, arrow navigation, Enter to select. Cross-platform modifier detection, typing safety, XSS prevention. 22 new tests in test_keyboard_shortcuts.py. 967 tests pass (2 pre-existing failures per Issue #37).
+**Issue #37 Complete - Needs Verification.** Fixed two pre-existing settings test failures. Bug 1: `DEFAULTS["permission_level"]` was `3` (FULL) but architecture spec says `1` (LOCAL) — fixed to `1`. Bug 2: `TestSettingsAPI.app` fixture shared module singleton, causing test pollution — fixed with per-test service isolation. Full suite: 969 passed, 0 failed (first time zero failures).
 
 ## Done
 - Repo structure and memory rules defined (.claude/CLAUDE.md + rules)
@@ -429,7 +429,7 @@
   - 22 new tests in test_keyboard_shortcuts.py (967 total passing)
 
 ## Next Step (single step)
-Check for more open issues or work on Issue #37 (Settings test fixes) if time permits.
+Wait for Criticizer to verify Issue #37, then check backlog for next work item.
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)

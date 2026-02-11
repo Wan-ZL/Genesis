@@ -1,5 +1,20 @@
 # Project Memory: Always-on Multimodal AI Assistant (Mac mini)
 
+## Quick Commands
+```bash
+# Tests (from project root)
+cd assistant && python3 -m pytest tests/ -q        # Full suite (~970 tests, ~35s)
+cd assistant && python3 -m pytest tests/ -x -q     # Stop on first failure
+cd assistant && python3 -m pytest tests/test_chat_api.py -v  # Single file
+
+# Run server
+cd assistant && python3 -m server.main              # http://127.0.0.1:8080
+
+# Orchestration loop
+./start-multi-agent-loop.sh                         # Builder → Criticizer → Planner
+./stop-multi-agent-loop.sh                          # Graceful stop
+```
+
 ## 0) Background, why this repo exists
 This repo is an experiment to build a self-evolving AI assistant.
 Claude Code is the primary builder and tester.
@@ -27,52 +42,22 @@ Key loop:
 
 ## 2.5) Multi-Agent System (IMPORTANT)
 
-You are the BUILDER in a 3-agent system:
-- **You (Builder)**: Implement features, write tests, commit code
-- **Criticizer**: Verifies your work by running actual API tests
-- **Planner**: Sets priorities, maintains roadmap, creates strategic issues
-
-**Critical Rule**: You CANNOT close issues. Only the Criticizer can close issues after verification.
-
-When you complete an issue:
-1. Add `needs-verification` label: `gh issue edit <n> --add-label "needs-verification"`
-2. Comment with test instructions
-3. Move on to the next issue
-
-See `.claude/rules/02-workflow.md` for the complete Issue Completion Protocol.
+You are the BUILDER. You CANNOT close issues — only Criticizer can.
+When done: `gh issue edit <N> --add-label "needs-verification"` + comment with test steps.
+Full protocol: `.claude/rules/02-workflow.md` and `.claude/rules/08-multi-agent-system.md`
 
 ## 3) Execution contract (EVERY run)
 Follow these steps in order:
-A) Read:
-   - `.claude/CLAUDE.md`
-   - `.claude/rules/*`
-   - `claude_iteration/state.md`
-   - Latest 3 runlogs from `claude_iteration/runlog/` (for continuity with previous sessions)
+A) Read: `claude_iteration/state.md` + latest 3 runlogs from `claude_iteration/runlog/`
 B) Discover work:
    - If any GitHub Issues are open, pick the highest-priority one.
    - Otherwise, pick the best item from `claude_iteration/backlog.md`.
    - If no GitHub Issues AND backlog is empty/all-done, run `./stop-loop.sh` and exit.
-C) Do ONE smallest meaningful increment only:
-   - Implement or refactor.
-   - Add/extend tests and/or evals.
-   - Update docs.
-D) Validate:
-   - Run the project's tests (or write clearly why tests cannot run).
+C) Do ONE smallest meaningful increment only.
+D) Validate: `cd assistant && python3 -m pytest tests/ -q`
 E) Persist memory (Claude Code must do this, not hooks):
-   - Write a run log to `claude_iteration/runlog/YYYY-MM-DD_HHMM.md` with:
-     ```
-     # Run Log: YYYY-MM-DD HH:MM
-     ## Focus
-     [What issue/task was worked on]
-     ## Changes
-     - [File changed]: [what changed]
-     ## Result
-     [SUCCESS/PARTIAL/BLOCKED]
-     ## Next
-     [Single next step]
-     ```
-   - Update `claude_iteration/state.md` with (1) what changed (2) what to do next
-   - Update `claude_iteration/roadmap.md` if milestone or priority changed
+   - Write runlog to `claude_iteration/runlog/YYYY-MM-DD_HHMM.md` (follow format of existing logs)
+   - Update `claude_iteration/state.md` (what changed + single next step)
 F) Exit cleanly.
 
 ## 4) Output format at end of every run
@@ -107,3 +92,12 @@ runlog_file = claude_iteration/runlog/<latest>.md
 - Criticizer state: `criticizer_iteration/state.md`
 - Planner state: `planner_iteration/state.md`
 - Architectural decisions: `planner_iteration/decisions/`
+
+## 8) Key files
+- `assistant/server/main.py` — FastAPI server entry point (port 8080)
+- `assistant/config.py` — All settings, model list, API keys
+- `assistant/server/routes/chat.py` — Chat + streaming endpoints
+- `assistant/server/services/memory.py` — SQLite conversation storage
+- `assistant/tests/` — 970+ tests
+- `start-multi-agent-loop.sh` — Orchestration loop (timeouts: Bash=10min, heartbeat=15min, max=45min)
+- `orchestrator/.circuit_breaker.json` — Loop health state (auto-resets on start)

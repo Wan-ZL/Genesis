@@ -192,17 +192,22 @@ class TestSettingsAPI:
 
     @pytest.fixture
     def app(self):
-        """Create test app."""
+        """Create test app with isolated settings service."""
         import tempfile
         from pathlib import Path
-        from unittest.mock import patch
+        from server.services.settings import SettingsService
+        import server.routes.settings as settings_route
 
-        # Create temp database
+        # Create a fresh temp database and settings service for each test
         temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        original_service = settings_route.settings_service
+        settings_route.settings_service = SettingsService(Path(temp_db.name))
 
-        with patch('config.DATABASE_PATH', Path(temp_db.name)):
-            from server.main import app
-            return app
+        from server.main import app
+        yield app
+
+        # Restore original service
+        settings_route.settings_service = original_service
 
     @pytest.mark.asyncio
     async def test_get_settings(self, app):

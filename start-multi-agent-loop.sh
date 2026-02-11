@@ -17,6 +17,7 @@ ITERATION_COUNT=0
 # Configuration
 HEARTBEAT_STALE_MINUTES=15      # Minutes before considering agent stuck
 HEARTBEAT_CHECK_INTERVAL=60     # Seconds between heartbeat checks
+AGENT_MAX_RUNTIME_MINUTES=45    # Max total runtime per agent (even with good heartbeat)
 CB_WARNING_THRESHOLD=3          # Iterations without progress before warning
 CB_STOP_THRESHOLD=5             # Iterations without progress before stopping
 
@@ -52,30 +53,31 @@ echo "true" > "$LOOP_FLAG_FILE"
 #=============================================================================
 
 init_circuit_breaker() {
-    if [ ! -f "$CB_FILE" ]; then
-        echo '{"state":"CLOSED","no_progress_count":0,"last_progress_iteration":0}' > "$CB_FILE"
+    # Always reset on loop start - stale state from previous runs should not block new runs
+    echo '{"state":"CLOSED","no_progress_count":0,"last_progress_iteration":0}' > "$CB_FILE"
+}
+
+# Check if there are uncommitted git changes (progress indicator)
+# Must be called BEFORE git_sync, otherwise git_sync commits everything and this always returns false
+has_uncommitted_changes() {
+    cd "$GENESIS_DIR"
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+        return 0  # Has changes
     fi
+    if [ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ]; then
+        return 0  # Has new files
+    fi
+    return 1  # No changes
 }
 
 check_circuit_breaker() {
     local iteration=$1
-
-    # Check if there are uncommitted changes (sign of progress)
-    cd "$GENESIS_DIR"
-    local has_changes="no"
-    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-        has_changes="yes"
-    fi
-    # Also check for untracked files (new files = progress)
-    if [ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ]; then
-        has_changes="yes"
-    fi
+    local had_progress=$2  # "yes" or "no" - passed in by caller
 
     # Read current state
-    local state=$(jq -r '.state' "$CB_FILE" 2>/dev/null || echo "CLOSED")
     local no_progress=$(jq -r '.no_progress_count' "$CB_FILE" 2>/dev/null || echo "0")
 
-    if [ "$has_changes" = "yes" ]; then
+    if [ "$had_progress" = "yes" ]; then
         # Progress detected, reset circuit breaker
         echo "{\"state\":\"CLOSED\",\"no_progress_count\":0,\"last_progress_iteration\":$iteration}" > "$CB_FILE"
         echo -e "${GREEN}[CIRCUIT BREAKER]${NC} Progress detected, state: CLOSED"
@@ -181,6 +183,24 @@ cleanup_zombie_processes() {
 # AGENT RUNNER WITH HEARTBEAT MONITORING
 #=============================================================================
 
+kill_agent() {
+    local pid=$1
+    local agent_name=$2
+
+    # Graceful kill first (SIGTERM)
+    kill $pid 2>/dev/null || true
+    sleep 5
+
+    # Force kill if still alive (SIGKILL)
+    if kill -0 $pid 2>/dev/null; then
+        echo -e "${RED}[$agent_name]${NC} Force killing PID $pid"
+        kill -9 $pid 2>/dev/null || true
+    fi
+
+    # Cleanup any zombies left behind
+    cleanup_zombie_processes
+}
+
 run_agent_with_heartbeat() {
     local agent_name=$1
     local prompt=$2
@@ -200,54 +220,58 @@ run_agent_with_heartbeat() {
     cd "$GENESIS_DIR"
     claude --dangerously-skip-permissions "$prompt" > "$log_file" 2>&1 &
     local claude_pid=$!
+    local start_epoch=$(date "+%s")
 
     echo -e "${color}[$agent_name]${NC} Started with PID $claude_pid"
     echo -e "${color}[$agent_name]${NC} Log: $log_file"
+    echo -e "${color}[$agent_name]${NC} Max runtime: ${AGENT_MAX_RUNTIME_MINUTES}min, heartbeat timeout: ${HEARTBEAT_STALE_MINUTES}min"
 
     # Monitor loop: check heartbeat while Claude is running
     while kill -0 $claude_pid 2>/dev/null; do
         sleep $HEARTBEAT_CHECK_INTERVAL
 
-        # Check if Claude is still running
+        # Check if Claude is still running (may have exited during sleep)
         if ! kill -0 $claude_pid 2>/dev/null; then
             break
         fi
 
-        # Check heartbeat
+        # Check total runtime cap (prevents infinite loops even with good heartbeat)
+        local now_epoch=$(date "+%s")
+        local elapsed_minutes=$(( (now_epoch - start_epoch) / 60 ))
+        if [ $elapsed_minutes -ge $AGENT_MAX_RUNTIME_MINUTES ]; then
+            echo -e "${YELLOW}[$agent_name] MAX RUNTIME (${AGENT_MAX_RUNTIME_MINUTES}min) reached - terminating${NC}"
+            kill_agent $claude_pid "$agent_name"
+            echo -e "${YELLOW}[$agent_name] Last 50 lines of log:${NC}"
+            tail -50 "$log_file" 2>/dev/null || true
+            return 125  # Exit code for max runtime
+        fi
+
+        # Check heartbeat (detects stuck-on-command state)
         if ! check_heartbeat_stale $HEARTBEAT_STALE_MINUTES; then
             echo -e "${RED}[$agent_name] STUCK - No heartbeat for ${HEARTBEAT_STALE_MINUTES}+ minutes${NC}"
             echo -e "${RED}[$agent_name] Terminating PID $claude_pid${NC}"
-
-            # Graceful kill first
-            kill $claude_pid 2>/dev/null || true
-            sleep 5
-
-            # Force kill if still alive
-            if kill -0 $claude_pid 2>/dev/null; then
-                kill -9 $claude_pid 2>/dev/null || true
-            fi
-
-            # Cleanup any zombies left behind
-            cleanup_zombie_processes
-
-            # Show last 50 lines of log for debugging
+            kill_agent $claude_pid "$agent_name"
             echo -e "${RED}[$agent_name] Last 50 lines of log:${NC}"
             tail -50 "$log_file" 2>/dev/null || true
-
-            return 124  # Exit code for timeout
+            return 124  # Exit code for heartbeat timeout
         fi
 
-        echo -e "${color}[$agent_name]${NC} Heartbeat OK (checking every ${HEARTBEAT_CHECK_INTERVAL}s)"
+        echo -e "${color}[$agent_name]${NC} Heartbeat OK | ${elapsed_minutes}/${AGENT_MAX_RUNTIME_MINUTES}min"
     done
 
-    # Wait for Claude to finish
+    # Wait for Claude to finish and get exit code
     wait $claude_pid 2>/dev/null
     local exit_code=$?
 
-    # Show log
-    cat "$log_file"
+    # Show summary (not full log - log file is saved for later review)
+    local now_epoch=$(date "+%s")
+    local elapsed_minutes=$(( (now_epoch - start_epoch) / 60 ))
+    echo -e "${color}[$agent_name]${NC} Completed in ${elapsed_minutes}min (exit code: $exit_code)"
+    echo -e "${color}[$agent_name]${NC} Full log: $log_file"
+    # Show just the tail for quick review
+    echo -e "${color}[$agent_name] Last 30 lines:${NC}"
+    tail -30 "$log_file" 2>/dev/null || true
 
-    echo -e "${color}[$agent_name]${NC} Completed with exit code: $exit_code"
     return $exit_code
 }
 
@@ -402,28 +426,43 @@ main_loop() {
         echo -e "${BLUE}   Iteration $ITERATION_COUNT - $(date '+%Y-%m-%d %H:%M:%S')${NC}"
         echo -e "${BLUE}========================================${NC}"
 
+        # Track whether ANY phase made progress this iteration
+        local iteration_progress="no"
+
         # Phase 1: Builder
         echo ""
         echo "--- Phase 1: Builder ---"
-        run_builder || true
+        local builder_exit=0
+        run_builder || builder_exit=$?
+        if [ $builder_exit -eq 124 ]; then
+            echo -e "${YELLOW}[Builder]${NC} Timed out (heartbeat stale) - continuing to next phase"
+        fi
+
+        # Check for progress BEFORE git_sync (critical: git_sync commits everything, clearing the diff)
+        if has_uncommitted_changes; then
+            iteration_progress="yes"
+        fi
 
         # Git sync after Builder
         echo ""
         echo "--- Git Sync ---"
         git_sync
 
-        # Check circuit breaker after Builder
-        if ! check_circuit_breaker $ITERATION_COUNT; then
-            echo -e "${RED}Circuit breaker tripped! Loop stopped.${NC}"
-            break
-        fi
-
         # Phase 2: Criticizer (if there are issues to verify)
         local needs_verify=$(check_needs_verification)
         if [ "$needs_verify" -gt 0 ]; then
             echo ""
             echo "--- Phase 2: Criticizer ($needs_verify issues to verify) ---"
-            run_criticizer || true
+            local criticizer_exit=0
+            run_criticizer || criticizer_exit=$?
+            if [ $criticizer_exit -eq 124 ]; then
+                echo -e "${YELLOW}[Criticizer]${NC} Timed out (heartbeat stale) - continuing to next phase"
+            fi
+
+            # Check for progress BEFORE git_sync
+            if has_uncommitted_changes; then
+                iteration_progress="yes"
+            fi
 
             # Git sync after Criticizer
             echo ""
@@ -450,7 +489,16 @@ main_loop() {
         fi
 
         if [ "$run_planner_now" = true ]; then
-            run_planner || true
+            local planner_exit=0
+            run_planner || planner_exit=$?
+            if [ $planner_exit -eq 124 ]; then
+                echo -e "${YELLOW}[Planner]${NC} Timed out (heartbeat stale) - continuing to next phase"
+            fi
+
+            # Check for progress BEFORE git_sync
+            if has_uncommitted_changes; then
+                iteration_progress="yes"
+            fi
 
             # Git sync after Planner
             echo ""
@@ -459,6 +507,14 @@ main_loop() {
         else
             echo ""
             echo "--- Phase 3: Planner (skipped - $open_issues open issues, iteration $ITERATION_COUNT) ---"
+        fi
+
+        # Check circuit breaker at end of iteration (uses progress flag, not git diff)
+        echo ""
+        echo "--- Circuit Breaker Check ---"
+        if ! check_circuit_breaker $ITERATION_COUNT "$iteration_progress"; then
+            echo -e "${RED}Circuit breaker tripped! Loop stopped.${NC}"
+            break
         fi
 
         # Brief pause between iterations
