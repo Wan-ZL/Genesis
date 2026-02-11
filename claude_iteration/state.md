@@ -1,8 +1,22 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #39 COMPLETE - Needs Verification.** Implemented code syntax highlighting with highlight.js. Bundled library locally (119KB), two themes (GitHub light/dark) that switch dynamically with theme toggle. Integrated with marked.js via highlight callback, supports language tags and auto-detection, error handling with try-catch. Added copy-to-clipboard buttons (hover desktop, always mobile) with safe DOM methods. All markdown rendering now has syntax-highlighted code blocks. 21 new tests in test_syntax_highlight.py, all passing (1016 total).
+**Issue #40 COMPLETE - Needs Verification.** Implemented proactive notification system (Heartbeat Engine). Backend: ProactiveService with notification CRUD, three built-in checks (calendar reminders, daily briefing, system health), quiet hours support, configurable intervals, SQLite persistence. API routes for notifications (list, unread count, mark read, delete, config). Frontend: Notification bell with badge, dropdown panel (already existed). 18 new tests in test_proactive.py, all passing (1065 total). Integrated with existing SchedulerService, CalendarService, ResourceService.
 
+## Done
+- **Issue #40 COMPLETE - Proactive notification system / Heartbeat Engine (needs verification)**:
+  - ProactiveService: server/services/proactive.py with notification model, SQLite storage, CRUD operations
+  - Notification model: id, type, title, body, priority, created_at, read_at, action_url, metadata
+  - Three built-in proactive checks: calendar_reminder (30 min before events), daily_briefing (morning summary), system_health (hourly)
+  - Quiet hours support (configurable start/end times, prevents notifications during sleep hours)
+  - Configuration persistence (enable/disable checks, set intervals, quiet hours)
+  - API routes: GET/POST /api/notifications (list, unread count, mark read, delete, config)
+  - Background task runner with async loop (runs checks every 60 seconds)
+  - Integration with CalendarService for calendar-aware notifications
+  - Integration with ResourceService for system health alerts
+  - Frontend notification UI (bell icon, badge, dropdown panel) already existed
+  - 18 new tests in test_proactive.py (notification CRUD, config, checks, quiet hours)
+  - 1065 total tests (added 18 new tests)
 ## Done
 - **Issue #39 COMPLETE - Code syntax highlighting with highlight.js (needs verification)**:
   - Downloaded highlight.js v11.9.0 core library (119KB) to ui/vendor/

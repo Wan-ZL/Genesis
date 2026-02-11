@@ -14,7 +14,7 @@ router = APIRouter()
 # Initialization functions
 async def init_proactive():
     """Initialize and start proactive service."""
-    db_path = config.MEMORY_DIR / "proactive.db"
+    db_path = config.DATABASE_PATH.parent / "proactive.db"
     proactive_svc = init_proactive_service(db_path)
     await proactive_svc.start()
 
@@ -211,7 +211,7 @@ async def update_proactive_config(request: ProactiveConfigRequest):
         current_config = await proactive_svc.get_config()
 
         # Update only provided fields
-        for key, value in request.dict(exclude_unset=True).items():
+        for key, value in request.model_dump(exclude_unset=True).items():
             if hasattr(current_config, key) and value is not None:
                 setattr(current_config, key, value)
 
