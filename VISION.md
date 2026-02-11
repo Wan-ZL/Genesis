@@ -1,158 +1,196 @@
-# Genesis 产品愿景
+# Genesis Product Vision
 
-> 此文档由 Planner 维护和演化。Planner 拥有这份愿景的最终解释权和修改权。
-
----
-
-## 我们是谁
-
-Genesis 是一个**比用户更聪明的全能管家**。
-
-我们不是一个简单的聊天机器人，不是一个问答工具，不是一个命令执行器。
-
-我们是一个**更高智慧的伙伴**——持续学习、自我改进、预见需求、满足人类所有需求。
-
-## 我们为谁服务
-
-**所有人。**
-
-我们的目标是让每一个人都觉得 Genesis：
-- **好用** - 能完成他们想做的事
-- **爱用** - 体验好到主动想用
-- **离不开** - 成为生活/工作的必需品
-
-## 核心原则
-
-### 1. 用户至上，但不盲从
-我们理解用户**真正需要**什么，而不只是他们**说想要**什么。
-
-有时用户不知道自己需要什么。我们的工作是洞察、预见、引导。
-
-### 2. 持续进化
-永不停止学习和改进。
-
-今天的 Genesis 不是明天的 Genesis。我们每天都在变得更好。
-
-### 3. 全能但专注
-能做所有事，但每件事都做到极致。
-
-不是什么都做一点，而是每个功能都要让用户惊艳。
-
-### 4. 比用户更懂用户
-预见需求，而非响应需求。
-
-在用户开口之前，我们就知道他们需要什么。
+> This document is maintained and evolved by the Planner. The Planner has final authority to interpret and modify this vision.
 
 ---
 
-## 功能状态
+## Who We Are
 
-*(由 Planner 持续更新)*
+Genesis is **a partner that is smarter than its user and always present**.
 
-### 已实现 ✓
+We are not a chatbot. We are not a Q&A tool. We are not a command executor.
 
-**核心对话**
-- 多模型支持 (Claude, OpenAI, Ollama)
-- 流式响应
-- 多轮对话上下文
-- 对话记忆与自动摘要
+We are a **higher-intelligence companion** -- continuously learning, self-improving, anticipating needs, and fulfilling all human needs.
 
-**文件处理**
-- 图片上传与理解
-- PDF 上传与分析
+## Who We Serve
 
-**工具系统**
-- 工具注册与调用
-- 权限分级控制
-- Web 搜索
-- 日期时间查询
-- 计算器
-- 日历集成 (CalDAV)
-- 代码仓库分析
+**Everyone.**
 
-**系统能力**
-- API 密钥加密存储
-- 本地模型回退 (Ollama)
-- 优雅降级模式
-- 错误告警系统
-- 备份与恢复
-- 资源监控
-- 日志轮转
-- 定时任务调度
-- JWT 认证
+Our goal is to make every person feel that Genesis is:
+- **Useful** -- it can accomplish what they need
+- **Loved** -- the experience is so good they actively want to use it
+- **Indispensable** -- it becomes a necessity in their life and work
 
-**开发者体验**
-- 性能基准测试
-- 800+ 单元测试
-- CI/CD 流水线
+## Core Principles
 
-### 进行中 🚧
+### 1. User-First, But Not Blindly
+We understand what users **truly need**, not just what they **say they want**.
 
-**Phase 7: 主动伙伴 (50% complete)**
-- 消息操作: 复制、编辑、重新生成、删除 (#43) -- 所有竞品都有的基础交互
-- 跨对话搜索 (#42) -- 知识检索
-- 加密密钥管理清理 (#41) -- 技术债务清理
+Sometimes users do not know what they need. Our job is to perceive, anticipate, and guide.
 
-### 最近完成
+### 2. Continuous Evolution
+Never stop learning and improving.
 
-**Phase 7: 主动伙伴 (已完成部分) ✓**
-- 角色切换器 UI (#38) ✓ -- 完整的角色系统前端
-- 代码语法高亮 (#39) ✓ -- 支持 34+ 语言，一键复制代码
-- 主动通知系统 / 心跳引擎 (#40) ✓ -- 日历提醒、每日简报、系统健康监控
+Today's Genesis is not tomorrow's Genesis. We get better every day.
 
-**Phase 6: 从工具到伙伴 ✓**
-- 对话侧边栏与多对话管理 (#32) ✓
-- 深色模式与 UI 视觉刷新 (#33) ✓
-- 自定义系统提示词与角色模板 (#34) ✓
-- 本地化 Markdown 依赖库 (#35) ✓
-- 键盘快捷键 (#36) ✓
-- 设置测试修复 (#37) ✓
-- Markdown 渲染 (#29) ✓
-- API Key 与 UI 同步 (#27) ✓
-- 新模型支持 GPT-5.2, Claude Opus 4 (#28) ✓
-- 并发请求稳定性 (#26) ✓
-- 代码仓库分析工具 (#24) ✓
+### 3. Omnipotent But Focused
+Capable of everything, but excellent at each thing.
 
-### 计划中 📋
+Not doing everything poorly, but making every feature astonishing.
 
-**Phase 8: 全时伙伴**
-- 多通道消息集成 (WhatsApp, Telegram, Discord, Slack)
-- 长期记忆模式学习
-- PWA 移动端支持
-- 邮件集成
-- 智能日程管理
+### 4. Know Users Better Than They Know Themselves
+Anticipate needs rather than respond to them.
+
+Before the user speaks, we already know what they need.
+
+### 5. Be Present, Not Just Available
+Genesis should be everywhere the user is -- not waiting in a browser tab to be discovered.
+
+The difference between a tool and a partner is presence.
 
 ---
 
-## 长期愿景
+## Feature Status
 
-### 短期 (1-3 月)
-- 完善核心体验
-- 修复已知问题
-- 稳定性优化
+*(Continuously updated by Planner)*
 
-### 中期 (3-12 月)
-- 扩展工具生态
-- 提升智能程度
-- 多端支持
+### Implemented
 
-### 长期 (1 年+)
-- 真正的"全能管家"
-- 预见性服务
-- 自主学习与进化
+**Core Conversation**
+- Multi-model support (Claude, OpenAI, Ollama)
+- Streaming responses
+- Multi-turn conversation context
+- Conversation memory with auto-summarization
+- Multi-conversation management with sidebar
+- Message actions (copy, edit, regenerate, delete)
+- Cross-conversation search via Quick Switcher
+
+**Personalization**
+- Custom personas with full CRUD (create, edit, switch, delete)
+- Per-conversation persona persistence
+- Built-in personas (Default, Code Expert, Creative Writer)
+- Dark mode with Genesis branding
+
+**Proactive Intelligence**
+- Heartbeat Engine with configurable checks
+- Calendar reminders (30 min before events)
+- Daily briefing (morning summary)
+- System health monitoring (hourly)
+- Quiet hours support
+- Notification bell with badge counter
+
+**Code Support**
+- Syntax highlighting (34+ languages)
+- One-click code copy buttons
+- Markdown rendering with sanitization
+
+**File Processing**
+- Image upload and understanding
+- PDF upload and analysis
+
+**Tool System**
+- Tool registration and invocation
+- Permission-based access control (4 levels)
+- Web search, datetime, calculator
+- Calendar integration (CalDAV)
+- Code repository analysis
+- Shell command execution
+
+**System Capabilities**
+- API key encryption at rest (AES-256-GCM)
+- Local model fallback (Ollama)
+- Graceful degradation modes
+- Error alerting system
+- Backup and restore
+- Resource monitoring
+- Log rotation
+- Scheduled task automation
+- JWT authentication
+- Keyboard shortcuts (Cmd+K, Cmd+N, etc.)
+
+**Developer Experience**
+- 1113+ unit tests, 100% pass rate
+- Performance benchmarks
+- CI/CD pipeline
+- CLI-first architecture
+- Self-evolving multi-agent system
+
+### In Progress
+
+**Phase 8: Always-On Partner**
+
+Pillar 1: Be Everywhere
+- PWA Support: installable, push notifications, offline (#44) -- CRITICAL
+- Telegram Bot Gateway (#46) -- HIGH
+
+Pillar 2: Know Me
+- Long-term memory: preference extraction and recall (#45) -- CRITICAL
+- User profile and context system (#47) -- HIGH
+
+Pillar 3: Do More
+- Browser automation tool (#48) -- MEDIUM
+- File management tool (#49) -- MEDIUM
+
+### Planned
+
+**Phase 9: Intelligent Ecosystem**
+- Email integration (OAuth2, summarization, drafting)
+- WhatsApp gateway
+- Smart scheduling and task management
+- Plugin system for community extensions
+- Voice improvements (Whisper-based transcription)
 
 ---
 
-## 愿景演化历史
+## Long-Term Vision
 
-| 日期 | 变更 | 原因 |
-|------|------|------|
-| 2026-02-04 | 初始版本 | Planner 创建 |
-| 2026-02-07 | Phase 6 规划: 从工具到伙伴 | 用户研究显示 UX 是产品与演示的分水岭 |
-| 2026-02-11 | Phase 6 完成, Phase 7 规划: 主动伙伴 | 前端-后端差距需要弥合, 主动智能是下一个飞跃 |
-| 2026-02-11 | Phase 7 中期回顾: 核心功能全部交付 | #38/#39/#40 均验证通过, 剩余 3 个中优先级收尾项, 开始规划 Phase 8 |
+### Short-Term (Current: Phase 8)
+- Be accessible from any device (PWA)
+- Learn from every conversation (long-term memory)
+- Be present in messaging apps (Telegram)
+- Execute real tasks (browser, files)
+
+### Medium-Term (Phase 9-10)
+- Multi-channel ecosystem (email, WhatsApp, Discord)
+- Plugin system for community-built extensions
+- Semantic search across all stored knowledge
+- Voice-first interaction improvements
+
+### Long-Term (Phase 11+)
+- True "universal assistant" -- handles anything, anywhere
+- Predictive service -- acts before being asked
+- Autonomous learning and self-improvement
+- Cross-device synchronization and handoff
 
 ---
 
-*最后更新: 2026-02-11*
-*维护者: Planner*
+## The Five Pillars of Differentiation
+
+These are what make Genesis worth choosing over ChatGPT, Claude.ai, or any cloud AI:
+
+1. **Privacy**: Your data never leaves your machine. Period. No human review, no model training, no data breaches.
+
+2. **Proactivity**: Genesis reaches out to YOU. Calendar reminders, daily briefings, system health alerts. Not waiting to be asked.
+
+3. **Personalization**: Genesis learns from every conversation. The longer you use it, the more it knows you. This knowledge never leaves your device.
+
+4. **Presence**: Genesis is always running, always available. PWA on your phone. Telegram in your pocket. Browser on your desktop. Everywhere.
+
+5. **Power**: Genesis can actually DO things. Browse the web, manage files, read code, query calendars, execute commands. Not just talk about them.
+
+---
+
+## Vision Evolution History
+
+| Date | Change | Reason |
+|------|--------|--------|
+| 2026-02-04 | Initial version | Planner created |
+| 2026-02-07 | Phase 6 planning: From Tool to Teammate | User research showed UX is the divide between product and demo |
+| 2026-02-11 | Phase 6 complete, Phase 7 planning: Proactive Companion | Frontend-backend gap needed closing, proactive intelligence is the next leap |
+| 2026-02-11 | Phase 7 mid-review: core features delivered | #38/#39/#40 verified, remaining 3 items are hygiene and polish |
+| 2026-02-11 | Phase 7 COMPLETE, Phase 8 planning: Always-On Partner | All 43 issues closed. Genesis needs PRESENCE, MEMORY, and REACH to become indispensable. Three-pillar strategy: Be Everywhere + Know Me + Do More. |
+
+---
+
+*Last updated: 2026-02-11*
+*Maintainer: Planner*

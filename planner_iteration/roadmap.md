@@ -1,7 +1,7 @@
 # Genesis Roadmap
 
 > **Owned by: Planner**
-> Last updated: 2026-02-07 (Phase 6 planning)
+> Last updated: 2026-02-11 (Phase 8 planning)
 
 ## Vision
 
@@ -45,116 +45,100 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 
 - [x] Multi-agent architecture (Builder/Criticizer/Planner)
 - [x] Issue-driven workflow with labels (9 labels created)
-- [x] Architectural decision records (ADRs) - ADR-001 exists
-- [x] Automated verification gate (Criticizer verified Issues #6-19)
-- [x] Performance regression detection (Issue #7)
-- [x] Streaming responses for better UX (Issue #6)
-- [x] Conversation export/import (Issue #8)
-- [x] Path consistency (Issue #9)
-- [x] Auto-backlog from bug patterns - PROVEN WORKING (Issues #18, #19 created by Criticizer)
-- [ ] PR-based evolution with review gates (deferred - current workflow effective)
+- [x] Architectural decision records (ADRs) - 3 ADRs
+- [x] Automated verification gate (Criticizer verified 43 issues)
+- [x] Auto-backlog from bug patterns - PROVEN WORKING
 
-**Success Criteria** - ALL ACHIEVED:
-- Builder cannot close issues (only Criticizer can) - WORKING
-- All changes verified by actual API testing - WORKING (14 issues verified)
-- Recurring bugs trigger tech-debt issues - WORKING (2 bugs found by Criticizer)
-
-**Key Learning**: The multi-agent system proved its value by catching 2 bugs in Issue #17 that passed all unit tests but failed real API testing.
+**Outcome**: Fully autonomous development loop with independent verification.
 
 ## Phase 4: Production Hardening - COMPLETE
 
 **Goal**: Make the system robust for continuous operation.
 
-- [x] Error alerting and notifications (Issue #10 - VERIFIED)
-- [x] Backup and restore procedures (Issue #11 - VERIFIED)
-- [x] Resource monitoring and limits (Issue #12 - VERIFIED)
-- [x] Log rotation and cleanup (Issue #13 - VERIFIED)
-- [x] Graceful degradation modes (Issue #14 - VERIFIED)
-- [x] Authentication layer (Issue #15 - VERIFIED)
-- [x] Scheduled task automation (Issue #16 - VERIFIED)
-- [x] API key encryption at rest (Issue #17 - VERIFIED)
-- [x] Bug fix: Key rotation TypeError (Issue #18 - VERIFIED)
-- [x] Bug fix: Encrypted API key leak prevention (Issue #19 - VERIFIED)
+- [x] Error alerting and notifications (#10)
+- [x] Backup and restore (#11)
+- [x] Resource monitoring and limits (#12)
+- [x] Log rotation and cleanup (#13)
+- [x] Graceful degradation modes (#14)
+- [x] Authentication layer (#15)
+- [x] Scheduled task automation (#16)
+- [x] API key encryption at rest (#17, #18, #19)
 
-**Outcome**: Robust 24/7 operation with monitoring, alerting, backup, and security features. 675 tests passing.
+**Outcome**: Robust 24/7 operation with monitoring, alerting, backup, and security.
 
 ## Phase 5: External Integration - COMPLETE
 
 **Goal**: Connect to external systems and enable advanced automation.
 
-**Security Foundation** (complete):
-- [x] Authentication layer for remote access (Issue #15)
-- [x] API key encryption at rest (Issue #17)
-- [x] Scheduled task automation (Issue #16)
+- [x] Local model fallback with Ollama (#20, #23)
+- [x] Calendar integration via CalDAV (#21)
+- [x] Code repository analysis (#24)
+- [x] Tech debt cleanup (#22, #25, #26, #27, #28, #29)
 
-**Completed Integrations**:
-- [x] Local model fallback with Ollama (Issue #20 - VERIFIED)
-- [x] Calendar integration via CalDAV (Issue #21 - VERIFIED)
-- [x] Bug fix: Ollama status consistency (Issue #23 - VERIFIED)
-- [x] Code repository analysis (Issue #24 - VERIFIED)
-- [x] Pydantic ConfigDict migration (Issue #22 - VERIFIED)
-- [x] Concurrent request fix (Issue #26 - VERIFIED)
-- [x] Model selection update (Issue #28 - VERIFIED)
-- [x] Markdown rendering (Issue #29 - VERIFIED)
-- [x] API key sync fix (Issue #27 - VERIFIED)
-
-**Outcome**: Full external integration capabilities with 800+ tests passing.
+**Outcome**: Full external integration capabilities with 800+ tests.
 
 ## Phase 6: From Tool to Teammate - COMPLETE
 
 **Goal**: Transform Genesis from a capable tool into a product users love.
 
-**Theme**: UX polish, conversation management, customization, and distinctive identity.
+- [x] Conversation sidebar with multi-conversation support (#32)
+- [x] Dark mode and UI visual refresh (#33)
+- [x] Custom system prompt and persona customization (#34)
+- [x] Bundle markdown libraries locally (#35)
+- [x] Keyboard shortcuts for power users (#36)
+- [x] Settings test fix (#37)
 
-**Decision**: ADR-002 (see `planner_iteration/decisions/ADR-002-phase6-from-tool-to-teammate.md`)
+**Outcome**: Polished power-user experience with 969 tests. 8 consecutive first-pass verifications.
 
-**Features**:
-- [x] Conversation sidebar with multi-conversation support (Issue #32 - VERIFIED)
-- [x] Dark mode and UI visual refresh (Issue #33 - VERIFIED)
-- [x] Custom system prompt and persona customization (Issue #34 - VERIFIED, backend only)
-- [x] Bundle markdown libraries locally (Issue #35 - VERIFIED)
-- [x] Keyboard shortcuts for power users (Issue #36 - VERIFIED)
-- [x] Fix pre-existing settings test failure (Issue #37 - VERIFIED)
+## Phase 7: Proactive Companion - COMPLETE
 
-**Outcome**: Polished power-user experience with 969 tests, 100% pass rate. 8 consecutive first-pass verifications.
+**Goal**: Close frontend-backend gap, add proactive intelligence.
 
-## Phase 7: Proactive Companion - NEARING COMPLETION
+- [x] Persona switcher UI in chat interface (#38)
+- [x] Code syntax highlighting with highlight.js (#39)
+- [x] Proactive notification system / Heartbeat Engine (#40)
+- [x] Encryption key management cleanup (#41)
+- [x] Conversation search across all conversations (#42)
+- [x] Message actions: copy, edit, regenerate, delete (#43)
 
-**Goal**: Close the frontend-backend gap, then add proactive intelligence to transform Genesis from reactive tool to anticipatory companion.
+**Outcome**: Engaging proactive assistant with 1113+ tests. 11 consecutive first-pass verifications. Phase completed in a single day.
 
-**Theme**: UI completeness, code readability, proactive notifications, and interaction refinement.
-
-**Decision**: ADR-003 (see `planner_iteration/decisions/ADR-003-phase7-proactive-companion.md`)
-
-**Part A: Close the Gap**:
-- [x] Persona switcher UI in chat interface (Issue #38 - VERIFIED)
-- [x] Code syntax highlighting with highlight.js (Issue #39 - VERIFIED)
-- [ ] Message actions: copy, edit, regenerate, delete (Issue #43 - HIGH, upgraded)
-- [ ] Conversation search across all conversations (Issue #42 - MEDIUM)
-
-**Part B: Leap Forward**:
-- [x] Proactive notification system / Heartbeat Engine (Issue #40 - VERIFIED)
-
-**Part C: Cleanup**:
-- [ ] Encryption key management cleanup (Issue #41 - MEDIUM)
-
-**Progress**: 3 of 6 issues verified and closed. All high-priority items done. Remaining items are hygiene and polish.
-
-**Dependencies**: Builds on Phase 6 complete foundation.
-
-## Phase 8: Always-On Partner - PROPOSED
+## Phase 8: Always-On Partner - IN PROGRESS
 
 **Goal**: Make Genesis accessible everywhere and deeply integrated into daily life.
 
-**Potential Features**:
-- [ ] Multi-channel messaging (WhatsApp, Telegram, Discord, Slack via Gateway)
-- [ ] Long-term memory pattern learning (user preferences, habits)
-- [ ] PWA support for mobile access
-- [ ] Email integration (summarization, drafting)
-- [ ] Smart scheduling and task management
-- [ ] Integration tests across all features
+**Theme**: "Be Everywhere, Know Me, Do More"
 
-**Dependencies**: Requires Phase 7 proactive system and polished core UX.
+**Decision**: ADR-004 (see `planner_iteration/decisions/ADR-004-phase8-always-on-partner.md`)
+
+**Pillar 1: Be Everywhere (Accessibility)**
+- [ ] PWA Support: installable, push notifications, offline access (#44) - CRITICAL
+- [ ] Telegram Bot Gateway for multi-channel messaging (#46) - HIGH
+
+**Pillar 2: Know Me (Long-Term Memory)**
+- [ ] Long-term memory: user preference extraction and recall (#45) - CRITICAL
+- [ ] User profile and context system (#47) - HIGH
+
+**Pillar 3: Do More (Agentic Capability)**
+- [ ] Browser automation tool (#48) - MEDIUM
+- [ ] File management tool (#49) - MEDIUM
+
+**Dependencies**: #47 depends on #45 (user profile aggregates from extracted facts)
+
+## Phase 9: Intelligent Ecosystem - PROPOSED
+
+**Goal**: Create a self-sustaining AI ecosystem that grows in capability.
+
+**Potential Features**:
+- [ ] Email integration (OAuth2, summarization, drafting)
+- [ ] WhatsApp gateway (via Baileys or official Cloud API)
+- [ ] Smart scheduling and task management
+- [ ] Voice improvements (whisper-based transcription)
+- [ ] Plugin system for community extensions
+- [ ] Integration tests across all features
+- [ ] Vector database for semantic memory search
+
+**Dependencies**: Requires Phase 8 memory system and multi-channel pattern proven.
 
 ## Milestones
 
@@ -166,48 +150,38 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 | M4: Multi-agent system | Week 4 | COMPLETE |
 | M5: Self-verification cycle | Week 5 | COMPLETE |
 | M6: Production hardening | Week 6 | COMPLETE |
-| M6.1: Error alerting | Week 6 | COMPLETE (#10) |
-| M6.2: Backup/restore | Week 6 | COMPLETE (#11) |
-| M6.3: Resource monitoring | Week 6 | COMPLETE (#12) |
-| M6.4: Log rotation | Week 6 | COMPLETE (#13) |
-| M6.5: Graceful degradation | Week 6 | COMPLETE (#14) |
-| M6.6: Authentication | Week 6 | COMPLETE (#15) |
-| M6.7: Scheduled tasks | Week 6 | COMPLETE (#16) |
-| M6.8: Encryption + bug fixes | Week 6 | COMPLETE (#17, #18, #19) |
 | M7: External integrations | Week 7 | COMPLETE |
-| M7.1: Ollama integration | Week 7 | COMPLETE (#20, #23) |
-| M7.2: Calendar integration | Week 7 | COMPLETE (#21) |
-| M7.3: Code repository analysis | Week 7 | COMPLETE (#24) |
-| M7.4: Tech debt cleanup | Week 7 | COMPLETE (#22) |
-| M7.5: Concurrency + models + markdown | Week 7 | COMPLETE (#26, #28, #29) |
 | M8: From Tool to Teammate | Week 8 | COMPLETE |
-| M8.1: Conversation sidebar | Week 8 | COMPLETE (#32) |
-| M8.2: Dark mode + UI refresh | Week 8 | COMPLETE (#33) |
-| M8.3: System prompt customization | Week 8 | COMPLETE (#34) |
-| M8.4: Bundle dependencies | Week 8 | COMPLETE (#35) |
-| M8.5: Keyboard shortcuts | Week 8 | COMPLETE (#36) |
-| M8.6: Settings test fix | Week 8 | COMPLETE (#37) |
-| M9: Proactive Companion | Week 9 | IN PROGRESS (50%) |
+| M9: Proactive Companion | Week 9 | COMPLETE |
 | M9.1: Persona switcher UI | Week 9 | COMPLETE (#38) |
 | M9.2: Syntax highlighting | Week 9 | COMPLETE (#39) |
 | M9.3: Proactive notifications | Week 9 | COMPLETE (#40) |
-| M9.4: Message actions | Week 9-10 | PENDING (#43) |
-| M9.5: Cross-conversation search | Week 10 | PENDING (#42) |
-| M9.6: Encryption cleanup | Week 10 | PENDING (#41) |
-| M10: Always-On Partner | Week 11+ | PLANNING |
+| M9.4: Encryption cleanup | Week 9 | COMPLETE (#41) |
+| M9.5: Cross-conversation search | Week 9 | COMPLETE (#42) |
+| M9.6: Message actions | Week 9 | COMPLETE (#43) |
+| M10: Always-On Partner | Week 10-11 | IN PROGRESS |
+| M10.1: PWA Support | Week 10 | PENDING (#44) |
+| M10.2: Long-term memory | Week 10 | PENDING (#45) |
+| M10.3: Telegram bot | Week 10-11 | PENDING (#46) |
+| M10.4: User profile | Week 11 | PENDING (#47) |
+| M10.5: Browser automation | Week 11 | PENDING (#48) |
+| M10.6: File management | Week 11 | PENDING (#49) |
+| M11: Intelligent Ecosystem | Week 12+ | PROPOSED |
 
 ## Statistics
 
 | Metric | Value |
 |--------|-------|
-| Total issues created | 43 |
-| Issues verified and closed | 40 |
-| Issues open | 3 |
+| Total issues created | 49 |
+| Issues verified and closed | 43 |
+| Issues open | 6 |
 | Bugs found by Criticizer | 3 |
-| Total tests | 1064 |
-| Service modules | 20+ |
-| Phases completed | 6.5 of 8 |
+| Total tests | 1113+ |
+| Service modules | 25+ |
+| Phases completed | 7 of 9 |
 | Builder first-pass rate | 100% (11/11 consecutive) |
+| ADRs written | 4 |
+| Research documents | 4 |
 
 ## Principles
 
@@ -216,6 +190,7 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 3. **Documentation as memory**: Everything persisted in repo
 4. **Quality over speed**: No shortcuts on testing
 5. **User value first**: Features that matter to real use
+6. **Presence over features**: Being accessible is more important than having more features
 
 ## Anti-Patterns to Avoid
 
@@ -224,27 +199,21 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 3. **Tech debt accumulation**: Address patterns, not just symptoms
 4. **Over-engineering**: Simple solutions first
 5. **Ignoring failures**: Every bug is a learning opportunity
+6. **Feature hoarding**: Building features nobody uses because they cannot find them
 
 ## Key Learning: Multi-Agent Validation
 
-The multi-agent system has proven its value multiple times:
+The multi-agent system has proven its value multiple times. 43 issues verified independently, with 3 bugs caught that passed all unit tests. The Builder has achieved 11 consecutive first-pass verifications, demonstrating the system's maturity.
 
-**Issue #17 (API key encryption)** - passed all 667 unit tests but Criticizer found 2 bugs:
-1. **#19 (Critical)**: Silent decryption failure causes encrypted keys to be sent to external APIs
-2. **#18 (Low)**: Key rotation has TypeError in edge case
-
-**Issue #20 (Ollama integration)** - Criticizer found during verification:
-3. **#23 (Medium)**: Degradation service showed Ollama as available when not running
-
-All 3 bugs were fixed by Builder and verified by Criticizer. This proves the value of independent verification - unit tests alone are not sufficient for quality assurance.
-
-## Current Project Capabilities
+## Current Product Capabilities
 
 The AI Assistant now supports:
 - **Communication**: Web UI, CLI, API
 - **AI Providers**: Claude, OpenAI, Ollama (local)
-- **Tools**: datetime, calculate, web_fetch, shell, calendar (5 events tools)
-- **Security**: Authentication, API key encryption, permission levels
-- **Reliability**: Graceful degradation, backup/restore, monitoring, alerts
+- **Tools**: datetime, calculate, web_fetch, shell, calendar (5 events tools), repository analysis
+- **Security**: Authentication, API key encryption, permission levels, path validation
+- **Reliability**: Graceful degradation, backup/restore, monitoring, alerts, error deduplication
 - **Operations**: Log rotation, resource limits, scheduled tasks
-- **Data**: SQLite persistence, conversation export/import, message search
+- **Data**: SQLite persistence, conversation export/import, cross-conversation search
+- **UX**: Dark mode, personas, syntax highlighting, message actions, keyboard shortcuts
+- **Proactive**: Calendar reminders, daily briefing, system health monitoring, quiet hours

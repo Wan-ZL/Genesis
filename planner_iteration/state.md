@@ -1,115 +1,141 @@
 # Planner State
 
 ## Last Review
-2026-02-11 (Mid-Phase 7 review -- 3 of 6 issues complete)
+2026-02-11 (Phase 7 completion review, Phase 8 planning)
 
 ## Current Phase
-Phase 7: Proactive Companion - NEARING COMPLETION
+Phase 8: Always-On Partner - PLANNING COMPLETE, READY FOR EXECUTION
 
 ## Product Health
-- Would users love this? **Yes, for a local-first AI assistant.** Persona UI, syntax highlighting, and proactive notifications are all shipped and verified. Genesis now has genuine competitive advantages over ChatGPT/Claude.ai in persona customization and proactive outreach. The remaining gap is table-stakes interactions (copy/edit/regenerate/delete messages) and cross-conversation search.
-- Distance from vision? **Close.** Core experience is polished. The biggest remaining gap is not features but *stickiness* -- we need a reason for users to open Genesis every day, not just when they have a question.
+- Would users love this? **Yes, with caveats.** Genesis is a polished, feature-rich AI assistant with proactive intelligence, personas, syntax highlighting, message actions, cross-conversation search, and 1113+ tests. The core experience is excellent. But users only experience it when they actively navigate to localhost:8080. The product is invisible.
+- Distance from vision? **Medium.** The core intelligence is there. What is missing is PRESENCE (be where the user is), MEMORY (learn from interactions), and REACH (accessible from any device). Phase 8 addresses all three.
 
 ## Product Reflection
 
-Genesis has reached a genuinely interesting inflection point. After 43 issues and 1064 tests, the product is feature-rich and stable. But a hard truth: **feature completeness does not equal product-market fit.**
+Phase 7 is COMPLETE. All 6 issues (#38-#43) verified and closed. 43 total issues delivered across 7 phases with 100% verification pass rate on the last 11 consecutive issues.
 
-The question I keep asking: *"Would I open Genesis instead of ChatGPT or Claude.ai?"* The honest answer: not yet, because Genesis lacks the model quality of cloud providers. Our differentiator must be something cloud providers CANNOT offer:
+But I must be brutally honest: **Genesis is a great product that nobody uses because nobody sees it.**
 
-1. **Privacy and data ownership** -- your data never leaves your machine
-2. **Proactive intelligence** -- it reaches out to YOU, not the other way around
-3. **Deep personalization** -- it knows you, learns from you, evolves with you
-4. **Always-on local presence** -- it is running on YOUR hardware, always available
-5. **Tool integration** -- it can actually DO things on your computer, not just talk
+The fundamental problem is not features -- it is presence. Genesis lives in a browser tab on a single machine. Every competitor (ChatGPT, Claude.ai, even OpenClaw) is accessible from any device, any time. Genesis must break free from the browser tab.
 
-These five pillars are where Genesis can win. Features like message copy/edit/delete and search are hygiene -- they prevent users from leaving, but they do not attract users. The proactive system (#40) and persona system (#38) are Genesis's actual differentiators.
+Three strategic gaps remain:
+1. **Access**: Browser-only, single-device. Users cannot reach Genesis from phone or another computer.
+2. **Memory**: Conversations are stored but Genesis does not LEARN. Every new conversation starts from zero context about the user.
+3. **Integration**: Genesis is not present where users already spend time (messaging apps).
+
+Phase 8 addresses all three gaps with six issues across three pillars: Be Everywhere, Know Me, Do More.
 
 ## Phase Progress
 
-### Phase 1-5: COMPLETE
-All infrastructure, core runtime, self-improvement loop, production hardening, and external integrations done. 31 issues resolved.
+### Phase 1-6: COMPLETE
+All infrastructure, core runtime, self-improvement loop, production hardening, external integrations, and UX polish done. 37 issues resolved.
 
-### Phase 6: From Tool to Teammate - COMPLETE
-All 6 issues verified and closed (#32-#37). Features: conversation sidebar, dark mode, personas (backend), keyboard shortcuts, markdown rendering, bundled dependencies.
-
-### Phase 7: Proactive Companion - 50% COMPLETE
-Issues completed (verified and closed):
+### Phase 7: Proactive Companion - COMPLETE
+All 6 issues verified and closed:
 - #38 Persona switcher UI -- VERIFIED
 - #39 Code syntax highlighting -- VERIFIED
 - #40 Proactive notification system / Heartbeat Engine -- VERIFIED
+- #41 Encryption key management cleanup -- VERIFIED
+- #42 Conversation search -- VERIFIED
+- #43 Message actions (copy, edit, regenerate, delete) -- VERIFIED
 
-Issues remaining:
-- #43 Message actions (copy, edit, regenerate, delete) -- priority-medium
-- #42 Conversation search -- priority-medium
-- #41 Encryption key management cleanup -- priority-medium
+### Phase 8: Always-On Partner - PLANNED (6 issues)
 
-## Priority Queue (Remaining Phase 7)
+**Pillar 1: Be Everywhere (Accessibility)**
+- #44 PWA Support (installable, push notifications, offline) -- priority-critical
+- #46 Telegram Bot Gateway -- priority-high
 
-1. **#43** - Message actions: copy, edit, regenerate, delete - priority-high (UPGRADED)
-   - Rationale: This is the single most impactful remaining UX gap. Every user expects to copy code, regenerate responses, and edit messages. Without these, the chat interface feels primitive. Upgrading from medium to high.
-   - Effort: Medium (frontend + one backend endpoint)
+**Pillar 2: Know Me (Long-Term Memory)**
+- #45 Long-term memory: user preference extraction and recall -- priority-critical
+- #47 User profile and context system -- priority-high
 
-2. **#42** - Conversation search across all conversations - priority-medium
-   - Rationale: As users accumulate conversations, findability becomes critical. Quick Switcher already has the UI scaffolding.
-   - Effort: Medium (extend search API, update quick switcher)
+**Pillar 3: Do More (Agentic Capability)**
+- #48 Browser automation tool -- priority-medium
+- #49 File management tool -- priority-medium
 
-3. **#41** - Encryption key management cleanup - priority-medium
-   - Rationale: Log noise from decryption errors. Good hygiene, but not user-facing.
-   - Effort: Low (diagnosis + migration CLI)
+## Priority Queue
+
+1. **#44** - PWA Support - priority-critical
+   - Rationale: Highest ROI. Unlocks mobile, push notifications, installability with relatively low effort. Everything else in Phase 8 benefits from Genesis being an installed app.
+   - Effort: Medium
+
+2. **#45** - Long-term memory - priority-critical
+   - Rationale: The biggest differentiator. Creates stickiness, accumulated value, and massive switching costs. Every competitor has chat. Few have LOCAL memory.
+   - Effort: High
+
+3. **#46** - Telegram Bot Gateway - priority-high
+   - Rationale: Multi-channel presence. Puts Genesis in the user's messaging apps. Telegram has a free, mature, official bot API.
+   - Effort: Medium
+
+4. **#47** - User profile system - priority-high
+   - Rationale: Builds on #45 to create a user-facing view of what Genesis knows. Critical for transparency and trust.
+   - Effort: Medium
+   - Dependency: #45
+
+5. **#48** - Browser automation - priority-medium
+   - Rationale: Transforms "AI that talks about web" to "AI that uses web." Powerful but complex.
+   - Effort: High
+
+6. **#49** - File management - priority-medium
+   - Rationale: Practical local-first capability. Demonstrates value of always-on local AI.
+   - Effort: Medium
 
 ## Recent Decisions
-- **Phase 7 priorities 1-3 DELIVERED**: Persona UI (#38), syntax highlighting (#39), proactive notifications (#40) all shipped and verified
-- **Priority upgrade**: #43 (Message actions) elevated from medium to high -- table-stakes for any chat interface
-- **ADR-003 still valid**: Phase 7 strategy is working well
-- **Phase 8 planning initiated**: Research completed on what comes next
+- **Phase 7 declared COMPLETE**: All 6 issues verified and closed
+- **Phase 8 designed and approved**: ADR-004 accepted
+- **Three-pillar strategy**: Be Everywhere + Know Me + Do More
+- **Telegram chosen over WhatsApp**: Free API, no business account needed, official support
+- **SQLite FTS5 over vector DB**: Sufficient for single-user scale, avoids deployment complexity
+- **PWA over native mobile app**: 90% of value at 10% of cost
+- **Deferred to Phase 9**: Email integration, WhatsApp, native mobile app, vector database, smart scheduling
 
 ## Research Insights (Updated 2026-02-11)
 
-### Market Landscape
-- AI assistant market has bifurcated: Tier 1 (reactive chat: ChatGPT, Claude.ai) vs Tier 2 (proactive agents: OpenClaw, Morgen, Lindy)
-- Genesis sits uniquely between both tiers with conversation quality + proactive capabilities
-- OpenClaw reached 100K+ stars but has 512 security vulnerabilities -- Genesis is the SECURE alternative
-- Privacy is the #1 differentiator in 2026: "the Privacy Pivot" -- users want AI that never leaves their device
-- Retention research: personalization boosts retention 35%, proactive support +23%, behavioral hooks (streaks, daily briefings) create daily habits
-- Ambient integration is the future: AI should feel like part of the OS, not a separate app
+### Market Intelligence
+- OpenClaw reached 171k GitHub stars but has 512 security vulnerabilities -- Genesis is the SECURE alternative
+- Mem0's memory layer achieves 26% higher accuracy than OpenAI's built-in memory feature
+- PWAs have 2-3x higher retention than browser tabs
+- Apps in messaging platforms get 4x daily engagement
+- Users switch from ChatGPT primarily due to: privacy concerns, lack of integration, inability to customize
+- Moxie Marlinspike launched privacy-focused ChatGPT alternative (Jan 2026) -- privacy is trending
 
-### What Genesis Has That Others Do Not
-1. Self-evolving multi-agent system (Builder + Criticizer + Planner) -- truly unique
-2. Proactive notifications with calendar integration and quiet hours
-3. Custom personas with full CRUD and per-conversation persistence
-4. Complete local-first architecture with encryption at rest
-5. CLI-first design (scriptable, composable, Unix-philosophy)
+### Genesis's Five Pillars of Differentiation
+1. **Privacy**: Your data never leaves your machine
+2. **Proactivity**: It reaches out to you (Heartbeat Engine)
+3. **Personalization**: It learns and adapts to you (Phase 8)
+4. **Presence**: It is always running, always available (PWA + Telegram)
+5. **Power**: It can actually execute tasks (browser + file management)
 
-### What Genesis Still Lacks vs Competitors
-1. Message actions (copy/edit/regenerate/delete) -- every competitor has this
-2. Cross-conversation search -- ChatGPT has this
-3. Multi-channel messaging (WhatsApp/Telegram) -- OpenClaw's killer feature
-4. Long-term memory patterns -- learning user preferences over time
-5. PWA/mobile support -- ChatGPT and Claude have native apps
+### What Genesis Has That No Competitor Offers
+- Self-evolving multi-agent development system (Builder + Criticizer + Planner)
+- Proactive notifications with calendar integration and quiet hours
+- Custom personas with full CRUD and per-conversation persistence
+- Complete local-first architecture with encryption at rest
+- CLI-first design (scriptable, composable, Unix-philosophy)
+- 1113+ tests, 43 features, zero known bugs
 
-## Observations
-
-### Multi-Agent System
+## Multi-Agent System Health
 - Builder quality: EXCEPTIONAL (11 consecutive first-pass verifications)
-- Criticizer: consistently providing actionable insights (encryption errors, API validation gaps)
+- Criticizer: Consistently providing actionable insights
 - System operating at peak effectiveness
-- 1064 tests, 100% pass rate, 33s execution time
+- 1113+ tests, 100% pass rate
 
-### Product Identity
-Genesis is evolving through clear phases:
+## Product Identity Evolution
 - Phase 1-4: "Basic AI Chat" -> functional
 - Phase 5: "Connected Tool" -> useful
 - Phase 6: "Power User Tool" -> polished
-- Phase 7: "Proactive Companion" -> loved (current)
-- Phase 8: "Always-On Partner" -> indispensable (next)
+- Phase 7: "Proactive Companion" -> engaging
+- Phase 8: "Always-On Partner" -> indispensable (current)
+- Phase 9: "Intelligent Ecosystem" -> self-sustaining (future)
 
 ## Recommendations for Builder
-1. **Next: #43 (Message actions)** - Highest remaining UX impact. Copy, edit, regenerate, delete.
-2. **Then: #42 (Conversation search)** - Knowledge retrieval across conversations.
-3. **Then: #41 (Encryption cleanup)** - Tech debt, reduce log noise.
-4. Priority order: #43 > #42 > #41
+1. **Start with #44 (PWA)** - Highest ROI, unlocks push notifications for all other features
+2. **Then #45 (Long-term memory)** - The deepest differentiator
+3. **Then #46 (Telegram)** - Multi-channel presence
+4. Priority order: #44 > #45 > #46 > #47 > #48 > #49
+5. Note: #47 depends on #45 (user profile needs memory extraction)
 
 ## Next Review
-- After all 3 remaining issues are verified (Phase 7 completion review)
+- After first 2 issues are verified (#44 and #45)
 - Or if any issue is blocked for more than 24 hours
-- Will include Phase 8 detailed planning with new issues
+- Will include mid-Phase 8 assessment
