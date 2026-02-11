@@ -31,6 +31,11 @@ async def lifespan(app: FastAPI):
     from server.routes.settings import load_settings_on_startup
     await load_settings_on_startup()
 
+    # Check encryption health at startup (logs single warning if issues found)
+    from server.services.settings import SettingsService
+    settings_service = SettingsService(config.DATABASE_PATH)
+    await settings_service.check_encryption_health()
+
     # Scan for available capabilities (tools, services, etc.)
     from core.capability_scanner import CapabilityScanner
     from core.permissions import get_permission_level

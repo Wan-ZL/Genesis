@@ -1,9 +1,38 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #43 COMPLETE - Needs Verification.** Implemented message actions (copy, edit, regenerate, delete). Backend: DELETE /api/conversations/{id}/messages/{msg_id} endpoint, delete_message() method with retry logic. Frontend: Action bar on hover/tap with 4 buttons (copy, regenerate for assistant, edit for user, delete for all). Security: Safe DOM methods (createElement/textContent, no innerHTML), confirmation dialogs. Mobile: Always-visible 44px touch targets. Accessibility: Keyboard-navigable. 7 new tests (all passing). Code blocks already had copy buttons from Issue #39.
+**Issue #42 COMPLETE - Needs Verification.** Conversation search across all conversations. Extended search API with cross_conversation parameter, Quick Switcher (Cmd+K) now searches message content when query >= 2 chars, safe DOM-based highlighting, loading indicators, empty states. 17 new tests (10 memory service, 7 API endpoint), 1113 total tests passing.
 
 ## Done
+- **Issue #42 COMPLETE - Conversation search across all conversations (needs verification)**:
+  - API: GET /api/messages/search?q=X&cross_conversation=true (searches all conversations)
+  - API: cross_conversation=false (default) searches only "main" conversation
+  - Frontend: Quick Switcher (Cmd+K) searches message content when query >= 2 chars
+  - Frontend: Shows conversation title, snippet with highlighted match, role/date metadata
+  - Frontend: Safe DOM-based highlighting (createElement/createTextNode, no innerHTML)
+  - Frontend: Loading indicator, empty state, error handling
+  - Frontend: Clicking result navigates to that conversation
+  - Backend: MemoryService.search_messages() already supported conversation_id=None
+  - Backend: Returns results with conversation_title, snippet, all metadata
+  - Tests: 10 new tests in test_message_search.py (single/cross-conversation, pagination, snippets)
+  - Tests: 7 new tests in test_chat_api.py::TestSearchEndpoint (API validation, structure)
+  - Tests: 1113 total passing (1106 baseline + 17 new, 1 pre-existing failure)
+- **Issue #41 COMPLETE - Encryption key management cleanup (needs verification)**:
+  - Error log deduplication: SettingsService._decryption_errors tracks logged errors per key
+  - _decrypt_if_sensitive() logs each unique error only once, clears on success
+  - Startup health check: check_encryption_health() runs in main.py lifespan
+  - Detects undecryptable keys by testing decryption, logs single summary warning
+  - Enhanced get_encryption_status(): Added can_decrypt, all_decryptable, errors fields
+  - Added _can_decrypt_key() helper method for testing decryptability
+  - CLI: python -m cli settings encryption-status (detailed status with recommendations)
+  - CLI: python -m cli settings clear-invalid --confirm (deletes undecryptable keys)
+  - CLI: python -m cli settings reencrypt (re-encrypts with current key)
+  - Service methods: clear_invalid_encrypted_keys(), reencrypt_with_current_key()
+  - Both methods clear error tracking, handle plaintext->encrypted migration
+  - Documentation: assistant/docs/ENCRYPTION_TROUBLESHOOTING.md (comprehensive guide)
+  - 19 new tests in test_encryption_health.py (health check, clear, reencrypt, dedup)
+  - 1091 total tests collected (added 26 including parameterized variants)
+  - Fixes repeated "Decryption failed for openai_api_key: InvalidTag" log spam
 - **Issue #43 COMPLETE - Message actions: copy, edit, regenerate, delete (needs verification)**:
   - Backend: DELETE /api/conversations/{conversation_id}/messages/{message_id} endpoint
   - Backend: MemoryService.delete_message() method with @with_db_retry() decorator
@@ -488,7 +517,7 @@
   - All 969 tests passing (first time zero failures)
 
 ## Next Step (single step)
-Wait for Criticizer verification of Issue #43 (message actions).
+Wait for Criticizer verification of Issue #42 (conversation search across all conversations).
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)

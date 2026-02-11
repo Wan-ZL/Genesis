@@ -1860,14 +1860,16 @@ async def get_conversation(conversation_id: str):
 async def search_messages(
     q: str,
     limit: int = 50,
-    offset: int = 0
+    offset: int = 0,
+    cross_conversation: bool = False
 ):
-    """Search messages by keyword in the infinite conversation.
+    """Search messages by keyword across conversations or within a specific one.
 
     Args:
         q: Search query (required)
         limit: Maximum results (default 50, max 100)
         offset: Pagination offset
+        cross_conversation: If true, search all conversations. If false, search only the default conversation.
 
     Returns:
         List of matching messages with snippets and context
@@ -1881,10 +1883,11 @@ async def search_messages(
     # Cap limit to prevent abuse
     limit = min(limit, 100)
 
-    # Search in the single infinite conversation
+    # Search across all conversations or just the default one
+    conversation_id = None if cross_conversation else DEFAULT_CONVERSATION_ID
     results = await memory.search_messages(
         query=q.strip(),
-        conversation_id=DEFAULT_CONVERSATION_ID,
+        conversation_id=conversation_id,
         limit=limit,
         offset=offset
     )
@@ -1892,6 +1895,7 @@ async def search_messages(
     return {
         "query": q.strip(),
         "count": len(results),
+        "cross_conversation": cross_conversation,
         "results": results
     }
 

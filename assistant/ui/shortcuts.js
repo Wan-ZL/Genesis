@@ -157,24 +157,103 @@ function closeQuickSwitcher() {
     quickSwitcherOpen = false;
 }
 
-function renderQuickSwitcherList(query) {
+async function renderQuickSwitcherList(query) {
     const listEl = document.getElementById('quick-switcher-list');
     if (!listEl) return;
-
-    // Filter conversations by query
-    const filtered = (window.conversations || []).filter(conv => {
-        const title = (conv.title || 'Untitled').toLowerCase();
-        const preview = (conv.preview || '').toLowerCase();
-        const q = query.toLowerCase();
-        return title.includes(q) || preview.includes(q);
-    });
 
     // Clear list (safe way)
     while (listEl.firstChild) {
         listEl.removeChild(listEl.firstChild);
     }
 
-    if (filtered.length === 0) {
+    if (!query || query.length < 2) {
+        // Show recent conversations when no query
+        const filtered = (window.conversations || []).filter(conv => {
+            const title = (conv.title || 'Untitled').toLowerCase();
+            const preview = (conv.preview || '').toLowerCase();
+            const q = query.toLowerCase();
+            return title.includes(q) || preview.includes(q);
+        });
+
+        renderConversationItems(filtered, listEl);
+        return;
+    }
+
+    // Show loading indicator
+    const loading = document.createElement('div');
+    loading.className = 'quick-switcher-loading';
+    loading.textContent = 'Searching...';
+    listEl.appendChild(loading);
+
+    try {
+        // Search both conversation titles and message content
+        const response = await fetch(`/api/messages/search?q=${encodeURIComponent(query)}&cross_conversation=true&limit=20`);
+        const data = await response.json();
+
+        // Remove loading indicator
+        loading.remove();
+
+        if (!response.ok) {
+            showSearchError(listEl, 'Search failed');
+            return;
+        }
+
+        const results = data.results || [];
+
+        if (results.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'quick-switcher-empty';
+            empty.textContent = 'No messages found';
+            listEl.appendChild(empty);
+            return;
+        }
+
+        // Render message search results
+        results.forEach((result, index) => {
+            const item = document.createElement('div');
+            item.className = 'quick-switcher-item message-result';
+            if (index === 0) {
+                item.classList.add('active');
+            }
+
+            // Conversation title
+            const convTitle = document.createElement('div');
+            convTitle.className = 'quick-switcher-item-title';
+            convTitle.textContent = result.conversation_title || 'Untitled';
+            item.appendChild(convTitle);
+
+            // Message snippet with highlighting
+            const snippet = document.createElement('div');
+            snippet.className = 'quick-switcher-item-preview';
+            highlightSearchTermsInElement(snippet, result.snippet, query);
+            item.appendChild(snippet);
+
+            // Message metadata
+            const meta = document.createElement('div');
+            meta.className = 'quick-switcher-item-meta';
+            meta.textContent = `${result.role === 'user' ? 'You' : 'Assistant'} • ${formatSearchDate(result.created_at)}`;
+            item.appendChild(meta);
+
+            // Click to navigate to conversation
+            item.addEventListener('click', () => {
+                if (typeof switchConversation === 'function') {
+                    switchConversation(result.conversation_id);
+                }
+                closeQuickSwitcher();
+            });
+
+            listEl.appendChild(item);
+        });
+
+    } catch (error) {
+        console.error('Search error:', error);
+        loading.remove();
+        showSearchError(listEl, 'Search error: ' + error.message);
+    }
+}
+
+function renderConversationItems(conversations, listEl) {
+    if (conversations.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'quick-switcher-empty';
         empty.textContent = 'No conversations found';
@@ -182,7 +261,7 @@ function renderQuickSwitcherList(query) {
         return;
     }
 
-    filtered.forEach((conv, index) => {
+    conversations.forEach((conv, index) => {
         const item = document.createElement('div');
         item.className = 'quick-switcher-item';
         if (index === 0) {
@@ -213,9 +292,63 @@ function renderQuickSwitcherList(query) {
     });
 }
 
+function showSearchError(listEl, message) {
+    const error = document.createElement('div');
+    error.className = 'quick-switcher-error';
+    error.textContent = message;
+    listEl.appendChild(error);
+}
+
+function highlightSearchTermsInElement(element, text, query) {
+    if (!text || !query) {
+        element.textContent = text;
+        return;
+    }
+
+    // Split text by the search term (case-insensitive)
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+
+    parts.forEach(part => {
+        if (part.toLowerCase() === query.toLowerCase()) {
+            // Highlight matching part
+            const mark = document.createElement('mark');
+            mark.textContent = part;
+            element.appendChild(mark);
+        } else {
+            // Regular text
+            element.appendChild(document.createTextNode(part));
+        }
+    });
+}
+
+function formatSearchDate(isoDate) {
+    if (!isoDate) return '';
+    try {
+        const date = new Date(isoDate);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) {
+            return 'Today';
+        } else if (diffDays === 1) {
+            return 'Yesterday';
+        } else if (diffDays < 7) {
+            return date.toLocaleDateString([], { weekday: 'short' });
+        } else {
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
+    } catch {
+        return '';
+    }
+}
+
 function handleQuickSwitcherSearch(event) {
     const query = event.target.value;
-    renderQuickSwitcherList(query);
+    renderQuickSwitcherList(query).catch(err => {
+        console.error('Quick switcher search error:', err);
+    });
 }
 
 function handleQuickSwitcherKeydown(event) {

@@ -4,14 +4,12 @@ import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-import json
 import logging
 import threading
 
 from server.services.encryption import (
     EncryptionService,
     get_encryption_service,
-    init_encryption_service,
     is_encrypted,
     CRYPTOGRAPHY_AVAILABLE
 )
@@ -133,6 +131,9 @@ class SettingsService:
     Uses a connection pool with WAL mode for safe concurrent access.
     """
 
+    # Track decryption errors to avoid log spam
+    _decryption_errors: dict = {}  # key -> error_type
+
     # Default settings
     DEFAULTS = {
         "openai_api_key": "",
@@ -244,29 +245,40 @@ class SettingsService:
         if not enc_service:
             # Encryption service not available but value is encrypted
             # Return empty to prevent encrypted value from leaking
-            logger.error(
-                f"Cannot decrypt {key}: encryption service not available. "
-                f"Value appears encrypted (starts with ENC:v1:). "
-                f"Returning empty string to prevent encrypted data from being used."
-            )
+            # Only log once per key to reduce noise
+            if key not in SettingsService._decryption_errors:
+                logger.error(
+                    f"Cannot decrypt {key}: encryption service not available. "
+                    f"Value appears encrypted (starts with ENC:v1:). "
+                    f"Returning empty string to prevent encrypted data from being used."
+                )
+                SettingsService._decryption_errors[key] = "no_service"
             return ""
 
         try:
             decrypted = enc_service.decrypt(value)
             # Sanity check: decrypted value should not look like encrypted format
             if is_encrypted(decrypted):
-                logger.error(
-                    f"Decryption of {key} returned another encrypted value. "
-                    f"This indicates a double-encryption bug. Returning empty."
-                )
+                if key not in SettingsService._decryption_errors:
+                    logger.error(
+                        f"Decryption of {key} returned another encrypted value. "
+                        f"This indicates a double-encryption bug. Returning empty."
+                    )
+                    SettingsService._decryption_errors[key] = "double_encrypted"
                 return ""
+            # Success - clear error tracking
+            if key in SettingsService._decryption_errors:
+                del SettingsService._decryption_errors[key]
             return decrypted
         except Exception as e:
-            logger.error(
-                f"Decryption failed for {key}: {type(e).__name__}: {e}. "
-                f"This may indicate the encryption key has changed or data is corrupted. "
-                f"Returning empty string to prevent encrypted data from being used."
-            )
+            # Only log once per key to reduce noise
+            if key not in SettingsService._decryption_errors:
+                logger.error(
+                    f"Decryption failed for {key}: {type(e).__name__}: {e}. "
+                    f"This may indicate the encryption key has changed or data is corrupted. "
+                    f"Returning empty string to prevent encrypted data from being used."
+                )
+                SettingsService._decryption_errors[key] = f"{type(e).__name__}"
             return ""
 
     async def _ensure_initialized(self):
@@ -532,22 +544,282 @@ class SettingsService:
 
         status = {
             "encryption_available": self._encryption_available,
-            "keys": {}
+            "keys": {},
+            "errors": dict(SettingsService._decryption_errors)
         }
 
         for key in SENSITIVE_KEYS:
             is_enc = await self.is_key_encrypted(key)
             has_value = bool(await self.get(key))
+            can_decrypt = await self._can_decrypt_key(key)
             status["keys"][key] = {
                 "has_value": has_value,
-                "is_encrypted": is_enc
+                "is_encrypted": is_enc,
+                "can_decrypt": can_decrypt
             }
 
-        # Overall: all set keys should be encrypted
+        # Overall: all set keys should be encrypted and decryptable
         all_encrypted = all(
             (not s["has_value"]) or s["is_encrypted"]
             for s in status["keys"].values()
         )
+        all_decryptable = all(
+            (not s["has_value"]) or s["can_decrypt"]
+            for s in status["keys"].values()
+        )
         status["all_encrypted"] = all_encrypted
+        status["all_decryptable"] = all_decryptable
 
         return status
+
+    async def _can_decrypt_key(self, key: str) -> bool:
+        """Check if a key's encrypted value can be decrypted.
+
+        Args:
+            key: The setting key to check
+
+        Returns:
+            True if value is not encrypted OR can be successfully decrypted
+        """
+        await self._ensure_initialized()
+
+        async with self._get_connection() as db:
+            cursor = await db.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                (key,)
+            )
+            row = await cursor.fetchone()
+            if not row or not row[0]:
+                return True  # No value or empty value
+
+            value = row[0]
+            if not is_encrypted(value):
+                return True  # Not encrypted
+
+            # Try to decrypt
+            enc_service = self._get_encryption_service()
+            if not enc_service:
+                return False  # Can't decrypt without service
+
+            try:
+                enc_service.decrypt(value)
+                return True
+            except Exception:
+                return False
+
+    async def clear_invalid_encrypted_keys(self) -> dict:
+        """Clear all encrypted keys that cannot be decrypted.
+
+        Returns:
+            Dict with cleared keys and skipped keys.
+        """
+        await self._ensure_initialized()
+
+        if not self._encryption_available:
+            return {
+                "success": False,
+                "error": "Encryption not available",
+                "cleared": [],
+                "skipped": []
+            }
+
+        enc_service = self._get_encryption_service()
+        if not enc_service:
+            return {
+                "success": False,
+                "error": "Could not initialize encryption service",
+                "cleared": [],
+                "skipped": []
+            }
+
+        cleared = []
+        skipped = []
+
+        async with self._get_connection() as db:
+            for key in SENSITIVE_KEYS:
+                cursor = await db.execute(
+                    "SELECT value FROM settings WHERE key = ?",
+                    (key,)
+                )
+                row = await cursor.fetchone()
+
+                if not row or not row[0]:
+                    skipped.append(key)
+                    continue
+
+                value = row[0]
+
+                if not is_encrypted(value):
+                    skipped.append(key)
+                    continue
+
+                # Try to decrypt
+                try:
+                    enc_service.decrypt(value)
+                    skipped.append(key)  # Can decrypt, don't clear
+                except Exception:
+                    # Cannot decrypt - clear it
+                    await db.execute(
+                        "DELETE FROM settings WHERE key = ?",
+                        (key,)
+                    )
+                    cleared.append(key)
+                    # Clear from error tracking
+                    if key in SettingsService._decryption_errors:
+                        del SettingsService._decryption_errors[key]
+
+            await db.commit()
+
+        return {
+            "success": True,
+            "cleared": cleared,
+            "skipped": skipped
+        }
+
+    async def reencrypt_with_current_key(self) -> dict:
+        """Re-encrypt all sensitive keys with the current encryption key.
+
+        This is useful if you've restored the encryption key salt and want
+        to re-encrypt existing data.
+
+        Returns:
+            Dict with re-encrypted keys and errors.
+        """
+        await self._ensure_initialized()
+
+        if not self._encryption_available:
+            return {
+                "success": False,
+                "error": "Encryption not available",
+                "reencrypted": [],
+                "skipped": [],
+                "failed": []
+            }
+
+        enc_service = self._get_encryption_service()
+        if not enc_service:
+            return {
+                "success": False,
+                "error": "Could not initialize encryption service",
+                "reencrypted": [],
+                "skipped": [],
+                "failed": []
+            }
+
+        reencrypted = []
+        skipped = []
+        failed = []
+
+        async with self._get_connection() as db:
+            for key in SENSITIVE_KEYS:
+                cursor = await db.execute(
+                    "SELECT value FROM settings WHERE key = ?",
+                    (key,)
+                )
+                row = await cursor.fetchone()
+
+                if not row or not row[0]:
+                    skipped.append(key)
+                    continue
+
+                value = row[0]
+
+                if not is_encrypted(value):
+                    # Plaintext - encrypt it
+                    try:
+                        encrypted = enc_service.encrypt(value)
+                        now = datetime.now().isoformat()
+                        await db.execute(
+                            "UPDATE settings SET value = ?, updated_at = ? WHERE key = ?",
+                            (encrypted, now, key)
+                        )
+                        reencrypted.append(key)
+                    except Exception as e:
+                        logger.error(f"Failed to encrypt {key}: {e}")
+                        failed.append({"key": key, "error": str(e)})
+                else:
+                    # Already encrypted - try to decrypt then re-encrypt
+                    try:
+                        plaintext = enc_service.decrypt(value)
+                        new_encrypted = enc_service.encrypt(plaintext)
+                        now = datetime.now().isoformat()
+                        await db.execute(
+                            "UPDATE settings SET value = ?, updated_at = ? WHERE key = ?",
+                            (new_encrypted, now, key)
+                        )
+                        reencrypted.append(key)
+                    except Exception as e:
+                        logger.error(f"Failed to re-encrypt {key}: {e}")
+                        failed.append({"key": key, "error": str(e)})
+                    finally:
+                        # Always clear from error tracking when we attempt re-encrypt
+                        # (successful re-encrypt means it's fixed, failed means we tried)
+                        if key in SettingsService._decryption_errors:
+                            del SettingsService._decryption_errors[key]
+
+            await db.commit()
+
+        return {
+            "success": len(failed) == 0,
+            "reencrypted": reencrypted,
+            "skipped": skipped,
+            "failed": failed
+        }
+
+    async def check_encryption_health(self) -> dict:
+        """Check encryption health and log a single warning if issues found.
+
+        This should be called once at startup to detect and report issues.
+
+        Returns:
+            Dict with health status and issues found.
+        """
+        status = await self.get_encryption_status()
+
+        issues = []
+        warnings = []
+
+        # Check if encryption is available
+        if not status["encryption_available"]:
+            issues.append("Encryption library not available (cryptography not installed)")
+
+        # Check for keys that can't be decrypted
+        # Note: We check the raw DB value directly to avoid triggering get() which returns empty
+        await self._ensure_initialized()
+        async with self._get_connection() as db:
+            for key in SENSITIVE_KEYS:
+                cursor = await db.execute(
+                    "SELECT value FROM settings WHERE key = ?",
+                    (key,)
+                )
+                row = await cursor.fetchone()
+                if row and row[0]:  # Key has a value in DB
+                    value = row[0]
+                    if is_encrypted(value):
+                        # Check if we can decrypt it
+                        can_decrypt = await self._can_decrypt_key(key)
+                        if not can_decrypt:
+                            issues.append(f"{key}: encrypted but cannot decrypt (key changed or data corrupted)")
+                    else:
+                        # Plaintext sensitive key
+                        warnings.append(f"{key}: stored in plaintext (should run 'python -m cli settings encrypt')")
+
+        # Log a single summary if issues found
+        if issues:
+            logger.warning(
+                "Encryption health check found issues:\n" +
+                "\n".join(f"  - {issue}" for issue in issues) +
+                "\nRun 'python -m cli settings encryption-status' for details."
+            )
+        elif warnings:
+            logger.info(
+                "Encryption health check found non-critical warnings:\n" +
+                "\n".join(f"  - {warning}" for warning in warnings)
+            )
+
+        return {
+            "healthy": len(issues) == 0,
+            "issues": issues,
+            "warnings": warnings,
+            "status": status
+        }

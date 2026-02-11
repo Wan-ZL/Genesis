@@ -45,6 +45,98 @@ def mock_claude_response():
     return mock_response
 
 
+class TestSearchEndpoint:
+    """Tests for GET /api/messages/search endpoint."""
+
+    def test_search_requires_query(self, client):
+        """Test that search requires a query parameter."""
+        response = client.get("/api/messages/search")
+        assert response.status_code == 422  # Validation error
+
+    def test_search_requires_minimum_length(self, client):
+        """Test that search requires at least 2 characters."""
+        response = client.get("/api/messages/search?q=a")
+        assert response.status_code == 400
+        assert "at least 2 characters" in response.json()["detail"]
+
+    def test_search_single_conversation(self, client):
+        """Test searching within the default conversation."""
+        # This test uses the actual database
+        response = client.get("/api/messages/search?q=test")
+        assert response.status_code == 200
+        data = response.json()
+        assert "query" in data
+        assert "count" in data
+        assert "results" in data
+        assert data["query"] == "test"
+        assert data["cross_conversation"] == False
+        assert isinstance(data["results"], list)
+
+    def test_search_cross_conversation(self, client):
+        """Test searching across all conversations."""
+        response = client.get("/api/messages/search?q=test&cross_conversation=true")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["cross_conversation"] == True
+        assert isinstance(data["results"], list)
+
+    def test_search_respects_limit(self, client):
+        """Test that search respects the limit parameter."""
+        response = client.get("/api/messages/search?q=test&limit=5")
+        assert response.status_code == 200
+        data = response.json()
+        # Can't assert exact count without knowing database state,
+        # but should not exceed limit
+        assert len(data["results"]) <= 5
+
+    def test_search_caps_max_limit(self, client):
+        """Test that search caps limit at 100."""
+        response = client.get("/api/messages/search?q=test&limit=1000")
+        assert response.status_code == 200
+        data = response.json()
+        # Should cap at 100 internally
+        assert len(data["results"]) <= 100
+
+    def test_search_result_structure(self, client):
+        """Test that search results have the correct structure."""
+        # First, create some test messages
+        with patch('server.routes.chat.get_openai_client') as mock_get_client:
+            mock_client = MagicMock()
+            mock_completion = MagicMock()
+            mock_completion.choices = [MagicMock()]
+            mock_completion.choices[0].message.content = "Test response with keyword"
+            mock_completion.choices[0].message.tool_calls = None
+            mock_client.chat.completions.create.return_value = mock_completion
+            mock_get_client.return_value = mock_client
+
+            with patch('server.routes.chat.config') as mock_config:
+                mock_config.USE_CLAUDE = False
+                mock_config.OPENAI_API_KEY = "test-key"
+                mock_config.OPENAI_MODEL = "gpt-4o-mini"
+                mock_config.DATABASE_PATH = Path(tempfile.gettempdir()) / "test_search.db"
+                mock_config.FILES_PATH = Path(tempfile.gettempdir()) / "test_files"
+                mock_config.OLLAMA_ENABLED = False
+
+                # Create a test message
+                client.post("/api/chat", json={"message": "Tell me about keyword"})
+
+        # Now search for it
+        response = client.get("/api/messages/search?q=keyword&cross_conversation=true")
+        assert response.status_code == 200
+        data = response.json()
+
+        if len(data["results"]) > 0:
+            result = data["results"][0]
+            # Check all required fields
+            assert "id" in result
+            assert "conversation_id" in result
+            assert "conversation_title" in result
+            assert "role" in result
+            assert "content" in result
+            assert "created_at" in result
+            assert "snippet" in result
+
+
 class TestChatEndpoint:
     """Tests for POST /api/chat endpoint."""
 

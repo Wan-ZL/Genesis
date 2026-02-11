@@ -27,7 +27,10 @@ Usage:
     python -m assistant.cli schedule enable <task_id>
     python -m assistant.cli schedule disable <task_id>
     python -m assistant.cli schedule history <task_id>
+    python -m assistant.cli settings encryption-status
     python -m assistant.cli settings encrypt
+    python -m assistant.cli settings clear-invalid --confirm
+    python -m assistant.cli settings reencrypt
     python -m assistant.cli settings status
 """
 import argparse
@@ -816,32 +819,56 @@ async def schedule_validate_command(args):
 
 # Settings commands
 
+async def settings_encryption_status_command(args):
+    """Show detailed encryption status for all sensitive keys."""
+    service = SettingsService(config.DATABASE_PATH)
+    status = await service.get_encryption_status()
+
+    if args.json:
+        print(json.dumps(status, indent=2))
+        return
+
+    print("Encryption Status")
+    print("=" * 60)
+    print(f"Encryption available: {'Yes' if status['encryption_available'] else 'No'}")
+    print(f"All keys encrypted: {'Yes' if status['all_encrypted'] else 'No'}")
+    print(f"All keys decryptable: {'Yes' if status.get('all_decryptable', True) else 'No'}")
+    print()
+
+    if status.get('errors'):
+        print("Decryption Errors (logged):")
+        for key, error_type in status['errors'].items():
+            print(f"  - {key}: {error_type}")
+        print()
+
+    print("API Key Status:")
+    for key, info in status['keys'].items():
+        has_value_str = "set" if info['has_value'] else "not set"
+        if not info['has_value']:
+            print(f"  [N/A] {key}: {has_value_str}")
+        elif info['can_decrypt']:
+            encrypted_str = "encrypted" if info['is_encrypted'] else "plaintext"
+            status_icon = "OK" if info['is_encrypted'] else "WARN"
+            print(f"  [{status_icon}] {key}: {has_value_str}, {encrypted_str}, decryptable")
+        else:
+            print(f"  [ERR] {key}: {has_value_str}, encrypted, CANNOT DECRYPT")
+
+    print()
+    print("Actions:")
+    if not status.get('all_encrypted'):
+        print("  - Run 'python -m cli settings encrypt' to encrypt plaintext keys")
+    if not status.get('all_decryptable', True):
+        print("  - Run 'python -m cli settings clear-invalid' to remove undecryptable keys")
+        print("  - Or restore encryption key salt from backup and run 'python -m cli settings reencrypt'")
+
+
 async def settings_encrypt_command(args):
     """Migrate existing plaintext API keys to encrypted format."""
     service = SettingsService(config.DATABASE_PATH)
 
     if args.status_only:
-        # Just show encryption status
-        status = await service.get_encryption_status()
-
-        if args.json:
-            print(json.dumps(status, indent=2))
-            return
-
-        print("Encryption Status")
-        print("=" * 50)
-        print(f"Encryption available: {'Yes' if status['encryption_available'] else 'No'}")
-        print(f"All keys encrypted: {'Yes' if status['all_encrypted'] else 'No'}")
-        print()
-        print("API Key Status:")
-        for key, info in status['keys'].items():
-            status_icon = "OK" if info['is_encrypted'] else ("WARN" if info['has_value'] else "N/A")
-            has_value_str = "set" if info['has_value'] else "not set"
-            encrypted_str = "encrypted" if info['is_encrypted'] else "plaintext"
-            if info['has_value']:
-                print(f"  [{status_icon}] {key}: {has_value_str}, {encrypted_str}")
-            else:
-                print(f"  [N/A] {key}: {has_value_str}")
+        # Just show encryption status (legacy - redirect to encryption-status)
+        await settings_encryption_status_command(args)
         return
 
     # Perform migration
@@ -866,6 +893,77 @@ async def settings_encrypt_command(args):
         print(f"Migration failed: {result['error']}", file=sys.stderr)
         if result['migrated']:
             print(f"  Partially migrated: {', '.join(result['migrated'])}")
+        sys.exit(1)
+
+
+async def settings_clear_invalid_command(args):
+    """Clear all encrypted keys that cannot be decrypted."""
+    service = SettingsService(config.DATABASE_PATH)
+
+    # Confirm unless --confirm flag is set
+    if not args.confirm:
+        print("This will DELETE all encrypted keys that cannot be decrypted.")
+        print("You will need to re-enter these API keys in the Settings UI.")
+        print()
+        print("Run with --confirm to proceed.")
+        sys.exit(0)
+
+    result = await service.clear_invalid_encrypted_keys()
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+
+    if result['success']:
+        print("Clear Invalid Keys Complete")
+        print("=" * 50)
+        if result['cleared']:
+            print(f"Cleared {len(result['cleared'])} key(s):")
+            for key in result['cleared']:
+                print(f"  - {key}")
+        else:
+            print("No invalid keys found.")
+        if result['skipped']:
+            print(f"\nSkipped {len(result['skipped'])} key(s) (not encrypted or decryptable):")
+            for key in result['skipped']:
+                print(f"  - {key}")
+    else:
+        print(f"Error: {result['error']}", file=sys.stderr)
+        sys.exit(1)
+
+
+async def settings_reencrypt_command(args):
+    """Re-encrypt all sensitive keys with the current encryption key."""
+    service = SettingsService(config.DATABASE_PATH)
+
+    print("Re-encrypting all sensitive keys with current encryption key...")
+    result = await service.reencrypt_with_current_key()
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+
+    if result['success']:
+        print()
+        print("Re-encryption Complete")
+        print("=" * 50)
+        if result['reencrypted']:
+            print(f"Re-encrypted {len(result['reencrypted'])} key(s):")
+            for key in result['reencrypted']:
+                print(f"  - {key}")
+        else:
+            print("No keys needed re-encryption.")
+        if result['skipped']:
+            print(f"\nSkipped {len(result['skipped'])} key(s) (no value set):")
+            for key in result['skipped']:
+                print(f"  - {key}")
+    else:
+        print()
+        print(f"Re-encryption failed: {result['error']}", file=sys.stderr)
+        if result['failed']:
+            print("\nFailed keys:")
+            for failure in result['failed']:
+                print(f"  - {failure['key']}: {failure['error']}")
         sys.exit(1)
 
 
@@ -1294,14 +1392,43 @@ def main():
     settings_parser = subparsers.add_parser("settings", help="Manage settings and encryption")
     settings_subparsers = settings_parser.add_subparsers(dest="settings_command", help="Settings commands")
 
+    # settings encryption-status
+    settings_enc_status_parser = settings_subparsers.add_parser("encryption-status", help="Show detailed encryption status")
+    settings_enc_status_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
     # settings encrypt
     settings_encrypt_parser = settings_subparsers.add_parser("encrypt", help="Migrate API keys to encrypted format")
     settings_encrypt_parser.add_argument(
         "--status-only", "-s",
         action="store_true",
-        help="Only show encryption status without migrating"
+        help="Only show encryption status without migrating (redirects to encryption-status)"
     )
     settings_encrypt_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
+    # settings clear-invalid
+    settings_clear_parser = settings_subparsers.add_parser("clear-invalid", help="Clear undecryptable encrypted keys")
+    settings_clear_parser.add_argument(
+        "--confirm", "-y",
+        action="store_true",
+        help="Confirm deletion"
+    )
+    settings_clear_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
+    # settings reencrypt
+    settings_reencrypt_parser = settings_subparsers.add_parser("reencrypt", help="Re-encrypt keys with current key")
+    settings_reencrypt_parser.add_argument(
         "--json", "-j",
         action="store_true",
         help="Output in JSON format"
@@ -1389,8 +1516,14 @@ def main():
             schedule_parser.print_help()
             sys.exit(1)
     elif args.command == "settings":
-        if args.settings_command == "encrypt":
+        if args.settings_command == "encryption-status":
+            asyncio.run(settings_encryption_status_command(args))
+        elif args.settings_command == "encrypt":
             asyncio.run(settings_encrypt_command(args))
+        elif args.settings_command == "clear-invalid":
+            asyncio.run(settings_clear_invalid_command(args))
+        elif args.settings_command == "reencrypt":
+            asyncio.run(settings_reencrypt_command(args))
         elif args.settings_command == "status":
             asyncio.run(settings_status_command(args))
         else:
