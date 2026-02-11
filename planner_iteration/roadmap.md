@@ -100,7 +100,7 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 
 **Outcome**: Full external integration capabilities with 800+ tests passing.
 
-## Phase 6: From Tool to Teammate - IN PROGRESS
+## Phase 6: From Tool to Teammate - COMPLETE
 
 **Goal**: Transform Genesis from a capable tool into a product users love.
 
@@ -109,28 +109,50 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 **Decision**: ADR-002 (see `planner_iteration/decisions/ADR-002-phase6-from-tool-to-teammate.md`)
 
 **Features**:
-- [ ] Conversation sidebar with multi-conversation support (Issue #32 - CRITICAL)
-- [ ] Dark mode and UI visual refresh (Issue #33 - HIGH)
-- [ ] Custom system prompt and persona customization (Issue #34 - HIGH)
-- [ ] Bundle markdown libraries locally (Issue #35 - MEDIUM)
-- [ ] Keyboard shortcuts for power users (Issue #36 - MEDIUM)
-- [ ] Fix pre-existing settings test failure (Issue #37 - LOW)
+- [x] Conversation sidebar with multi-conversation support (Issue #32 - VERIFIED)
+- [x] Dark mode and UI visual refresh (Issue #33 - VERIFIED)
+- [x] Custom system prompt and persona customization (Issue #34 - VERIFIED, backend only)
+- [x] Bundle markdown libraries locally (Issue #35 - VERIFIED)
+- [x] Keyboard shortcuts for power users (Issue #36 - VERIFIED)
+- [x] Fix pre-existing settings test failure (Issue #37 - VERIFIED)
 
-**Dependencies**: Builds on Phase 5 stable foundation.
+**Outcome**: Polished power-user experience with 969 tests, 100% pass rate. 8 consecutive first-pass verifications.
 
-## Phase 7: Proactive Intelligence - PROPOSED
+## Phase 7: Proactive Companion - IN PROGRESS
 
-**Goal**: Make the assistant anticipate and proactively serve user needs.
+**Goal**: Close the frontend-backend gap, then add proactive intelligence to transform Genesis from reactive tool to anticipatory companion.
+
+**Theme**: UI completeness, code readability, proactive notifications, and interaction refinement.
+
+**Decision**: ADR-003 (see `planner_iteration/decisions/ADR-003-phase7-proactive-companion.md`)
+
+**Part A: Close the Gap**:
+- [ ] Persona switcher UI in chat interface (Issue #38 - CRITICAL)
+- [ ] Code syntax highlighting with highlight.js (Issue #39 - HIGH)
+- [ ] Conversation search across all conversations (Issue #42 - MEDIUM)
+- [ ] Message actions: copy, edit, regenerate, delete (Issue #43 - MEDIUM)
+
+**Part B: Leap Forward**:
+- [ ] Proactive notification system / Heartbeat Engine (Issue #40 - HIGH)
+
+**Part C: Cleanup**:
+- [ ] Encryption key management cleanup (Issue #41 - MEDIUM)
+
+**Dependencies**: Builds on Phase 6 complete foundation.
+
+## Phase 8: Always-On Partner - PROPOSED
+
+**Goal**: Make Genesis accessible everywhere and deeply integrated into daily life.
 
 **Potential Features**:
-- [ ] Proactive suggestions based on calendar/schedule
-- [ ] Long-term memory patterns - Learn user preferences
-- [ ] Context-aware tool selection improvements
-- [ ] Multi-turn planning for complex tasks
-- [ ] Slack/Discord bot integration
-- [ ] Email summarization
+- [ ] Multi-channel messaging (WhatsApp, Telegram, Discord, Slack via Gateway)
+- [ ] Long-term memory pattern learning (user preferences, habits)
+- [ ] PWA support for mobile access
+- [ ] Email integration (summarization, drafting)
+- [ ] Smart scheduling and task management
+- [ ] Integration tests across all features
 
-**Dependencies**: Requires Phase 6 multi-conversation model and polished UX.
+**Dependencies**: Requires Phase 7 proactive system and polished core UX.
 
 ## Milestones
 
@@ -156,25 +178,33 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 | M7.3: Code repository analysis | Week 7 | COMPLETE (#24) |
 | M7.4: Tech debt cleanup | Week 7 | COMPLETE (#22) |
 | M7.5: Concurrency + models + markdown | Week 7 | COMPLETE (#26, #28, #29) |
-| M8: From Tool to Teammate | Week 8 | IN PROGRESS |
-| M8.1: Conversation sidebar | Week 8 | PENDING (#32) |
-| M8.2: Dark mode + UI refresh | Week 8 | PENDING (#33) |
-| M8.3: System prompt customization | Week 8 | PENDING (#34) |
-| M8.4: Bundle dependencies | Week 8 | PENDING (#35) |
-| M8.5: Keyboard shortcuts | Week 9 | PENDING (#36) |
-| M9: Proactive Intelligence | Week 10+ | PROPOSED |
+| M8: From Tool to Teammate | Week 8 | COMPLETE |
+| M8.1: Conversation sidebar | Week 8 | COMPLETE (#32) |
+| M8.2: Dark mode + UI refresh | Week 8 | COMPLETE (#33) |
+| M8.3: System prompt customization | Week 8 | COMPLETE (#34) |
+| M8.4: Bundle dependencies | Week 8 | COMPLETE (#35) |
+| M8.5: Keyboard shortcuts | Week 8 | COMPLETE (#36) |
+| M8.6: Settings test fix | Week 8 | COMPLETE (#37) |
+| M9: Proactive Companion | Week 9 | IN PROGRESS |
+| M9.1: Persona switcher UI | Week 9 | PENDING (#38) |
+| M9.2: Syntax highlighting | Week 9 | PENDING (#39) |
+| M9.3: Proactive notifications | Week 9-10 | PENDING (#40) |
+| M9.4: Encryption cleanup | Week 10 | PENDING (#41) |
+| M9.5: Cross-conversation search | Week 10 | PENDING (#42) |
+| M9.6: Message actions | Week 10 | PENDING (#43) |
+| M10: Always-On Partner | Week 11+ | PROPOSED |
 
 ## Statistics
 
 | Metric | Value |
 |--------|-------|
-| Total issues created | 37 |
-| Issues verified and closed | 31 |
+| Total issues created | 43 |
+| Issues verified and closed | 37 |
 | Issues open | 6 |
 | Bugs found by Criticizer | 3 |
-| Total tests | 800+ |
+| Total tests | 969 |
 | Service modules | 19+ |
-| Phases completed | 5 of 7 |
+| Phases completed | 6 of 8 |
 
 ## Principles
 

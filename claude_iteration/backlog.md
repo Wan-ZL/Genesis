@@ -4,34 +4,29 @@
 
 ## Active GitHub Issues (see `gh issue list`)
 
-### Phase 6 (From Tool to Teammate) - CURRENT
-- Issue #32: Conversation sidebar with multi-conversation support (CRITICAL)
-- Issue #33: Dark mode and UI visual refresh (HIGH)
-- Issue #34: Custom system prompt and persona customization (HIGH)
-- Issue #35: Bundle markdown libraries locally (MEDIUM)
-- Issue #36: Keyboard shortcuts for power users (MEDIUM)
-- Issue #37: Fix pre-existing settings test failure (LOW)
+### Phase 7 (Proactive Companion) - CURRENT
+- Issue #38: Persona switcher UI in chat interface (CRITICAL)
+- Issue #39: Code syntax highlighting with highlight.js (HIGH)
+- Issue #40: Proactive notification system / Heartbeat Engine (HIGH)
+- Issue #41: Encryption key management cleanup (MEDIUM)
+- Issue #42: Conversation search across all conversations (MEDIUM)
+- Issue #43: Message actions: copy, edit, regenerate, delete (MEDIUM)
 
 ## Recommended Work Order
-1. #32 (Conversation sidebar) - highest impact
-2. #35 (Bundle CDN deps) - quick win
-3. #33 (Dark mode) - builds on sidebar
-4. #34 (System prompt) - core differentiator
-5. #36 (Keyboard shortcuts) - after sidebar exists
-6. #37 (Fix test) - anytime
+1. #38 (Persona UI) - highest impact gap closure
+2. #39 (Syntax highlighting) - quick visual win
+3. #40 (Proactive notifications) - the leap forward
+4. #41 (Encryption cleanup) - tech debt
+5. #42 (Cross-conversation search) - knowledge retrieval
+6. #43 (Message actions) - table-stakes interactions
 
-## Recently Completed (Phase 5)
-- Issue #20: Local model fallback with Ollama - VERIFIED
-- Issue #21: Calendar integration via CalDAV - VERIFIED
-- Issue #22: Pydantic ConfigDict migration - VERIFIED
-- Issue #23: Ollama status inconsistency fix - VERIFIED
-- Issue #24: Code repository analysis tool - VERIFIED
-- Issue #25: Repository settings API fix - VERIFIED
-- Issue #26: Concurrent request database lock fix - VERIFIED
-- Issue #27: API key .env sync fix - VERIFIED
-- Issue #28: New model selection (GPT-5.2, etc.) - VERIFIED
-- Issue #29: Markdown rendering for Web UI - VERIFIED
-- Issue #31: ConnectionPool event loop fix - VERIFIED
+## Recently Completed (Phase 6)
+- Issue #32: Conversation sidebar - VERIFIED
+- Issue #33: Dark mode and UI refresh - VERIFIED
+- Issue #34: Custom system prompt and personas - VERIFIED
+- Issue #35: Bundle markdown libraries - VERIFIED
+- Issue #36: Keyboard shortcuts - VERIFIED
+- Issue #37: Settings test fix - VERIFIED
 
 ## Pending User Action
 - [ ] Activate Claude API (user needs to add ANTHROPIC_API_KEY)
@@ -40,12 +35,15 @@
 
 ## Ideas (Not Yet Scoped as Issues)
 
-### Phase 7 Candidates (Proactive Intelligence)
-- Proactive suggestions based on calendar/schedule/context
-- Long-term memory pattern learning
-- Slack/Discord bot integration
-- Email summarization
-- Multi-turn planning for complex tasks
+### Phase 8 Candidates (Always-On Partner)
+- Multi-channel messaging (WhatsApp, Telegram, Discord, Slack via Gateway pattern)
+- Long-term memory pattern learning (user preferences, habits)
+- PWA support for mobile access
+- Email integration (summarization, drafting)
+- Smart scheduling and task management
+- Integration tests across all features
+- High contrast accessibility theme
+- Conversation folders/tags for organization
 
-## Completed (Phase 1-5)
-31 issues verified and closed. See planner_iteration/roadmap.md for full history.
+## Completed (Phase 1-6)
+37 issues verified and closed. See planner_iteration/roadmap.md for full history.

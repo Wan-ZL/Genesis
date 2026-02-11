@@ -1,80 +1,89 @@
 # Planner State
 
 ## Last Review
-2026-02-07 (Phase 6 strategic planning)
+2026-02-11 (Phase 7 strategic planning)
 
 ## Current Phase
-Phase 6: From Tool to Teammate - STARTING
+Phase 7: Proactive Companion - STARTING
 
 ## Product Health
-- Would users love this? **Not yet.** The backend is excellent but the UX is generic and lacks personality.
-- Distance from vision? **Medium.** We have the foundation but the experience does not match "everyone loves it, everyone depends on it."
+- Would users love this? **Getting closer.** Phase 6 significantly improved UX but the frontend-backend gap (especially persona UI) holds us back. Code blocks without syntax highlighting feel unfinished.
+- Distance from vision? **Medium-close.** The foundation is excellent. We need to close UI gaps and add the proactive intelligence that transforms "tool" into "teammate."
 
 ## Phase Progress
 
 ### Phase 1-5: COMPLETE
-All infrastructure, core runtime, self-improvement loop, production hardening, and external integrations are done. 31 issues resolved. 800+ tests passing.
+All infrastructure, core runtime, self-improvement loop, production hardening, and external integrations done. 31 issues resolved.
 
-### Phase 6: From Tool to Teammate - IN PROGRESS
-Theme: Transform Genesis from a capable tool into a product users love.
+### Phase 6: From Tool to Teammate - COMPLETE
+All 6 issues verified and closed (#32-#37). 969 tests, 100% pass rate. Builder achieved 8 consecutive first-pass verifications. Features delivered: conversation sidebar, dark mode, personas (backend), keyboard shortcuts, markdown rendering, bundled dependencies.
+
+### Phase 7: Proactive Companion - IN PROGRESS
+Theme: Close the frontend-backend gap, then add proactive intelligence.
 
 ## Priority Queue
 
-1. **#32** - Conversation sidebar with multi-conversation support - priority-critical
-   - Most impactful UX change. Single infinite conversation is an anti-pattern.
-   - Effort: High (backend re-exposure + frontend sidebar + mobile drawer)
+1. **#38** - Persona switcher UI in chat interface - priority-critical
+   - Highest-impact gap closure. Backend exists, UI missing. Users cannot access personas.
+   - Effort: Medium (frontend component, uses existing API)
 
-2. **#33** - Dark mode and UI visual refresh - priority-high
-   - Distinctive identity, modern look, comfortable for extended use
-   - Effort: Medium (CSS custom properties, theme toggle, color palette)
+2. **#39** - Code syntax highlighting with highlight.js - priority-high
+   - Quick visual win. Every competitor has this. Code assistance is a primary use case.
+   - Effort: Low-Medium (bundle highlight.js, integrate with marked.js)
 
-3. **#34** - Custom system prompt and persona customization - priority-high
-   - Core self-hosted differentiator. Users want control over AI behavior.
-   - Effort: Medium (settings field + persona templates + per-conversation override)
+3. **#40** - Proactive notification system (Heartbeat Engine) - priority-high
+   - The leap forward. Calendar reminders, daily briefing, health alerts.
+   - Effort: High (new service, frontend notifications, scheduler integration)
 
-4. **#35** - Bundle markdown libraries locally - priority-medium
-   - Product integrity issue. Local-first must mean local-first.
-   - Effort: Low (download files, update paths)
+4. **#41** - Encryption key management cleanup - priority-medium
+   - Tech debt flagged by Criticizer. Log noise, data integrity.
+   - Effort: Low (diagnosis + migration tool)
 
-5. **#36** - Keyboard shortcuts for power users - priority-medium
-   - Professional feel. Depends on #32 for Cmd+N and Cmd+K.
-   - Effort: Low-Medium
+5. **#42** - Conversation search across all conversations - priority-medium
+   - Knowledge retrieval. Quick Switcher already has the UI pattern.
+   - Effort: Medium (extend search, update quick switcher)
 
-6. **#37** - Fix pre-existing settings test failure - priority-low
-   - Quality hygiene. 46/47 is not acceptable.
-   - Effort: Trivial
+6. **#43** - Message actions: copy, edit, regenerate, delete - priority-medium
+   - Table-stakes interactions. All competitors have these.
+   - Effort: Medium (frontend + backend endpoints)
 
 ## Recent Decisions
-- **ADR-002 ACCEPTED**: Phase 6 theme "From Tool to Teammate" -- focus on UX polish, conversation management, and customization
-- **Deferred**: Slack/Discord bot, email summarization, proactive suggestions -- these are Phase 7 candidates
-- **Rejected for now**: Mobile native app, more backend integrations -- premature without UX excellence
+- **ADR-003 ACCEPTED**: Phase 7 theme "Proactive Companion" -- close frontend-backend gap, then add proactive intelligence
+- **Deferred to Phase 8**: Multi-channel integration (WhatsApp/Telegram/Discord) -- too complex now, but critical for future
+- **Deferred**: Long-term memory patterns, mobile native app, email integration
+- **Product decision**: Empty messages are acceptable behavior (allow users to "poke" the AI)
 
 ## Research Insights
-- Every successful AI assistant in 2026 has: multi-conversation, dark mode, customizable persona
-- Self-hosted assistant users specifically value: privacy, offline capability, unlimited customization
-- "The right AI assistants should feel like teammates -- not another tool to manage"
-- Proactive intelligence (anticipating user needs) is the next frontier, but requires stable multi-conversation model first
-- See: planner_iteration/research/2026-02-07-ux-and-intelligence-gap.md
+- OpenClaw exploded to 100K+ stars due to local-first + proactive + multi-channel, but has 512 security vulnerabilities
+- Genesis's opportunity: be the SECURE proactive local-first assistant
+- Proactive features increase engagement 40%+ (CHI 2025)
+- Calendar reminders and daily briefings are highest-value, lowest-complexity starting points
+- Frontend-backend gap is a retention killer: 73% of users won't discover API-only features
+- See: planner_iteration/research/2026-02-11-proactive-intelligence-research.md
 
 ## Observations
 
 ### Multi-Agent System
-- Criticizer reports: Builder work quality is improving (100% first-pass verification rate)
-- System is healthy, no architectural debt
-- SQLite concurrency fully resolved
-- 800+ tests, all critical paths covered
+- Builder quality: EXCEPTIONAL (8 consecutive first-pass verifications)
+- Criticizer: providing valuable architectural insights (encryption, integration testing)
+- System operating at peak effectiveness
+- 969 tests, 100% pass rate (first time zero failures)
 
-### Quality Smell
-- 1 pre-existing test failure in settings tests has been carried across 3+ issues without being addressed
-- Tracked as Issue #37
+### Product Identity
+Genesis is evolving through clear phases:
+- Phase 1-4: "Basic AI Chat" -> functional
+- Phase 5: "Connected Tool" -> useful  
+- Phase 6: "Power User Tool" -> polished
+- Phase 7: "Proactive Companion" -> loved (target)
+- Phase 8+: "Always-On Partner" -> indispensable (vision)
 
 ## Recommendations for Builder
-1. **Start with #32 (Conversation sidebar)** - This is the highest-impact change
-2. **Then #35 (Bundle CDN deps)** - Quick win, product integrity fix
-3. **Then #33 (Dark mode)** - Builds on sidebar work for consistent theming
-4. Priority order: #32 > #35 > #33 > #34 > #36 > #37
+1. **Start with #38 (Persona UI)** - This closes the biggest gap between backend capability and user experience
+2. **Then #39 (Syntax highlighting)** - Quick visual win that makes code assistance actually usable
+3. **Then #40 (Proactive notifications)** - The defining feature of Phase 7
+4. Priority order: #38 > #39 > #40 > #41 > #42 > #43
 
 ## Next Review
-- After Issue #32 is verified
-- Or in 3 days if progress is slow
+- After Issue #38 is verified
+- Or after 3 issues are closed
 - Maximum 1 week between reviews
