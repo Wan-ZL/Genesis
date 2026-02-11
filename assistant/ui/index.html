@@ -33,6 +33,13 @@
                 <h1><span class="genesis-mark">G</span>enesis</h1>
             </div>
             <div class="header-buttons">
+                <button id="notification-bell-btn" class="notification-bell" title="Notifications" aria-label="Notifications">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    </svg>
+                    <span id="notification-badge" class="notification-badge hidden">0</span>
+                </button>
                 <button id="theme-toggle-btn" class="theme-toggle" title="Toggle dark mode (Cmd/Ctrl+Shift+D)" aria-label="Toggle dark mode">
                     <!-- Moon icon (shown in light mode) -->
                     <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -156,6 +163,20 @@
         </main>
     </div>
 
+    <!-- Notification Dropdown -->
+    <div id="notification-dropdown" class="notification-dropdown hidden">
+        <div class="notification-dropdown-header">
+            <h3>Notifications</h3>
+            <button id="mark-all-read-btn" class="mark-all-read-btn" title="Mark all as read">Mark all read</button>
+        </div>
+        <div id="notification-list" class="notification-list">
+            <!-- Populated dynamically -->
+        </div>
+        <div class="notification-dropdown-footer">
+            <button id="clear-notifications-btn" class="clear-notifications-btn">Clear all</button>
+        </div>
+    </div>
+
     <!-- Settings Modal -->
     <div id="settings-modal" class="modal hidden">
         <div class="modal-backdrop"></div>
@@ -204,6 +225,37 @@
                             <option value="3">FULL - Complete access</option>
                         </select>
                         <small>Controls what the AI assistant can access</small>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>Proactive Notifications</h3>
+                    <div class="settings-field">
+                        <label>
+                            <input type="checkbox" id="calendar-reminder-enabled" checked>
+                            Calendar Reminders
+                        </label>
+                        <small>Get notified 30 minutes before calendar events</small>
+                    </div>
+                    <div class="settings-field">
+                        <label>
+                            <input type="checkbox" id="daily-briefing-enabled" checked>
+                            Daily Briefing
+                        </label>
+                        <small>Morning summary of today's calendar (7:00 AM)</small>
+                    </div>
+                    <div class="settings-field">
+                        <label>
+                            <input type="checkbox" id="system-health-enabled" checked>
+                            System Health Alerts
+                        </label>
+                        <small>Get notified about low disk space or high resource usage</small>
+                    </div>
+                    <div class="settings-field">
+                        <label>
+                            <input type="checkbox" id="quiet-hours-enabled" checked>
+                            Quiet Hours
+                        </label>
+                        <small>Disable notifications from 10:00 PM to 7:00 AM</small>
                     </div>
                 </div>
             </div>

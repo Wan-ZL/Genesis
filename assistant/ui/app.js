@@ -1613,8 +1613,29 @@ async function loadSettings() {
         // Set permission level
         permissionSelect.value = data.permission_level;
 
+        // Load proactive notification config
+        await loadProactiveConfig();
+
     } catch (error) {
         console.error('Failed to load settings:', error);
+    }
+}
+
+/**
+ * Load proactive notification configuration
+ */
+async function loadProactiveConfig() {
+    try {
+        const response = await authenticatedFetch('/api/notifications/config');
+        const config = await response.json();
+
+        // Set checkbox values
+        document.getElementById('calendar-reminder-enabled').checked = config.calendar_reminder_enabled !== false;
+        document.getElementById('daily-briefing-enabled').checked = config.daily_briefing_enabled !== false;
+        document.getElementById('system-health-enabled').checked = config.system_health_enabled !== false;
+        document.getElementById('quiet-hours-enabled').checked = config.quiet_hours_enabled !== false;
+    } catch (error) {
+        console.error('Failed to load proactive config:', error);
     }
 }
 
@@ -1660,6 +1681,10 @@ async function saveSettings() {
 
         if (response.ok) {
             const data = await response.json();
+
+            // Save proactive config
+            await saveProactiveConfig();
+
             // Reload settings to show updated status
             await loadSettings();
             // Clear password fields
@@ -1684,3 +1709,276 @@ async function saveSettings() {
         settingsSaveBtn.disabled = false;
     }
 }
+
+/**
+ * Save proactive notification configuration
+ */
+async function saveProactiveConfig() {
+    try {
+        const config = {
+            calendar_reminder_enabled: document.getElementById('calendar-reminder-enabled').checked,
+            daily_briefing_enabled: document.getElementById('daily-briefing-enabled').checked,
+            system_health_enabled: document.getElementById('system-health-enabled').checked,
+            quiet_hours_enabled: document.getElementById('quiet-hours-enabled').checked
+        };
+
+        await authenticatedFetch('/api/notifications/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+    } catch (error) {
+        console.error('Failed to save proactive config:', error);
+    }
+}
+
+// ============================================================================
+// Notification System
+// ============================================================================
+
+const notificationBellBtn = document.getElementById('notification-bell-btn');
+const notificationBadge = document.getElementById('notification-badge');
+const notificationDropdown = document.getElementById('notification-dropdown');
+const notificationList = document.getElementById('notification-list');
+const markAllReadBtn = document.getElementById('mark-all-read-btn');
+const clearNotificationsBtn = document.getElementById('clear-notifications-btn');
+
+let notifications = [];
+let notificationDropdownOpen = false;
+
+/**
+ * Initialize notification system
+ */
+function initNotifications() {
+    // Toggle dropdown
+    notificationBellBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleNotificationDropdown();
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (notificationDropdownOpen && 
+            !notificationDropdown.contains(e.target) && 
+            e.target !== notificationBellBtn) {
+            closeNotificationDropdown();
+        }
+    });
+
+    // Mark all as read
+    markAllReadBtn.addEventListener('click', async () => {
+        await markAllNotificationsAsRead();
+    });
+
+    // Clear all notifications
+    clearNotificationsBtn.addEventListener('click', async () => {
+        if (confirm('Clear all notifications?')) {
+            await clearAllNotifications();
+        }
+    });
+
+    // Load initial notifications
+    loadNotifications();
+
+    // Poll for new notifications every 30 seconds
+    setInterval(loadNotifications, 30000);
+
+    // Request notification permission (for desktop notifications)
+    requestNotificationPermission();
+}
+
+/**
+ * Toggle notification dropdown
+ */
+function toggleNotificationDropdown() {
+    if (notificationDropdownOpen) {
+        closeNotificationDropdown();
+    } else {
+        openNotificationDropdown();
+    }
+}
+
+/**
+ * Open notification dropdown
+ */
+function openNotificationDropdown() {
+    notificationDropdown.classList.remove('hidden');
+    notificationDropdownOpen = true;
+    loadNotifications(); // Refresh when opening
+}
+
+/**
+ * Close notification dropdown
+ */
+function closeNotificationDropdown() {
+    notificationDropdown.classList.add('hidden');
+    notificationDropdownOpen = false;
+}
+
+/**
+ * Load notifications from API
+ */
+async function loadNotifications() {
+    try {
+        const response = await authenticatedFetch('/api/notifications?limit=50');
+        const data = await response.json();
+        
+        notifications = data.notifications || [];
+        updateNotificationBadge(data.unread_count || 0);
+        renderNotificationList();
+    } catch (error) {
+        console.error('Failed to load notifications:', error);
+    }
+}
+
+/**
+ * Update notification badge
+ */
+function updateNotificationBadge(count) {
+    if (count > 0) {
+        notificationBadge.textContent = count > 99 ? '99+' : count;
+        notificationBadge.classList.remove('hidden');
+    } else {
+        notificationBadge.classList.add('hidden');
+    }
+}
+
+/**
+ * Render notification list
+ */
+function renderNotificationList() {
+    notificationList.innerHTML = '';
+
+    if (notifications.length === 0) {
+        const empty = createElement('div', { className: 'notification-empty' });
+        empty.textContent = 'No notifications';
+        notificationList.appendChild(empty);
+        return;
+    }
+
+    notifications.forEach(notification => {
+        const item = createNotificationElement(notification);
+        notificationList.appendChild(item);
+    });
+}
+
+/**
+ * Create notification element
+ */
+function createNotificationElement(notification) {
+    const item = createElement('div', {
+        className: `notification-item ${notification.read_at ? '' : 'unread'} priority-${notification.priority}`
+    });
+
+    const header = createElement('div', { className: 'notification-header' });
+    
+    const title = createElement('div', { className: 'notification-title' });
+    title.textContent = notification.title;
+    
+    const time = createElement('div', { className: 'notification-time' });
+    time.textContent = formatRelativeTime(notification.created_at);
+    
+    header.appendChild(title);
+    header.appendChild(time);
+    
+    const body = createElement('div', { className: 'notification-body' });
+    body.textContent = notification.body;
+    
+    item.appendChild(header);
+    item.appendChild(body);
+
+    // Click handler
+    item.addEventListener('click', async () => {
+        await markNotificationAsRead(notification.id);
+        if (notification.action_url) {
+            // Navigate to action URL if provided
+            window.location.hash = notification.action_url;
+        }
+        closeNotificationDropdown();
+    });
+
+    return item;
+}
+
+/**
+ * Mark notification as read
+ */
+async function markNotificationAsRead(notificationId) {
+    try {
+        await authenticatedFetch(`/api/notifications/${notificationId}/read`, {
+            method: 'POST'
+        });
+        await loadNotifications(); // Reload to update UI
+    } catch (error) {
+        console.error('Failed to mark notification as read:', error);
+    }
+}
+
+/**
+ * Mark all notifications as read
+ */
+async function markAllNotificationsAsRead() {
+    try {
+        await authenticatedFetch('/api/notifications/read-all', {
+            method: 'POST'
+        });
+        await loadNotifications(); // Reload to update UI
+    } catch (error) {
+        console.error('Failed to mark all as read:', error);
+    }
+}
+
+/**
+ * Clear all notifications
+ */
+async function clearAllNotifications() {
+    try {
+        // Delete each notification
+        const promises = notifications.map(n => 
+            authenticatedFetch(`/api/notifications/${n.id}`, { method: 'DELETE' })
+        );
+        await Promise.all(promises);
+        await loadNotifications(); // Reload to update UI
+    } catch (error) {
+        console.error('Failed to clear notifications:', error);
+    }
+}
+
+/**
+ * Request desktop notification permission
+ */
+function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+
+/**
+ * Show desktop notification
+ */
+function showDesktopNotification(title, body) {
+    if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, {
+            body: body,
+            icon: '/static/favicon.ico'
+        });
+    }
+}
+
+/**
+ * Format relative time (e.g., "5 minutes ago")
+ */
+function formatRelativeTime(isoString) {
+    const date = new Date(isoString);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+    return date.toLocaleDateString();
+}
+
+// Initialize notifications when page loads
+initNotifications();

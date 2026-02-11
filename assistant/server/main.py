@@ -56,6 +56,11 @@ async def lifespan(app: FastAPI):
     await init_scheduler()
     logger.info("Scheduler service started")
 
+    # Initialize and start proactive service
+    from server.routes.notifications import init_proactive
+    await init_proactive()
+    logger.info("Proactive service started")
+
     # Initialize degradation service and check actual Ollama availability
     from server.services.degradation import get_degradation_service
     degradation_svc = get_degradation_service()
@@ -69,6 +74,9 @@ async def lifespan(app: FastAPI):
     # Stop scheduler on shutdown
     from server.routes.schedule import stop_scheduler
     await stop_scheduler()
+    # Stop proactive service on shutdown
+    from server.routes.notifications import stop_proactive
+    await stop_proactive()
     logger.info("Shutting down AI Assistant")
 
 
@@ -164,7 +172,7 @@ async def auth_middleware(request: Request, call_next):
 
 
 # Import and include routers
-from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth, schedule, persona
+from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth, schedule, persona, notifications
 
 # Auth routes (always accessible)
 app.include_router(auth.router, prefix="/api", tags=["auth"])
@@ -181,6 +189,7 @@ app.include_router(resources.router, prefix="/api", tags=["resources"])
 app.include_router(degradation.router, prefix="/api", tags=["degradation"])
 app.include_router(schedule.router, prefix="/api", tags=["schedule"])
 app.include_router(persona.router, prefix="/api", tags=["persona"])
+app.include_router(notifications.router, prefix="/api", tags=["notifications"])
 
 # Serve static UI files (when they exist)
 UI_PATH = Path(__file__).parent.parent / "ui"
