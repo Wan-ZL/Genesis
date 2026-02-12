@@ -1201,11 +1201,12 @@ def _list_files_impl(
 
 def _format_size(size: int) -> str:
     """Format file size in human-readable form."""
+    value: float = float(size)
     for unit in ["B", "KB", "MB", "GB"]:
-        if size < 1024:
-            return f"{size:.0f}{unit}" if unit == "B" else f"{size:.1f}{unit}"
-        size /= 1024
-    return f"{size:.1f}TB"
+        if value < 1024:
+            return f"{value:.0f}{unit}" if unit == "B" else f"{value:.1f}{unit}"
+        value /= 1024
+    return f"{value:.1f}TB"
 
 
 # Register list_files tool
@@ -1399,3 +1400,67 @@ registry.register_tool(ToolSpec(
     handler=_get_file_info_impl,
     required_permission=PermissionLevel.LOCAL,
 ))
+
+
+# ============================================================
+# MCP Tool Integration
+# ============================================================
+
+def register_mcp_tools_from_manager():
+    """Register tools from connected MCP servers into Genesis tool registry.
+
+    This function should be called after MCP manager connects to servers.
+    It bridges MCP tools into Genesis's native tool system.
+    """
+    try:
+        from .mcp_client import get_mcp_manager
+
+        manager = get_mcp_manager()
+        mcp_tools = manager.get_all_tools()
+
+        for mcp_tool in mcp_tools:
+            # Create a handler that routes to MCP
+            def make_mcp_handler(tool_name_capture: str):
+                async def mcp_handler(**kwargs):
+                    """Handler that routes to MCP server."""
+                    result = await manager.call_tool(tool_name_capture, kwargs)
+                    # Extract text from MCP response
+                    if isinstance(result, dict) and "content" in result:
+                        content = result["content"]
+                        if isinstance(content, list) and len(content) > 0:
+                            return content[0].get("text", str(result))
+                    return str(result)
+                return mcp_handler
+
+            # Convert MCP input schema to Genesis ToolParameter format
+            parameters = []
+            input_schema = mcp_tool.input_schema
+            properties = input_schema.get("properties", {})
+            required_fields = input_schema.get("required", [])
+
+            for param_name, param_def in properties.items():
+                param_type = param_def.get("type", "string")
+                param_desc = param_def.get("description", f"Parameter: {param_name}")
+                parameters.append(ToolParameter(
+                    name=param_name,
+                    type=param_type,
+                    description=param_desc,
+                    required=param_name in required_fields
+                ))
+
+            # Register as Genesis tool with mcp: prefix to avoid naming conflicts
+            tool_name = f"mcp:{mcp_tool.server_name}:{mcp_tool.name}"
+            spec = ToolSpec(
+                name=tool_name,
+                description=f"[MCP: {mcp_tool.server_name}] {mcp_tool.description}",
+                parameters=parameters,
+                handler=make_mcp_handler(mcp_tool.name),
+                required_permission=PermissionLevel.LOCAL  # MCP tools require LOCAL by default
+            )
+            registry.register_tool(spec)
+            logger.info(f"Registered MCP tool: {tool_name}")
+
+    except ImportError:
+        logger.debug("MCP module not available, skipping MCP tool registration")
+    except Exception as e:
+        logger.error(f"Failed to register MCP tools: {e}")

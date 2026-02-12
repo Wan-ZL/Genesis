@@ -159,6 +159,9 @@ class SettingsService:
         "telegram_bot_token": "",  # Bot token from BotFather (encrypted)
         "telegram_allowed_users": "",  # Comma-separated list of allowed Telegram user IDs
         "telegram_enabled": False,  # Enable Telegram bot integration
+        # MCP (Model Context Protocol) settings
+        "mcp_enabled": False,  # Enable MCP client/server functionality
+        "mcp_servers": "[]",  # JSON array of MCP server configs
     }
 
     # Available models
@@ -434,6 +437,9 @@ class SettingsService:
             "telegram_bot_token_set": bool(settings.get("telegram_bot_token")),
             "telegram_allowed_users": settings.get("telegram_allowed_users", ""),
             "telegram_enabled": self._parse_bool(settings.get("telegram_enabled", False)),
+            # MCP settings
+            "mcp_enabled": self._parse_bool(settings.get("mcp_enabled", False)),
+            "mcp_servers": settings.get("mcp_servers", "[]"),
         }
 
     def _parse_bool(self, value) -> bool:

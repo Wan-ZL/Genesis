@@ -89,6 +89,22 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Telegram bot not configured, skipping")
 
+    # Initialize MCP client manager and connect to configured servers
+    from server.services.mcp_client import get_mcp_manager
+    from server.services.tools import register_mcp_tools_from_manager
+    mcp_manager = get_mcp_manager()
+    try:
+        await mcp_manager.load_configs_from_settings()
+        await mcp_manager.connect_all()
+        register_mcp_tools_from_manager()
+        tool_count = len(mcp_manager.get_all_tools())
+        if tool_count > 0:
+            logger.info(f"MCP client initialized: {tool_count} tools from {len(mcp_manager.clients)} server(s)")
+        else:
+            logger.info("MCP client ready (no servers connected)")
+    except Exception as e:
+        logger.error(f"Failed to initialize MCP client: {e}", exc_info=True)
+
     logger.info(f"Using model: {config.MODEL}")
     if not config.OPENAI_API_KEY and not config.ANTHROPIC_API_KEY:
         logger.warning("No API key set - configure via Settings page or .env files")
@@ -104,6 +120,10 @@ async def lifespan(app: FastAPI):
     telegram_svc = await get_telegram_service()
     if telegram_svc:
         await telegram_svc.stop()
+    # Disconnect all MCP clients on shutdown
+    from server.services.mcp_client import get_mcp_manager
+    mcp_manager = get_mcp_manager()
+    await mcp_manager.disconnect_all()
     logger.info("Shutting down AI Assistant")
 
 
@@ -199,7 +219,7 @@ async def auth_middleware(request: Request, call_next):
 
 
 # Import and include routers
-from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth, schedule, persona, notifications, push, memory_facts, user_profile
+from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth, schedule, persona, notifications, push, memory_facts, user_profile, mcp
 
 # Auth routes (always accessible)
 app.include_router(auth.router, prefix="/api", tags=["auth"])
@@ -220,6 +240,7 @@ app.include_router(notifications.router, prefix="/api", tags=["notifications"])
 app.include_router(push.router, prefix="/api", tags=["push"])
 app.include_router(memory_facts.router, prefix="/api", tags=["memory"])
 app.include_router(user_profile.router, prefix="/api", tags=["profile"])
+app.include_router(mcp.router, prefix="/api", tags=["mcp"])
 
 # Serve static UI files (when they exist)
 UI_PATH = Path(__file__).parent.parent / "ui"
