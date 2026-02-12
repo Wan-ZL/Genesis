@@ -38,6 +38,48 @@ async def get_profile():
     }
 
 
+@router.get("/profile/export")
+async def export_profile():
+    """Export the user profile in a portable JSON format.
+
+    Returns:
+        Profile data with version and metadata for backup/transfer
+    """
+    service = get_user_profile_service()
+    export_data = await service.export_profile()
+
+    return export_data
+
+
+@router.post("/profile/import")
+async def import_profile(request: ImportProfileRequest):
+    """Import profile from exported JSON format.
+
+    Args:
+        request: ImportProfileRequest with version, sections, and mode
+
+    Returns:
+        Success confirmation
+    """
+    service = get_user_profile_service()
+
+    try:
+        await service.import_profile(
+            data={
+                "version": request.version,
+                "sections": request.sections,
+            },
+            mode=request.mode
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "success": True,
+        "mode": request.mode,
+    }
+
+
 @router.get("/profile/{section}")
 async def get_section(section: str):
     """Get a specific profile section.
@@ -111,48 +153,6 @@ async def delete_entry(section: str, key: str):
     return {
         "success": True,
         "deleted": {"section": section, "key": key},
-    }
-
-
-@router.get("/profile/export")
-async def export_profile():
-    """Export the user profile in a portable JSON format.
-
-    Returns:
-        Profile data with version and metadata for backup/transfer
-    """
-    service = get_user_profile_service()
-    export_data = await service.export_profile()
-
-    return export_data
-
-
-@router.post("/profile/import")
-async def import_profile(request: ImportProfileRequest):
-    """Import profile from exported JSON format.
-
-    Args:
-        request: ImportProfileRequest with version, sections, and mode
-
-    Returns:
-        Success confirmation
-    """
-    service = get_user_profile_service()
-
-    try:
-        await service.import_profile(
-            data={
-                "version": request.version,
-                "sections": request.sections,
-            },
-            mode=request.mode
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    return {
-        "success": True,
-        "mode": request.mode,
     }
 
 

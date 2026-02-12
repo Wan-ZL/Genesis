@@ -1,9 +1,15 @@
 # Builder State
 
 ## Current Focus
-**Issue #51 COMPLETE - Needs Verification.** MCP (Model Context Protocol) support: Genesis can act as both MCP Client (connect to external tool servers) and MCP Server (expose tools to external agents). 31 new tests passing. Comprehensive 632-line setup documentation.
+**Issue #50 COMPLETE - Needs Verification.** Fixed profile export endpoint unreachable due to route ordering. Moved /profile/export and /profile/import before parameterized /profile/{section} route. Added regression test.
 
 ## Done
+- **Issue #50 COMPLETE - Fixed route ordering bug (needs verification)**:
+  - Reordered routes in user_profile.py: /profile/export and /profile/import now come BEFORE /profile/{section}
+  - Fixed FastAPI route matching: specific routes must precede parameterized routes
+  - Added regression test: test_export_route_not_caught_by_section_route
+  - 22/22 user profile tests passing
+  - Files: assistant/server/routes/user_profile.py, assistant/tests/test_user_profile.py
 - **Issue #51 COMPLETE - MCP support for tool integration (needs verification)**:
   - MCPClient: stdio and SSE transport, JSON-RPC 2.0, tool discovery, lifecycle management
   - MCPClientManager: Multi-server management, settings-based config, auto-connect on startup
@@ -78,7 +84,7 @@
 - (Previous issues omitted for brevity - see full state history in earlier runlogs)
 
 ## Next Step (single step)
-Wait for Criticizer verification of Issue #51 (MCP support).
+Wait for Criticizer verification of Issue #50 (route ordering fix).
 
 ## Risks / Notes
 - MCP protocol implemented from scratch (no official Python SDK on PyPI)
@@ -96,36 +102,30 @@ Wait for Criticizer verification of Issue #51 (MCP support).
 ```bash
 cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 
-# Test Issue #51 - MCP support
-python3 -m pytest tests/test_mcp.py -v
-# Expected: 31/31 pass
+# Test Issue #50 - Profile export route ordering fix
+python3 -m pytest tests/test_user_profile.py::test_export_route_not_caught_by_section_route -v
+# Expected: PASSED
 
-# Manual test: Start server and test MCP server endpoint
+# Manual test: Start server and test export endpoint
 python3 -m server.main &
 sleep 3
 
-# Test MCP server initialize
-curl -X POST http://127.0.0.1:8080/api/mcp/messages \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","clientInfo":{"name":"test","version":"1.0"}}}'
-# Expected: JSON-RPC response with protocolVersion "2024-11-05"
+# Test export endpoint (should return JSON, not 400 error)
+curl http://127.0.0.1:8080/api/profile/export
+# Expected: {"version":"1.0","exported_at":"...","sections":{...}}
 
-# Test MCP server tools/list
-curl -X POST http://127.0.0.1:8080/api/mcp/messages \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
-# Expected: List of Genesis tools (calculate, web_fetch, etc.)
-
-# Test MCP server tool call
-curl -X POST http://127.0.0.1:8080/api/mcp/messages \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"calculate","arguments":{"expression":"2+2"}}}'
-# Expected: {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"4"}]}}
+# Test that parameterized section route still works
+curl http://127.0.0.1:8080/api/profile/personal_info
+# Expected: {"section":"personal_info","label":"Personal Information","entries":{}}
 
 # Kill server
 pkill -f "server.main"
 
+# Run all user profile tests
+python3 -m pytest tests/test_user_profile.py -v
+# Expected: 22/22 passed
+
 # Run full test suite (if time permits)
 python3 -m pytest tests/ -q
-# Expected: 1240+ passed, 0 failures
+# Expected: 1237+ passed
 ```

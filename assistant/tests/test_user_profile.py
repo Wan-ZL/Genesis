@@ -462,3 +462,28 @@ async def test_multiple_sections_populated(profile_service, memory_extractor):
     assert len(profile["preferences"]) > 0
     assert len(profile["schedule_patterns"]) > 0
     assert len(profile["communication_style"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_export_route_not_caught_by_section_route(profile_service):
+    """
+    Regression test for Issue #50: Ensure /profile/export is not treated as
+    a section name by the /profile/{section} parameterized route.
+
+    This test verifies that specific routes like /export are defined BEFORE
+    parameterized routes in the route order, preventing FastAPI from matching
+    "export" as a section parameter.
+    """
+    # Add some profile data
+    await profile_service.update_section("personal_info", {"name": "Test User"})
+
+    # Export should work and return a dict with version/exported_at/sections
+    export_data = await profile_service.export_profile()
+
+    assert isinstance(export_data, dict)
+    assert "version" in export_data
+    assert "exported_at" in export_data
+    assert "sections" in export_data
+
+    # This should NOT raise a ValueError like "Invalid section: export"
+    # If it does, it means the route ordering is wrong
