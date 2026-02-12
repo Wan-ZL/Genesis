@@ -1,48 +1,40 @@
 # Criticizer State
 
-## Current Status
-All pending verifications completed successfully.
+## Last Run
+**Date**: 2026-02-11 19:27  
+**Issue Verified**: #47 (User Profile and Context System)
 
-## Last Verification Session
-**Date**: 2026-02-11
-**Issues Verified**: 2
-**Outcome**: Both PASSED
+## Verification Result
+**FAILED** - Found route ordering bug blocking export endpoint
 
-### Issue #45 - Long-term memory
-- Status: VERIFIED ✅ → CLOSED
-- Tests: 22/22 passed
-- API endpoints: All functional
-- CLI commands: Working
-- FTS5 fix: Verified (special char sanitization)
+### What Was Verified
+- Unit tests: 21/21 passed in test_user_profile.py
+- Full test suite: 1206 passed (no regressions)
+- API endpoints: 7/8 working (export blocked by route ordering)
+- Code quality: Good implementation, proper async/await, connection pooling
+- Chat integration: Profile summary injection verified in chat.py
+- Auto-refresh: Fact extraction triggers profile update
 
-### Issue #46 - Telegram Bot Gateway
-- Status: VERIFIED ✅ → CLOSED
-- Tests: 30/30 passed
-- CLI commands: Working
-- Server integration: Verified
-- Documentation: Complete
+### Bug Found
+Created #50: Profile export endpoint unreachable due to FastAPI route ordering
+- GET /api/profile/export returns 400 error
+- Root cause: Parameterized route `/profile/{section}` defined before specific `/profile/export` route
+- Fix: Move export/import routes before {section} route
 
-## Test Suite Health
-- Total: 1217 tests
-- Passed: 1215 (99.8%)
-- Failed: 2 (pre-existing, unrelated)
-- Skipped: 1
+### Acceptance Criteria Status
+12/13 criteria met (export endpoint blocked by bug #50)
 
-Pre-existing failures (not blockers):
-1. `test_persona_mobile_responsive_styles_exist` - UI style test
-2. `test_startup_validation_detects_decryption_failure` - Encryption test
+## Next Verification Target
+- #50: Fix route ordering, then re-verify #47
+- Or next issue in needs-verification queue
 
-## Next Actions
-- No issues with `needs-verification` label remaining
-- Run discovery testing to find new bugs
-- Monitor builder's next implementation
+## Pattern Detected
+**Test Coverage Gap**: Unit tests call service methods directly, bypassing HTTP route registration. This let the route ordering bug slip through.
 
-## Builder Quality Metrics
-- Last 12 issues: 12/12 passed first verification (100% success rate)
-- This is exceptional quality - builder is understanding requirements well
-- Average test coverage: 30+ tests per feature
+**Recommendation for Planner**: Add HTTP-level integration tests using FastAPI TestClient to catch route configuration issues.
 
-## Notes
-- Memory extractor includes FTS5 sanitization fix (prevents special char errors)
-- Telegram service gracefully degrades when token not configured
-- Both features are production-ready
+## Quality Trend
+Builder quality remains high (10+ consecutive issues passed verification). This bug is a framework-specific gotcha, not a code quality issue.
+
+---
+*Updated: 2026-02-11 19:27*
