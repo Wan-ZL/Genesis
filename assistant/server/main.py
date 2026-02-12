@@ -77,6 +77,18 @@ async def lifespan(app: FastAPI):
     await degradation_svc.initialize_ollama_status()
     logger.info("Degradation service initialized with actual Ollama status")
 
+    # Initialize and start Telegram bot service if configured
+    from server.services.telegram import get_telegram_service
+    telegram_svc = await get_telegram_service()
+    if telegram_svc:
+        try:
+            await telegram_svc.start()
+            logger.info("Telegram bot service started")
+        except Exception as e:
+            logger.error(f"Failed to start Telegram bot: {e}", exc_info=True)
+    else:
+        logger.info("Telegram bot not configured, skipping")
+
     logger.info(f"Using model: {config.MODEL}")
     if not config.OPENAI_API_KEY and not config.ANTHROPIC_API_KEY:
         logger.warning("No API key set - configure via Settings page or .env files")
@@ -87,6 +99,11 @@ async def lifespan(app: FastAPI):
     # Stop proactive service on shutdown
     from server.routes.notifications import stop_proactive
     await stop_proactive()
+    # Stop Telegram bot on shutdown
+    from server.services.telegram import get_telegram_service
+    telegram_svc = await get_telegram_service()
+    if telegram_svc:
+        await telegram_svc.stop()
     logger.info("Shutting down AI Assistant")
 
 

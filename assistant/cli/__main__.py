@@ -32,6 +32,8 @@ Usage:
     python -m assistant.cli settings clear-invalid --confirm
     python -m assistant.cli settings reencrypt
     python -m assistant.cli settings status
+    python -m assistant.cli telegram setup
+    python -m assistant.cli telegram status
 """
 import argparse
 import asyncio
@@ -1116,6 +1118,125 @@ async def memory_forget_all_command(args):
     print("Genesis has forgotten everything it learned about you.")
 
 
+# Telegram commands
+
+async def telegram_setup_command(args):
+    """Interactive setup for Telegram bot configuration."""
+    service = SettingsService(config.DATABASE_PATH)
+
+    print("Telegram Bot Setup")
+    print("=" * 60)
+    print()
+    print("To create a Telegram bot:")
+    print("1. Open Telegram and search for @BotFather")
+    print("2. Send /newbot and follow instructions")
+    print("3. Copy the bot token (looks like: 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11)")
+    print()
+    print("To find your Telegram user ID:")
+    print("1. Search for @userinfobot in Telegram")
+    print("2. Send /start to get your user ID")
+    print()
+
+    # Get bot token
+    current = await service.get("telegram_bot_token")
+    if current:
+        print(f"Current bot token: {service.mask_api_key(current)}")
+        update_token = input("Update bot token? (y/N): ").strip().lower()
+        if update_token != 'y':
+            bot_token = current
+        else:
+            bot_token = input("Enter bot token: ").strip()
+    else:
+        bot_token = input("Enter bot token: ").strip()
+
+    if not bot_token:
+        print("Error: Bot token is required", file=sys.stderr)
+        sys.exit(1)
+
+    # Get allowed users
+    current_users = await service.get("telegram_allowed_users")
+    if current_users:
+        print(f"Current allowed users: {current_users}")
+        update_users = input("Update allowed users? (y/N): ").strip().lower()
+        if update_users != 'y':
+            allowed_users = current_users
+        else:
+            allowed_users = input("Enter allowed user IDs (comma-separated): ").strip()
+    else:
+        allowed_users = input("Enter allowed user IDs (comma-separated): ").strip()
+
+    if not allowed_users:
+        print("Error: At least one user ID is required", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate user IDs
+    try:
+        user_ids = [int(uid.strip()) for uid in allowed_users.split(",") if uid.strip()]
+        if not user_ids:
+            raise ValueError("No valid user IDs")
+    except ValueError as e:
+        print(f"Error: Invalid user ID format. Use comma-separated integers (e.g., 123456,789012)", file=sys.stderr)
+        sys.exit(1)
+
+    # Enable bot
+    enabled = input("Enable Telegram bot? (Y/n): ").strip().lower()
+    telegram_enabled = enabled != 'n'
+
+    # Save settings
+    await service.set("telegram_bot_token", bot_token)
+    await service.set("telegram_allowed_users", allowed_users)
+    await service.set("telegram_enabled", str(telegram_enabled))
+
+    print()
+    print("Telegram bot configured successfully!")
+    print(f"  Bot token: {service.mask_api_key(bot_token)}")
+    print(f"  Allowed users: {len(user_ids)} user(s)")
+    print(f"  Enabled: {telegram_enabled}")
+    print()
+    print("Restart the Genesis server to activate the bot:")
+    print("  supervisorctl restart assistant")
+
+
+async def telegram_status_command(args):
+    """Show Telegram bot status."""
+    service = SettingsService(config.DATABASE_PATH)
+    settings = await service.get_all()
+
+    bot_token = settings.get("telegram_bot_token", "")
+    allowed_users = settings.get("telegram_allowed_users", "")
+    enabled = service._parse_bool(settings.get("telegram_enabled", False))
+
+    if args.json:
+        print(json.dumps({
+            "bot_token_set": bool(bot_token),
+            "bot_token_masked": service.mask_api_key(bot_token) if bot_token else "",
+            "allowed_users": allowed_users,
+            "enabled": enabled
+        }, indent=2))
+        return
+
+    print("Telegram Bot Status")
+    print("=" * 60)
+    print(f"Bot token: {service.mask_api_key(bot_token) if bot_token else '(not set)'}")
+    print(f"Allowed users: {allowed_users or '(none)'}")
+    print(f"Enabled: {enabled}")
+    print()
+
+    if not bot_token:
+        print("⚠ Bot token not configured. Run 'python -m cli telegram setup'")
+    elif not allowed_users:
+        print("⚠ No users whitelisted. Add user IDs via 'python -m cli telegram setup'")
+    elif not enabled:
+        print("⚠ Bot is disabled. Enable via 'python -m cli telegram setup'")
+    else:
+        print("✅ Bot is configured and enabled")
+        print()
+        print("Next steps:")
+        print("1. Restart Genesis server: supervisorctl restart assistant")
+        print("2. Open Telegram and search for your bot")
+        print("3. Send /start to begin chatting")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="assistant.cli",
@@ -1549,6 +1670,21 @@ def main():
         help="Confirm deletion of all memories"
     )
 
+    # Telegram command with subcommands
+    telegram_parser = subparsers.add_parser("telegram", help="Manage Telegram bot")
+    telegram_subparsers = telegram_parser.add_subparsers(dest="telegram_command", help="Telegram commands")
+
+    # telegram setup
+    telegram_setup_parser = telegram_subparsers.add_parser("setup", help="Interactive Telegram bot setup")
+
+    # telegram status
+    telegram_status_parser = telegram_subparsers.add_parser("status", help="Show Telegram bot status")
+    telegram_status_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
     # Settings command with subcommands
     settings_parser = subparsers.add_parser("settings", help="Manage settings and encryption")
     settings_subparsers = settings_parser.add_subparsers(dest="settings_command", help="Settings commands")
@@ -1685,6 +1821,14 @@ def main():
             asyncio.run(memory_forget_all_command(args))
         else:
             memory_parser.print_help()
+            sys.exit(1)
+    elif args.command == "telegram":
+        if args.telegram_command == "setup":
+            asyncio.run(telegram_setup_command(args))
+        elif args.telegram_command == "status":
+            asyncio.run(telegram_status_command(args))
+        else:
+            telegram_parser.print_help()
             sys.exit(1)
     elif args.command == "settings":
         if args.settings_command == "encryption-status":

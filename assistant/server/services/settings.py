@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 # Keys that contain sensitive data and should be encrypted
-SENSITIVE_KEYS = {"openai_api_key", "anthropic_api_key", "calendar_password"}
+SENSITIVE_KEYS = {"openai_api_key", "anthropic_api_key", "calendar_password", "telegram_bot_token"}
 
 # Connection pool settings
 _DB_BUSY_TIMEOUT_MS = 5000  # 5 seconds - shorter timeout, rely on retries
@@ -155,6 +155,10 @@ class SettingsService:
         "repository_max_file_size": 1048576,  # 1MB default
         # System prompt (custom instructions)
         "system_prompt": "",  # Default system prompt for all conversations (max 4000 chars)
+        # Telegram bot settings
+        "telegram_bot_token": "",  # Bot token from BotFather (encrypted)
+        "telegram_allowed_users": "",  # Comma-separated list of allowed Telegram user IDs
+        "telegram_enabled": False,  # Enable Telegram bot integration
     }
 
     # Available models
@@ -425,6 +429,11 @@ class SettingsService:
             "repository_max_file_size": int(settings.get("repository_max_file_size", 1048576)),
             # System prompt
             "system_prompt": settings.get("system_prompt", ""),
+            # Telegram bot settings
+            "telegram_bot_token_masked": self.mask_api_key(settings.get("telegram_bot_token", "")),
+            "telegram_bot_token_set": bool(settings.get("telegram_bot_token")),
+            "telegram_allowed_users": settings.get("telegram_allowed_users", ""),
+            "telegram_enabled": self._parse_bool(settings.get("telegram_enabled", False)),
         }
 
     def _parse_bool(self, value) -> bool:

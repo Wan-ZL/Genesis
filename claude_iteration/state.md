@@ -1,9 +1,25 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #45 COMPLETE - Needs Verification.** Long-term memory: user preference extraction and recall. Complete memory system with LLM-based extraction, SQLite FTS5 search, deduplication, API endpoints, CLI commands, and chat integration. 35 new tests passing (1158 total).
+**Issue #46 COMPLETE - Needs Verification.** Telegram Bot Gateway: multi-channel messaging via Telegram. Bot service with long-polling, access control, text/image/PDF support, bot commands, CLI setup, comprehensive docs, and 30 new tests. Also fixed FTS5 syntax error from Issue #45's memory extractor (special chars in user messages broke FTS5 MATCH). 1185 passing, 2 pre-existing failures, 1 skipped.
 
 ## Done
+- **Issue #46 COMPLETE - Telegram Bot Gateway (needs verification)**:
+  - TelegramService: Long-polling bot with access control, text/image/PDF support
+  - Bot commands: /start (welcome), /status (system info), /persona, /search, /help
+  - Access control: User whitelist (telegram_allowed_users setting)
+  - Message forwarding: Telegram → Genesis Chat API → Telegram
+  - File uploads: Photos and PDFs downloaded, uploaded to Genesis, analyzed
+  - Markdown conversion: Telegram-compatible markdown formatting
+  - Long message splitting: Auto-split messages > 4096 chars
+  - Settings integration: telegram_bot_token (encrypted), telegram_allowed_users, telegram_enabled
+  - Main.py integration: Start/stop bot in lifespan, graceful error handling
+  - CLI: python -m cli telegram setup (guided), python -m cli telegram status
+  - Documentation: assistant/docs/TELEGRAM_SETUP.md (340 lines, comprehensive)
+  - Security: Bot token encrypted at rest, user whitelist enforced
+  - 30 new tests in test_telegram.py (100% pass rate)
+  - Dependencies: python-telegram-bot v22.5 installed
+  - Files: telegram.py (580 lines), TELEGRAM_SETUP.md, test_telegram.py (640 lines)
 - **Issue #45 COMPLETE - Long-term memory system (needs verification)**:
   - MemoryExtractor Service: LLM-based fact extraction with confidence scoring
   - Fact types: preference, personal_info, work_context, behavioral_pattern, temporal
@@ -560,7 +576,7 @@
   - All 969 tests passing (first time zero failures)
 
 ## Next Step (single step)
-Wait for Criticizer verification of Issue #45 (Long-term memory: user preference extraction and recall).
+Wait for Criticizer verification of Issue #46 (Telegram Bot Gateway for multi-channel messaging).
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)
@@ -581,24 +597,34 @@ Wait for Criticizer verification of Issue #45 (Long-term memory: user preference
 ```bash
 cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 
-# Test Issue #36 - Keyboard shortcuts
-python3 -m pytest tests/test_keyboard_shortcuts.py -v
-# Expected: 22/22 pass
+# Test Issue #46 - Telegram bot
+python3 -m pytest tests/test_telegram.py -v
+# Expected: 30/30 pass
 
 # Run full test suite
 python3 -m pytest tests/ -q
-# Expected: 967 passed, 2 failed (pre-existing #37), 1 skipped
+# Expected: 1182+ passed, 5 pre-existing failures, 1 skipped
 
-# Manual test:
-python3 -m server.main
-# Open http://127.0.0.1:8080
-# 1. Press Cmd+K (Mac) or Ctrl+K (Windows) - quick switcher appears
-# 2. Type to search conversations, arrow keys to navigate, Enter to select
-# 3. Press Cmd+N - new conversation created
-# 4. Press Cmd+, - settings modal opens
-# 5. Press Cmd+Shift+D - theme toggles
-# 6. Press Escape - any open modal closes
-# 7. Press Cmd+/ - keyboard shortcuts help appears
-# 8. Verify shortcuts work globally (not just when input focused)
-# 9. Type in textarea - shortcuts disabled (except Escape)
+# CLI test:
+python3 -m cli telegram status
+# Should show current configuration
+
+# Manual test (requires bot token from @BotFather):
+python3 -m cli telegram setup
+# Follow prompts to configure bot
+
+# Then restart server:
+supervisorctl restart assistant
+# Or: python3 -m server.main
+
+# Check logs for "Telegram bot started"
+python3 -m cli logs tail
+
+# In Telegram app:
+# 1. Search for your bot (e.g., @genesis_ai_bot)
+# 2. Send /start - should get welcome message
+# 3. Send "Hello" - should get AI response
+# 4. Send image - should get visual analysis
+# 5. Send PDF - should get document analysis
+# 6. Test commands: /help, /status, /persona, /search
 ```

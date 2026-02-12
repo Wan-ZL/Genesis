@@ -20,6 +20,7 @@ import aiosqlite
 import asyncio
 import json
 import logging
+import re
 import uuid
 import threading
 from datetime import datetime
@@ -463,7 +464,18 @@ If no facts can be extracted, return: {{"facts": []}}"""
         await self._ensure_initialized()
 
         async with self._get_connection() as db:
+            words: List[str] = []
             if query:
+                # Sanitize query for FTS5 (strip special chars like ?, *, +, etc.)
+                sanitized = re.sub(r'[^\w\s]', ' ', query).strip()
+                # Extract words and join with OR for broad matching
+                words = sanitized.split()
+                if not words:
+                    # No usable search terms after sanitization, fall through to non-query path
+                    query = None
+
+            if query and words:
+                fts_query = " OR ".join(f'"{w}"' for w in words)
                 # Use FTS5 for keyword search
                 sql = """
                     SELECT f.id, f.fact_type, f.key, f.value,
@@ -473,7 +485,7 @@ If no facts can be extracted, return: {{"facts": []}}"""
                     JOIN facts_fts fts ON f.rowid = fts.rowid
                     WHERE facts_fts MATCH ?
                 """
-                params: List[Any] = [query]
+                params: List[Any] = [fts_query]
 
                 if fact_types:
                     sql += " AND f.fact_type IN ({})".format(
