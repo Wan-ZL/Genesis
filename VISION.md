@@ -117,66 +117,78 @@ The difference between a tool and a partner is presence.
 
 ### In Progress
 
-**Phase 8: Always-On Partner**
+**Phase 8: Always-On Partner** (3/6 verified)
 
 Pillar 1: Be Everywhere
-- PWA Support: installable, push notifications, offline (#44) -- CRITICAL
-- Telegram Bot Gateway (#46) -- HIGH
+- PWA Support: installable, push notifications, offline (#44) -- VERIFIED
+- Telegram Bot Gateway (#46) -- VERIFIED
 
 Pillar 2: Know Me
-- Long-term memory: preference extraction and recall (#45) -- CRITICAL
-- User profile and context system (#47) -- HIGH
+- Long-term memory: preference extraction and recall (#45) -- VERIFIED
+- User profile and context system (#47) -- NEEDS VERIFICATION
 
 Pillar 3: Do More
-- Browser automation tool (#48) -- MEDIUM
-- File management tool (#49) -- MEDIUM
+- Browser automation tool (#48) -- PENDING
+- File management tool (#49) -- PENDING
 
 ### Planned
 
-**Phase 9: Intelligent Ecosystem**
-- Email integration (OAuth2, summarization, drafting)
+**Phase 9: Secure Agent Platform**
+- MCP (Model Context Protocol) support for universal tool integration (#51) -- CRITICAL
+- HTTP-level integration tests (#52) -- HIGH
+- Multi-step task execution / agentic workflows (#53) -- HIGH
+- Security hardening: sandboxed tool execution (#54) -- HIGH
+- Email integration (OAuth2, summarization, drafting) -- MEDIUM
+- Vector database for semantic memory search -- MEDIUM
+
+**Phase 10: Universal Agent**
+- Plugin/skill marketplace with security vetting
 - WhatsApp gateway
 - Smart scheduling and task management
-- Plugin system for community extensions
-- Voice improvements (Whisper-based transcription)
+- Multi-agent collaboration
+- Cross-device synchronization
+- Wake word voice activation
 
 ---
 
 ## Long-Term Vision
 
-### Short-Term (Current: Phase 8)
-- Be accessible from any device (PWA)
-- Learn from every conversation (long-term memory)
-- Be present in messaging apps (Telegram)
-- Execute real tasks (browser, files)
+### Short-Term (Current: Phase 8, completing)
+- Be accessible from any device (PWA) -- DONE
+- Learn from every conversation (long-term memory) -- DONE
+- Be present in messaging apps (Telegram) -- DONE
+- Execute real tasks (browser, files) -- IN PROGRESS
 
-### Medium-Term (Phase 9-10)
-- Multi-channel ecosystem (email, WhatsApp, Discord)
-- Plugin system for community-built extensions
-- Semantic search across all stored knowledge
-- Voice-first interaction improvements
+### Medium-Term (Phase 9: Secure Agent Platform)
+- MCP integration: connect to 1000+ existing tool servers
+- Multi-step agentic workflows: plan, execute, report
+- Security hardening: sandboxed execution, trust levels
+- Email integration and semantic search
 
-### Long-Term (Phase 11+)
-- True "universal assistant" -- handles anything, anywhere
-- Predictive service -- acts before being asked
-- Autonomous learning and self-improvement
+### Long-Term (Phase 10+: Universal Agent)
+- Plugin/skill marketplace with security vetting
+- Multi-agent collaboration (Genesis agents coordinating)
 - Cross-device synchronization and handoff
+- Wake word voice activation
+- Predictive service -- acts before being asked
 
 ---
 
-## The Five Pillars of Differentiation
+## The Six Pillars of Differentiation
 
-These are what make Genesis worth choosing over ChatGPT, Claude.ai, or any cloud AI:
+These are what make Genesis worth choosing over ChatGPT, Claude.ai, OpenClaw, or any other AI:
 
 1. **Privacy**: Your data never leaves your machine. Period. No human review, no model training, no data breaches.
 
-2. **Proactivity**: Genesis reaches out to YOU. Calendar reminders, daily briefings, system health alerts. Not waiting to be asked.
+2. **Security**: Unlike OpenClaw (512 vulnerabilities, RCE exploits, 900 malicious skills), Genesis is built secure-by-default. Permission system, sandboxed execution, encrypted storage, path validation. Security is not a feature -- it is the foundation.
 
-3. **Personalization**: Genesis learns from every conversation. The longer you use it, the more it knows you. This knowledge never leaves your device.
+3. **Proactivity**: Genesis reaches out to YOU. Calendar reminders, daily briefings, system health alerts. Not waiting to be asked.
 
-4. **Presence**: Genesis is always running, always available. PWA on your phone. Telegram in your pocket. Browser on your desktop. Everywhere.
+4. **Personalization**: Genesis learns from every conversation. The longer you use it, the more it knows you. This knowledge never leaves your device.
 
-5. **Power**: Genesis can actually DO things. Browse the web, manage files, read code, query calendars, execute commands. Not just talk about them.
+5. **Presence**: Genesis is always running, always available. PWA on your phone. Telegram in your pocket. Browser on your desktop. Everywhere.
+
+6. **Interoperability**: MCP (Model Context Protocol) support connects Genesis to 1000+ existing tool servers. Genesis is not an island -- it is a platform.
 
 ---
 
@@ -189,6 +201,7 @@ These are what make Genesis worth choosing over ChatGPT, Claude.ai, or any cloud
 | 2026-02-11 | Phase 6 complete, Phase 7 planning: Proactive Companion | Frontend-backend gap needed closing, proactive intelligence is the next leap |
 | 2026-02-11 | Phase 7 mid-review: core features delivered | #38/#39/#40 verified, remaining 3 items are hygiene and polish |
 | 2026-02-11 | Phase 7 COMPLETE, Phase 8 planning: Always-On Partner | All 43 issues closed. Genesis needs PRESENCE, MEMORY, and REACH to become indispensable. Three-pillar strategy: Be Everywhere + Know Me + Do More. |
+| 2026-02-11 | Phase 8 mid-review: 3/6 verified | PWA, long-term memory, Telegram all verified. Reframed Phase 9 from "Intelligent Ecosystem" to "Secure Agent Platform" based on competitive analysis. Added MCP support, agentic workflows, and security hardening as Phase 9 priorities. OpenClaw's security disasters create Genesis's positioning: the secure, self-hosted AI agent. |
 
 ---
 

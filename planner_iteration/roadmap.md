@@ -112,33 +112,64 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 **Decision**: ADR-004 (see `planner_iteration/decisions/ADR-004-phase8-always-on-partner.md`)
 
 **Pillar 1: Be Everywhere (Accessibility)**
-- [ ] PWA Support: installable, push notifications, offline access (#44) - CRITICAL
-- [ ] Telegram Bot Gateway for multi-channel messaging (#46) - HIGH
+- [x] PWA Support: installable, push notifications, offline access (#44) - VERIFIED
+- [x] Telegram Bot Gateway for multi-channel messaging (#46) - VERIFIED
 
 **Pillar 2: Know Me (Long-Term Memory)**
-- [ ] Long-term memory: user preference extraction and recall (#45) - CRITICAL
-- [ ] User profile and context system (#47) - HIGH
+- [x] Long-term memory: user preference extraction and recall (#45) - VERIFIED
+- [ ] User profile and context system (#47) - NEEDS VERIFICATION (blocked by #50)
 
 **Pillar 3: Do More (Agentic Capability)**
 - [ ] Browser automation tool (#48) - MEDIUM
 - [ ] File management tool (#49) - MEDIUM
 
+**Open Bug**: #50 - Profile export endpoint unreachable due to route ordering (blocks #47)
+
 **Dependencies**: #47 depends on #45 (user profile aggregates from extracted facts)
 
-## Phase 9: Intelligent Ecosystem - PROPOSED
+## Phase 9: Secure Agent Platform - PLANNED
 
-**Goal**: Create a self-sustaining AI ecosystem that grows in capability.
+**Goal**: Transform Genesis from an intelligent chatbot into a secure, interoperable AI agent platform.
+
+**Theme**: "The Secure OpenClaw Alternative"
+
+**Strategic Context**: OpenClaw proved massive demand (171k stars) for self-hosted AI agents, but its 512 security vulnerabilities, RCE exploits, and 900 malicious skills create an opening. MCP (Model Context Protocol) is becoming the universal standard for AI agent integration, adopted by OpenAI, Google, and Anthropic. Genesis must become the agent platform users can actually TRUST.
+
+**Pillar 1: Ecosystem Integration (MCP)**
+- [ ] MCP Client and Server support (#51) - CRITICAL
+- [ ] HTTP-level integration tests (#52) - HIGH
+
+**Pillar 2: Agentic Capability**
+- [ ] Multi-step task execution with planning and progress (#53) - HIGH
+- [ ] Email integration (OAuth2, summarization, drafting) - MEDIUM
+
+**Pillar 3: Security Foundation**
+- [ ] Security hardening: sandboxed tool execution (#54) - HIGH
+- [ ] MCP server trust levels and vetting - HIGH
+
+**Pillar 4: Intelligence**
+- [ ] Vector database for semantic memory search - MEDIUM
+- [ ] Voice improvements (Whisper-based transcription) - MEDIUM
+
+**Dependencies**:
+- #51 (MCP) should come before or alongside #53 (agentic workflows)
+- #54 (security) must be done alongside #51 and #53, not after
+
+**Priority Order**: #51 (MCP) > #54 (Security) > #52 (Integration tests) > #53 (Agentic) > Email > Vector DB > Voice
+
+## Phase 10: Universal Agent - PROPOSED
+
+**Goal**: Genesis becomes a fully autonomous agent ecosystem.
 
 **Potential Features**:
-- [ ] Email integration (OAuth2, summarization, drafting)
-- [ ] WhatsApp gateway (via Baileys or official Cloud API)
+- [ ] Plugin/skill marketplace with security vetting
+- [ ] WhatsApp gateway (official Cloud API)
 - [ ] Smart scheduling and task management
-- [ ] Voice improvements (whisper-based transcription)
-- [ ] Plugin system for community extensions
-- [ ] Integration tests across all features
-- [ ] Vector database for semantic memory search
+- [ ] Multi-agent collaboration (Genesis agents talking to each other)
+- [ ] Cross-device synchronization
+- [ ] Wake word / always-listening voice activation
 
-**Dependencies**: Requires Phase 8 memory system and multi-channel pattern proven.
+**Dependencies**: Requires Phase 9 MCP integration and security hardening proven.
 
 ## Milestones
 
@@ -160,19 +191,24 @@ Genesis is a self-evolving AI development system where AI agents collaborate to 
 | M9.5: Cross-conversation search | Week 9 | COMPLETE (#42) |
 | M9.6: Message actions | Week 9 | COMPLETE (#43) |
 | M10: Always-On Partner | Week 10-11 | IN PROGRESS |
-| M10.1: PWA Support | Week 10 | PENDING (#44) |
-| M10.2: Long-term memory | Week 10 | PENDING (#45) |
-| M10.3: Telegram bot | Week 10-11 | PENDING (#46) |
-| M10.4: User profile | Week 11 | PENDING (#47) |
+| M10.1: PWA Support | Week 10 | VERIFIED (#44) |
+| M10.2: Long-term memory | Week 10 | VERIFIED (#45) |
+| M10.3: Telegram bot | Week 10 | VERIFIED (#46) |
+| M10.4: User profile | Week 11 | NEEDS VERIFICATION (#47, blocked by #50) |
 | M10.5: Browser automation | Week 11 | PENDING (#48) |
 | M10.6: File management | Week 11 | PENDING (#49) |
-| M11: Intelligent Ecosystem | Week 12+ | PROPOSED |
+| M11: Secure Agent Platform | Week 12-13 | PLANNED |
+| M11.1: MCP Support | Week 12 | PLANNED (#51) |
+| M11.2: HTTP Integration Tests | Week 12 | PLANNED (#52) |
+| M11.3: Multi-step Task Execution | Week 12-13 | PLANNED (#53) |
+| M11.4: Security Hardening | Week 12-13 | PLANNED (#54) |
+| M12: Universal Agent | Week 14+ | PROPOSED |
 
 ## Statistics
 
 | Metric | Value |
 |--------|-------|
-| Total issues created | 49 |
+| Total issues created | 54 |
 | Issues verified and closed | 43 |
 | Issues open | 6 |
 | Bugs found by Criticizer | 3 |
