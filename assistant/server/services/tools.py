@@ -15,9 +15,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Any, Optional
 from datetime import datetime
 import hashlib
-import json
 import logging
-import re
 from urllib.parse import urlparse
 
 # Import permission system
@@ -141,19 +139,57 @@ class ToolRegistry:
         """Get all tool specifications."""
         return list(self._tools.values())
 
-    def execute(self, name: str, **kwargs) -> dict[str, Any]:
+    def execute(self, name: str, user_ip: Optional[str] = None, **kwargs) -> dict[str, Any]:
         """
         Execute a tool by name with given arguments.
+
+        Args:
+            name: Tool name
+            user_ip: User IP address (for audit logging)
+            **kwargs: Tool arguments
 
         Returns:
             dict with:
             - 'success' bool and 'result' for successful execution
             - 'success' False and 'error' for errors
             - 'success' False and 'permission_escalation' for permission requests
+            - 'success' False and 'rate_limited' for rate limit errors
         """
+        import time
+        from .security import get_security_service
+        from .rate_limiter import get_rate_limiter
+        from .audit import get_audit_logger
+
+        start_time = time.time()
+
         tool = self._tools.get(name)
         if not tool:
             return {"success": False, "error": f"Tool not found: {name}"}
+
+        # Check rate limit
+        rate_limiter = get_rate_limiter()
+        allowed, retry_after, _remaining = rate_limiter.check_rate_limit(name)
+
+        if not allowed:
+            logger.warning(f"Rate limit exceeded for {name}")
+            # Log to audit
+            duration_ms = (time.time() - start_time) * 1000
+            audit_logger = get_audit_logger()
+            audit_logger.log_execution(
+                tool_name=name,
+                args=kwargs,
+                result=None,
+                success=False,
+                duration_ms=duration_ms,
+                user_ip=user_ip,
+                rate_limited=True,
+            )
+            return {
+                "success": False,
+                "rate_limited": True,
+                "retry_after": retry_after,
+                "error": f"Rate limit exceeded. Retry after {retry_after:.1f} seconds."
+            }
 
         # Check permission before execution
         current_level = get_permission_level()
@@ -177,11 +213,63 @@ class ToolRegistry:
                 }
             }
 
+        # Sanitize arguments
+        security_service = get_security_service()
+        sanitized_args, is_safe, error = security_service.sanitize_tool_args(name, kwargs)
+
+        if not is_safe:
+            logger.error(f"Tool {name} blocked: {error}")
+            duration_ms = (time.time() - start_time) * 1000
+            audit_logger = get_audit_logger()
+            audit_logger.log_execution(
+                tool_name=name,
+                args=kwargs,
+                result=None,
+                success=False,
+                duration_ms=duration_ms,
+                user_ip=user_ip,
+            )
+            return {"success": False, "error": f"Security check failed: {error}"}
+
         try:
-            result = tool.handler(**kwargs)
-            logger.info(f"Tool {name} executed successfully")
+            if tool.handler is None:
+                return {"success": False, "error": f"Tool {name} has no handler"}
+            result = tool.handler(**sanitized_args)
+
+            # Sanitize output
+            if isinstance(result, str):
+                result = security_service.sanitize_output(result)
+
+            duration_ms = (time.time() - start_time) * 1000
+
+            # Log to audit
+            audit_logger = get_audit_logger()
+            audit_logger.log_execution(
+                tool_name=name,
+                args=sanitized_args,
+                result=result,
+                success=True,
+                duration_ms=duration_ms,
+                user_ip=user_ip,
+            )
+
+            logger.info(f"Tool {name} executed successfully in {duration_ms:.1f}ms")
             return {"success": True, "result": result}
+
         except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+
+            # Log to audit
+            audit_logger = get_audit_logger()
+            audit_logger.log_execution(
+                tool_name=name,
+                args=sanitized_args,
+                result=None,
+                success=False,
+                duration_ms=duration_ms,
+                user_ip=user_ip,
+            )
+
             logger.error(f"Tool {name} failed: {e}")
             return {"success": False, "error": str(e)}
 
@@ -468,61 +556,64 @@ def _run_shell_command_impl(command: str, timeout: int = 30) -> str:
     """Implementation for run_shell_command tool.
 
     Requires SYSTEM permission level.
+    Uses sandboxed execution for safety.
     """
-    import subprocess
+    from .sandbox import SandboxExecutor, SandboxConfig
+    from .security import get_security_service
 
-    # Safety check: block extremely dangerous commands
-    dangerous_patterns = [
-        "rm -rf /",
-        "rm -rf ~",
-        ":(){:|:&};:",  # fork bomb
-        "mkfs.",
-        "dd if=/dev/zero",
-        "> /dev/sda",
-    ]
+    # Pre-execution safety check (before sandboxing)
+    security_service = get_security_service()
+    _, is_safe = security_service.sanitize_shell_input(command)
 
-    cmd_lower = command.lower()
-    for pattern in dangerous_patterns:
-        if pattern in cmd_lower:
-            return f"Error: Command blocked for safety reasons (matched pattern: {pattern})"
+    if not is_safe:
+        logger.error(f"run_shell_command: Blocked dangerous command: {command[:100]}")
+        return f"Error: Command blocked for safety reasons"
 
     logger.info(f"run_shell_command: Executing command='{command}', timeout={timeout}")
 
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=str(Path(__file__).parent.parent.parent.parent)  # Genesis root
-        )
+    # Use sandbox executor
+    config = SandboxConfig(
+        timeout=timeout,
+        max_output_size=1024 * 1024,  # 1MB
+        working_directory=Path(__file__).parent.parent.parent.parent,  # Genesis root
+        use_macos_sandbox=True,
+    )
+    # Create fresh executor with per-call config (timeout varies per call)
+    sandbox = SandboxExecutor(config)
+    result = sandbox.execute(command)
 
-        output_parts = []
-        if result.stdout:
-            output_parts.append(f"STDOUT:\n{result.stdout}")
-        if result.stderr:
-            output_parts.append(f"STDERR:\n{result.stderr}")
-        if not output_parts:
-            output_parts.append("(no output)")
+    if not result['success']:
+        logger.error(f"run_shell_command: {result.get('error', 'Unknown error')}")
+        return f"Error: {result.get('error', 'Unknown error')}"
 
-        output_parts.append(f"\nExit code: {result.returncode}")
+    # Format output
+    output_parts = []
 
-        output = "\n".join(output_parts)
+    if result['sandboxed']:
+        output_parts.append("[Executed in sandbox]")
 
-        # Truncate if too long
-        if len(output) > 4000:
-            output = output[:4000] + f"\n\n[Output truncated at 4000 characters]"
+    if result['stdout']:
+        output_parts.append(f"STDOUT:\n{result['stdout']}")
 
-        logger.info(f"run_shell_command: exit_code={result.returncode}, output_length={len(output)}")
-        return output
+    if result['stderr']:
+        output_parts.append(f"STDERR:\n{result['stderr']}")
 
-    except subprocess.TimeoutExpired:
-        logger.warning(f"run_shell_command: Command timed out after {timeout}s")
-        return f"Error: Command timed out after {timeout} seconds"
-    except Exception as e:
-        logger.error(f"run_shell_command: Error executing command: {e}")
-        return f"Error: {str(e)}"
+    if not result['stdout'] and not result['stderr']:
+        output_parts.append("(no output)")
+
+    output_parts.append(f"\nExit code: {result['exit_code']}")
+
+    if result.get('truncated'):
+        output_parts.append("[Output truncated]")
+
+    output = "\n".join(output_parts)
+
+    logger.info(
+        f"run_shell_command: exit_code={result['exit_code']}, "
+        f"sandboxed={result['sandboxed']}, output_length={len(output)}"
+    )
+
+    return output
 
 
 # Register run_shell_command with SYSTEM permission requirement

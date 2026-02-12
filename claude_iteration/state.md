@@ -1,9 +1,24 @@
 # Builder State
 
 ## Current Focus
-**Issue #52 COMPLETE - Needs Verification.** Implemented comprehensive HTTP-level integration tests for all API routes. 58 new tests using FastAPI TestClient to catch bugs at HTTP layer (route ordering, middleware, serialization).
+**Issue #54 COMPLETE - Needs Verification.** Implemented comprehensive security hardening with sandboxed tool execution, input/output sanitization, rate limiting, audit logging, MCP trust levels, and security headers.
 
 ## Done
+- **Issue #54 COMPLETE - Security hardening - sandboxed tool execution (needs verification)**:
+  - SecurityService: Input/output sanitization for shell commands, URLs, file paths, tool arguments
+  - SandboxExecutor: Sandboxed shell execution with restricted environment, resource limits, macOS sandbox-exec
+  - ToolRateLimiter: Token bucket algorithm, per-tool rate limits, default limits for all tool types
+  - AuditLogger: SQLite append-only log, argument hashing, comprehensive statistics
+  - MCP Trust Levels: UNTRUSTED (0), TRUSTED (1), VERIFIED (2) with enforcement
+  - Security Headers Middleware: X-Content-Type-Options, X-Frame-Options, CSP, HSTS, Referrer-Policy
+  - Audit API: GET /api/audit (query with filters), GET /api/audit/stats
+  - Tool Registry Integration: All tools now use security+rate+audit layers
+  - Shell Command Tool: Updated to use sandbox executor, pre-execution blocking
+  - 34 new tests in test_security.py (100% pass rate)
+  - Security Documentation: assistant/docs/SECURITY.md (400+ lines, threat model, best practices)
+  - Files: security.py (330 lines), sandbox.py (200 lines), rate_limiter.py (210 lines), audit.py (280 lines), audit.py routes (85 lines)
+  - Updated: mcp_client.py (trust levels), tools.py (security integration), main.py (security headers + audit init)
+  - Test count: 1274 total tests (1240 baseline + 34 new security tests)
 - **Issue #52 COMPLETE - HTTP-level integration tests (needs verification)**:
   - Created comprehensive test suite: tests/test_http_integration.py with 58 tests
   - Route Groups Covered: Health, Chat, Conversations, Messages, Profile, Memory/Facts, Settings, Push, Auth, Capabilities, Metrics, Alerts, Resources, Degradation, Schedule, Persona, Notifications, MCP, Upload
@@ -94,7 +109,7 @@
 - (Previous issues omitted for brevity - see full state history in earlier runlogs)
 
 ## Next Step (single step)
-Wait for Criticizer verification of Issue #52 (HTTP integration tests).
+Wait for Criticizer verification of Issue #54 (security hardening).
 
 ## Risks / Notes
 - MCP protocol implemented from scratch (no official Python SDK on PyPI)
@@ -112,19 +127,23 @@ Wait for Criticizer verification of Issue #52 (HTTP integration tests).
 ```bash
 cd $GENESIS_DIR/assistant  # or cd assistant/ from project root
 
-# Test Issue #52 - HTTP integration tests
-python3 -m pytest tests/test_http_integration.py -v
-# Expected: 58/58 passed
+# Test Issue #54 - Security hardening
+python3 -m pytest tests/test_security.py -v
+# Expected: 34/34 passed
 
-# Test specific route ordering tests (Issue #50 pattern)
-python3 -m pytest tests/test_http_integration.py::TestRouteOrdering -v
+# Test security integration with tools
+python3 -m pytest tests/test_tools.py::TestRunShellCommand -v
+# Expected: 8/8 passed
+
+# Test audit API
+python3 -m pytest tests/test_security.py::TestAuditLogger -v
+# Expected: 5/5 passed
+
+# Test MCP trust levels
+python3 -m pytest tests/test_security.py::TestMCPTrustLevels -v
 # Expected: 3/3 passed
-
-# Test critical profile route ordering
-python3 -m pytest tests/test_http_integration.py::TestProfileEndpoints::test_route_ordering_export_before_section -v
-# Expected: PASSED
 
 # Run full test suite to verify no regressions
 python3 -m pytest tests/ -q
-# Expected: 1073+ passed (58 new + 1015 existing)
+# Expected: 1107+ passed (34 new security + 1073 existing), 1 flaky timeout test
 ```

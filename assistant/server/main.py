@@ -56,6 +56,11 @@ async def lifespan(app: FastAPI):
     init_alert_service()
     logger.info("Alert service initialized")
 
+    # Initialize audit logging
+    from server.services.audit import get_audit_logger
+    get_audit_logger()
+    logger.info("Audit logging initialized")
+
     # Initialize and start scheduler service
     from server.routes.schedule import init_scheduler
     await init_scheduler()
@@ -145,6 +150,23 @@ app.add_middleware(
 
 
 @app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Add security headers to all responses."""
+    response = await call_next(request)
+
+    # Security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
+    return response
+
+
+@app.middleware("http")
 async def access_log_middleware(request: Request, call_next):
     """Log all HTTP requests to access.log."""
     start_time = time.time()
@@ -219,7 +241,7 @@ async def auth_middleware(request: Request, call_next):
 
 
 # Import and include routers
-from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth, schedule, persona, notifications, push, memory_facts, user_profile, mcp
+from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth, schedule, persona, notifications, push, memory_facts, user_profile, mcp, audit
 
 # Auth routes (always accessible)
 app.include_router(auth.router, prefix="/api", tags=["auth"])
@@ -241,6 +263,7 @@ app.include_router(push.router, prefix="/api", tags=["push"])
 app.include_router(memory_facts.router, prefix="/api", tags=["memory"])
 app.include_router(user_profile.router, prefix="/api", tags=["profile"])
 app.include_router(mcp.router, prefix="/api", tags=["mcp"])
+app.include_router(audit.router, prefix="/api", tags=["audit"])
 
 # Serve static UI files (when they exist)
 UI_PATH = Path(__file__).parent.parent / "ui"

@@ -12,6 +12,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Any
 from pathlib import Path
+from enum import IntEnum
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,18 @@ class MCPTool:
     server_name: str  # Which MCP server provides this tool
 
 
+class MCPTrustLevel(IntEnum):
+    """Trust levels for MCP servers.
+
+    UNTRUSTED (0): Can only read data, no tool execution
+    TRUSTED (1): Can execute approved tools
+    VERIFIED (2): Full access, user explicitly verified
+    """
+    UNTRUSTED = 0
+    TRUSTED = 1
+    VERIFIED = 2
+
+
 @dataclass
 class MCPServerConfig:
     """Configuration for an MCP server connection."""
@@ -34,6 +47,7 @@ class MCPServerConfig:
     command: Optional[List[str]] = None  # For stdio transport
     url: Optional[str] = None  # For SSE transport
     env: Dict[str, str] = field(default_factory=dict)  # Environment variables
+    trust_level: MCPTrustLevel = MCPTrustLevel.TRUSTED  # Default to TRUSTED
 
 
 class MCPClient:
@@ -196,9 +210,19 @@ class MCPClient:
 
         Returns:
             Tool execution result
+
+        Raises:
+            PermissionError: If server trust level doesn't allow tool execution
         """
         if not self._connected:
             raise RuntimeError("MCP client not connected")
+
+        # Check trust level
+        if self.config.trust_level == MCPTrustLevel.UNTRUSTED:
+            raise PermissionError(
+                f"MCP server '{self.config.name}' is UNTRUSTED and cannot execute tools. "
+                "Upgrade trust level to TRUSTED or VERIFIED in settings."
+            )
 
         if self.config.transport == "stdio":
             return await self._send_request_stdio("tools/call", {
@@ -317,7 +341,8 @@ class MCPClientManager:
                     transport=s["transport"],
                     command=s.get("command"),
                     url=s.get("url"),
-                    env=s.get("env", {})
+                    env=s.get("env", {}),
+                    trust_level=MCPTrustLevel(s.get("trust_level", MCPTrustLevel.TRUSTED))
                 )
                 for s in servers
             ]
@@ -410,6 +435,8 @@ class MCPClientManager:
                 "configured": True,
                 "connected": client.is_connected() if client else False,
                 "transport": config.transport,
+                "trust_level": config.trust_level.value,
+                "trust_level_name": config.trust_level.name,
                 "tool_count": len(client.tools) if client and client.is_connected() else 0
             }
         return status
