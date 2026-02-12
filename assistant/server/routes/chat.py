@@ -29,6 +29,7 @@ from server.services.ollama import get_ollama_client, OllamaStatus
 from server.services.persona import PersonaService
 from server.services.settings import SettingsService
 from server.services.memory_extractor import get_memory_extractor
+from server.services.user_profile import get_user_profile_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -41,6 +42,8 @@ persona_service = PersonaService(config.DATABASE_PATH)
 settings_service = SettingsService(config.DATABASE_PATH)
 # Initialize memory extractor service
 memory_extractor = get_memory_extractor()
+# Initialize user profile service
+user_profile_service = get_user_profile_service()
 
 
 async def _extract_facts_async(
@@ -70,6 +73,13 @@ async def _extract_facts_async(
             # Store facts with deduplication
             await memory_extractor.store_facts(facts, deduplicate=True)
             logger.info(f"Extracted and stored {len(facts)} facts from conversation turn")
+
+            # Auto-refresh profile from newly extracted facts
+            try:
+                await user_profile_service.aggregate_from_facts(memory_extractor)
+                logger.debug("Profile auto-refreshed from new facts")
+            except Exception as profile_err:
+                logger.error(f"Profile aggregation failed: {profile_err}")
         else:
             logger.debug("No facts extracted from conversation turn")
 
@@ -1347,12 +1357,20 @@ async def chat_stream(request: ChatMessage):
             if facts_context:
                 logger.info(f"Recalled {len(recalled_facts)} relevant facts for context")
 
+            # Get user profile summary for context
+            profile_summary = await user_profile_service.get_profile_summary()
+            if profile_summary:
+                logger.info("Injecting user profile summary into system prompt")
+
             # Analyze user message for relevant tool suggestions
             suggestion_service = get_suggestion_service()
             suggestions = suggestion_service.analyze_message(request.message)
 
-            # Build system prompt (base + facts + tool suggestions)
+            # Build system prompt (base + profile + facts + tool suggestions)
             system_parts = [base_system_prompt]
+
+            if profile_summary:
+                system_parts.append(profile_summary)
 
             if facts_context:
                 system_parts.append(facts_context)
@@ -1581,12 +1599,20 @@ async def chat(request: ChatMessage):
         if facts_context:
             logger.info(f"Recalled {len(recalled_facts)} relevant facts for context")
 
+        # Get user profile summary for context
+        profile_summary = await user_profile_service.get_profile_summary()
+        if profile_summary:
+            logger.info("Injecting user profile summary into system prompt")
+
         # Analyze user message for relevant tool suggestions
         suggestion_service = get_suggestion_service()
         suggestions = suggestion_service.analyze_message(request.message)
 
-        # Build system prompt (base + facts + tool suggestions)
+        # Build system prompt (base + profile + facts + tool suggestions)
         system_parts = [base_system_prompt]
+
+        if profile_summary:
+            system_parts.append(profile_summary)
 
         if facts_context:
             system_parts.append(facts_context)

@@ -1,9 +1,24 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #46 COMPLETE - Needs Verification.** Telegram Bot Gateway: multi-channel messaging via Telegram. Bot service with long-polling, access control, text/image/PDF support, bot commands, CLI setup, comprehensive docs, and 30 new tests. Also fixed FTS5 syntax error from Issue #45's memory extractor (special chars in user messages broke FTS5 MATCH). 1185 passing, 2 pre-existing failures, 1 skipped.
+**Issue #47 COMPLETE - Needs Verification.** User Profile and Context System: Aggregates long-term memory facts (#45) into structured user profile with 6 sections (personal_info, work, preferences, schedule_patterns, interests, communication_style). Profile injected into system prompts, supports manual overrides, export/import, auto-refresh. 21 new tests.
 
 ## Done
+- **Issue #47 COMPLETE - User Profile and Context System (needs verification)**:
+  - UserProfileService: Aggregates facts from long-term memory into structured profile
+  - 6 profile sections: personal_info, work, preferences, schedule_patterns, interests, communication_style
+  - Fact-to-section mapping: personal_info→personal_info, work_context→work, preference→preferences, temporal→schedule_patterns, behavioral_pattern→communication_style
+  - Aggregation: aggregate_from_facts() maps fact types to sections, updates based on confidence
+  - Manual overrides: User edits persist through auto-aggregation (is_manual_override flag)
+  - Profile summary: Compact format injected into system prompts before each response
+  - Auto-refresh: Profile updates automatically after fact extraction (async)
+  - API: GET /api/profile (full), GET /api/profile/{section}, PUT /api/profile/{section}, DELETE /api/profile/{section}/{key}
+  - Export/Import: GET /api/profile/export, POST /api/profile/import (merge/replace modes)
+  - Chat integration: Profile summary injected in both streaming and non-streaming endpoints
+  - Database: SQLite with unique constraint on (section, key), confidence tracking, source tracking
+  - 21 new tests in test_user_profile.py (all passing)
+  - Files: user_profile.py (580 lines), routes/user_profile.py (180 lines), test_user_profile.py (400 lines)
+  - Chat.py modified: Profile injection before persona/facts in system prompt
 - **Issue #46 COMPLETE - Telegram Bot Gateway (needs verification)**:
   - TelegramService: Long-polling bot with access control, text/image/PDF support
   - Bot commands: /start (welcome), /status (system info), /persona, /search, /help
@@ -576,7 +591,7 @@
   - All 969 tests passing (first time zero failures)
 
 ## Next Step (single step)
-Wait for Criticizer verification of Issue #46 (Telegram Bot Gateway for multi-channel messaging).
+Wait for Criticizer verification of Issue #47 (User Profile and Context System).
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)

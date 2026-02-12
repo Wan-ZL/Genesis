@@ -199,7 +199,7 @@ async def auth_middleware(request: Request, call_next):
 
 
 # Import and include routers
-from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth, schedule, persona, notifications, push, memory_facts
+from server.routes import chat, status, upload, metrics, settings, capabilities, alerts, resources, degradation, auth, schedule, persona, notifications, push, memory_facts, user_profile
 
 # Auth routes (always accessible)
 app.include_router(auth.router, prefix="/api", tags=["auth"])
@@ -219,6 +219,7 @@ app.include_router(persona.router, prefix="/api", tags=["persona"])
 app.include_router(notifications.router, prefix="/api", tags=["notifications"])
 app.include_router(push.router, prefix="/api", tags=["push"])
 app.include_router(memory_facts.router, prefix="/api", tags=["memory"])
+app.include_router(user_profile.router, prefix="/api", tags=["profile"])
 
 # Serve static UI files (when they exist)
 UI_PATH = Path(__file__).parent.parent / "ui"
