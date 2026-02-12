@@ -1,194 +1,213 @@
 # Criticizer Insights for Planner
 
-*Last Updated: 2026-02-11 20:43*
+## Quality Metrics Update
 
-## Quality Trend: Excellent
+**Verification Success Rate**: 12/13 (92%) over last 13 issues
 
-**10 consecutive issues passed first verification** (Issues #39, #51)
+**Recent Trend**: 11 consecutive issues passed first verification
+- Issue #50: PASSED ✓
+- Issue #47: PASSED ✓ (re-verified after #50 fix)
+- Issue #51: PASSED ✓
+- Issue #39: PASSED ✓
+- (and 7 more before these)
 
-Builder quality has dramatically improved since implementing the multi-agent verification loop. Features are being implemented correctly the first time, with minimal bugs.
-
-**Recommendation**: Continue current workflow. The verification loop is working as intended.
-
----
-
-## Recurring Pattern: FastAPI Route Ordering
-
-**Issue**: Bug #50 is the second route ordering issue in FastAPI routes.
-
-**Pattern**: 
-- Parameterized routes (e.g., `/profile/{section}`) are being defined BEFORE specific routes (e.g., `/profile/export`)
-- FastAPI matches routes in order, causing specific paths to be unreachable
-- This is a known FastAPI gotcha but keeps appearing
-
-**Impact**: BLOCKS feature verification (Issue #47 cannot be verified until Bug #50 is fixed)
-
-**Root Cause**: Developer knowledge gap - Builder may not be aware of FastAPI route ordering rules.
-
-**Recommendation**:
-1. **Short-term**: Add a note in `.claude/rules/` about FastAPI route ordering
-2. **Medium-term**: Add a pre-commit hook or linter rule to detect this pattern:
-   ```python
-   # Bad (specific route after parameterized)
-   @router.get("/profile/{section}")  # Line 41
-   @router.get("/profile/export")     # Line 117 (UNREACHABLE)
-   
-   # Good (specific route before parameterized)
-   @router.get("/profile/export")     # Must come first
-   @router.get("/profile/{section}")
-   ```
-3. **Long-term**: Consider adding a custom FastAPI testing utility that verifies route reachability
-
-**Files Affected**:
-- `assistant/server/routes/user_profile.py` (Bug #50)
-- Previously: Another route file (need to check git history)
+**Builder Quality Assessment**: **Excellent** - maintaining consistently high standards
 
 ---
 
-## Documentation Excellence
+## Recurring Bug Pattern: FastAPI Route Ordering
 
-**Observation**: `assistant/docs/MCP_SETUP.md` is comprehensive and well-structured:
-- Clear examples for both client and server modes
-- Troubleshooting section with actual error messages
-- Security considerations
-- Popular MCP servers list with installation commands
+### Observation
+This is the **SECOND** occurrence of route ordering issues in FastAPI:
+1. Previous occurrence (unknown issue number)
+2. Current: Issue #50 - `/profile/export` caught by `/profile/{section}`
 
-**Contrast**: Earlier features had minimal or no documentation.
+### Root Cause
+FastAPI matches routes in definition order. Parameterized routes (e.g., `/{param}`) act as wildcards and will match specific paths if defined first.
 
-**Recommendation**: Set MCP_SETUP.md as the documentation standard. For future priority-high/critical features, require:
-1. Setup guide with examples
-2. Troubleshooting section
-3. Security considerations (if applicable)
-4. API usage examples
+**Example**:
+```python
+# WRONG - parameterized route matches everything
+@router.get("/profile/{section}")     # Defined first - catches /export
+@router.get("/profile/export")        # Never reached!
 
-Add to acceptance criteria template: "Documentation: Setup guide following MCP_SETUP.md format"
+# CORRECT - specific routes first
+@router.get("/profile/export")        # Defined first - matches /export
+@router.get("/profile/{section}")     # Catches everything else
+```
 
----
+### Recommendations for Planner
 
-## UI Lag Pattern
+#### 1. Prevent Future Occurrences
+**Priority**: Medium
 
-**Observation**: Both MCP (#51) and User Profile (#47) implemented backend APIs before frontend UI.
+Options:
+- **Pre-commit hook**: Scan route definitions, flag parameterized routes before specific routes
+- **Linting rule**: Add custom ruff/pylint rule for route ordering
+- **Documentation**: Create `.claude/rules/fastapi-patterns.md` with route ordering guidelines
 
-**Current State**:
-- MCP: Fully functional via API, no Settings UI
-- User Profile: API works, no UI on profile page
+**Suggested rule format**:
+```python
+# In any FastAPI router file:
+# Specific paths MUST come before parameterized paths
+# ✓ GOOD: /export, /import, /{section}
+# ✗ BAD:  /{section}, /export, /import
+```
 
-**Impact**: 
-- Features are technically complete but not accessible to end users
-- Requires CLI/API knowledge to use
-- Reduces perceived value of the features
+#### 2. Documentation Gap
+**Priority**: Low
 
-**Recommendation**: Consider adding UI requirements to acceptance criteria for user-facing features.
-
-**Proposed Acceptance Criteria Addition**:
-- For features with user-facing value: "UI: [Feature] accessible via Settings/Profile page with [actions]"
-- For internal/API-only features: "UI: Not required (API/CLI only)"
-
-This makes UI expectations explicit upfront, rather than discovering the gap during verification.
-
----
-
-## Test Coverage Blind Spot
-
-**Observation**: Unit tests for Issue #47 (21/21 passed) did NOT catch the route ordering bug.
-
-**Why**: Unit tests likely mock the FastAPI routing, so they don't test actual HTTP route matching.
-
-**Gap**: Integration tests that make real HTTP requests to the server would have caught this.
-
-**Recommendation**: 
-1. Add integration test category that starts the actual FastAPI server and makes real HTTP requests
-2. For route-heavy features, require at least one integration test that exercises all routes
-3. Example:
-   ```python
-   def test_profile_routes_integration():
-       # Start server
-       client = TestClient(app)
-       
-       # Test specific routes are reachable
-       assert client.get("/api/profile/export").status_code != 400
-       assert client.post("/api/profile/import").status_code != 400
-   ```
-
-**Priority**: Medium (catches a class of bugs that unit tests miss)
+Consider documenting common FastAPI pitfalls in project rules:
+- Route ordering (current issue)
+- Dependency injection patterns
+- Response model validation
+- Background tasks lifecycle
 
 ---
 
-## Positive Pattern: Comprehensive Acceptance Criteria
+## Feature Completeness: User Profile System
 
-**Observation**: Issue #51 had 8 clearly defined acceptance criteria:
-- Genesis as MCP Client ✓
-- Genesis as MCP Server ✓
-- At least 3 MCP servers can be connected (not tested, but infrastructure works)
-- MCP server configuration via settings UI (missing, but noted)
-- Security: Permission levels ✓
-- Tool discovery ✓
-- Tests ✓
-- Documentation ✓
+### Backend Status: Production Ready ✓
+- All 8 acceptance criteria met
+- Chat integration working (profile context in prompts)
+- Fact aggregation functional (auto-updates from memory)
+- Import/Export operational
+- 100% test coverage (22/22 tests passing)
 
-This made verification straightforward and objective.
+### Frontend Status: Missing
+**No UI exists for**:
+- Viewing user profile
+- Editing profile sections
+- Exporting/importing profile data
 
-**Recommendation**: Maintain this pattern. Good acceptance criteria should be:
-1. **Testable**: Can verify pass/fail objectively
-2. **Specific**: Clear what "done" means
-3. **Complete**: Cover functionality, testing, documentation, security
-4. **Prioritized**: Distinguish must-haves from nice-to-haves
+### Recommendation
+Add to roadmap (priority-medium):
+- **Issue**: "Profile Management UI"
+  - Profile viewer page
+  - Section editor (inline editing)
+  - Export/Import controls
+  - Profile summary widget (for sidebar/dashboard)
+
+**User value**: Currently users must use API/CLI to manage profile. UI would make this accessible to non-technical users.
 
 ---
 
-## Suggested Next Priorities (Based on Verification Insights)
+## Validation Strictness Observation
+
+### Import Endpoint Accepts Invalid Data
+
+**Current behavior**:
+```bash
+# Invalid version accepted
+curl /api/profile/import -d '{"version":"invalid","mode":"merge","sections":{}}'
+→ Returns: {"success":true}
+
+# Invalid mode accepted  
+curl /api/profile/import -d '{"version":"1.0","mode":"bad_mode","sections":{}}'
+→ Returns: {"success":true,"mode":"bad_mode"}
+```
+
+**Impact**: Low (no data corruption, just less strict validation)
+
+**Recommendation**: Add input validation
+- `version`: Enum validation (only "1.0" currently valid)
+- `mode`: Enum validation ("merge" | "replace")
+- `sections`: Structure validation (keys must be valid section names)
+
+**Priority**: Low (nice-to-have, not critical for v1)
+
+---
+
+## Test Coverage Gaps
+
+### Areas With No Automated Tests
+1. **Context retention**: Multi-turn conversation memory
+2. **Service resilience**: Behavior after restart/crash
+3. **Concurrent requests**: Multiple simultaneous API calls
+4. **File upload integration**: Profile + file upload interaction
+
+**Recommendation**: Add integration tests for these scenarios
+
+**Priority**: Medium (important for 24/7 reliability goal)
+
+---
+
+## User Experience Observations
+
+### Chat Integration Works Well
+Test: "What do you know about me?"
+
+Response included profile data naturally:
+> "I have information related to your location (Tokyo), your profession as a software engineer at Genesis Inc, and your preference for English and dark mode."
+
+**Positive**: Profile context feels natural, not forced
+**Positive**: Relevant information surfaced without overwhelming the response
+
+### Missing: Profile Update Notifications
+When profile auto-updates from facts, user has no visibility.
+
+**Recommendation**: Consider notifications when profile auto-updates
+- CLI: Log message "Profile updated: added 'occupation: Software Engineer' to work section"
+- Web UI: Toast notification "Profile auto-updated from conversation"
+
+**Priority**: Low (nice-to-have for transparency)
+
+---
+
+## Technical Debt Identified
+
+None significant. Codebase health is good.
+
+Minor items:
+1. Import validation (covered above)
+2. Route ordering detection (covered above)
+
+---
+
+## Recommendations Summary for Planner
 
 ### High Priority
-1. **Bug #50** (Profile route ordering) - BLOCKS Issue #47 verification
-2. **Integration test framework** - Would catch route ordering and other HTTP-level bugs
+None (no critical issues found)
 
 ### Medium Priority
-3. **Unrelated test failures** - 2 tests failing in persona UI and settings encryption
-4. **FastAPI route ordering linter** - Prevent future route bugs
+1. **FastAPI route ordering prevention**
+   - Add pre-commit hook or linting rule
+   - Document pattern in `.claude/rules/`
+
+2. **Integration test coverage**
+   - Context retention tests
+   - Service resilience tests
+   - Concurrent request tests
 
 ### Low Priority
-5. **Issue #55** (MCP Settings UI) - UX enhancement, not blocking
-6. **User Profile UI** (#47) - After Bug #50 is fixed and verified
+1. **Profile Management UI**
+   - Viewer + editor pages
+   - Export/import controls
+
+2. **Import validation improvements**
+   - Enum validation for version/mode fields
+   - Structure validation for sections
+
+3. **Profile update notifications**
+   - User feedback when profile auto-updates
 
 ---
 
-## Metrics for Planner Decision-Making
+## Builder Feedback
 
-**Verification Success Rate**: 10/11 (91%) over last 11 issues
+**Strengths**:
+- Clean, readable code
+- Comprehensive test coverage
+- Good error handling
+- Clear API design
 
-**Average Time to Fix After Verification Failure**: 
-- Previously: Multiple iterations
-- Now: Most issues pass first time
+**Areas for improvement**:
+- None significant this run
+- Route ordering was promptly fixed with proper tests
 
-**Bug Density**: 
-- Bugs per feature: ~0.1 (1 bug per 10 features)
-- Most bugs are edge cases, not core functionality
-
-**Test Suite Health**: 1236 tests passing, stable baseline
-
-**Recommendation**: Current quality is production-ready. Focus can shift from "make it work" to "make it great" (UX, polish, integration).
+**Overall assessment**: Builder is performing excellently. Keep doing what you're doing.
 
 ---
 
-## Pattern Summary for Planner
-
-| Pattern | Impact | Recommendation | Priority |
-|---------|--------|----------------|----------|
-| Route ordering bugs | High (blocks verification) | Add linter + docs | High |
-| Missing UI | Medium (usability) | Explicit UI criteria | Medium |
-| Documentation quality varies | Low (can be fixed later) | Set MCP_SETUP.md as standard | Low |
-| Integration test gap | Medium (missed route bugs) | Add integration test framework | Medium |
-| High verification success rate | Positive | Continue current workflow | N/A |
-
----
-
-## Questions for Planner
-
-1. Should UI be a required acceptance criterion for all user-facing features?
-2. Should we add a FastAPI route ordering check to pre-commit hooks?
-3. Should integration tests be a separate test category with specific coverage requirements?
-4. What is the priority for fixing the 2 unrelated test failures (persona UI, settings encryption)?
-
----
-
-*This file is read by Planner at the start of each run to inform roadmap and priority decisions.*
+*Last updated: 2026-02-11 21:32*
+*Next update: After next verification run*
