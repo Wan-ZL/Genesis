@@ -28,6 +28,7 @@ from server.services.encryption import is_encrypted, ENCRYPTED_PREFIX
 from server.services.ollama import get_ollama_client, OllamaStatus
 from server.services.persona import PersonaService
 from server.services.settings import SettingsService
+from server.services.memory_extractor import get_memory_extractor
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -38,6 +39,43 @@ memory = MemoryService(config.DATABASE_PATH)
 persona_service = PersonaService(config.DATABASE_PATH)
 # Initialize settings service
 settings_service = SettingsService(config.DATABASE_PATH)
+# Initialize memory extractor service
+memory_extractor = get_memory_extractor()
+
+
+async def _extract_facts_async(
+    user_message: str,
+    assistant_message: str,
+    conversation_id: str,
+    message_id: str
+):
+    """Extract facts from a conversation turn asynchronously.
+
+    This runs in the background after the response is sent to the user,
+    so it doesn't block the API response.
+    """
+    try:
+        logger.debug(f"Starting async fact extraction for message {message_id}")
+
+        # Extract facts using LLM
+        facts = await memory_extractor.extract_facts_from_turn(
+            user_message=user_message,
+            assistant_message=assistant_message,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            use_lightweight_model=True  # Use cheaper model for extraction
+        )
+
+        if facts:
+            # Store facts with deduplication
+            await memory_extractor.store_facts(facts, deduplicate=True)
+            logger.info(f"Extracted and stored {len(facts)} facts from conversation turn")
+        else:
+            logger.debug("No facts extracted from conversation turn")
+
+    except Exception as e:
+        # Don't let extraction failures break the application
+        logger.error(f"Fact extraction failed: {e}", exc_info=True)
 
 
 class ChatMessage(BaseModel):
@@ -1300,12 +1338,24 @@ async def chat_stream(request: ChatMessage):
                 default_system_prompt=default_system_prompt
             )
 
+            # Recall relevant facts for long-term memory context
+            recalled_facts = await memory_extractor.recall_facts(
+                query=request.message,  # Use user message for relevance
+                limit=10  # Top 10 most relevant facts
+            )
+            facts_context = memory_extractor.format_facts_for_system_prompt(recalled_facts)
+            if facts_context:
+                logger.info(f"Recalled {len(recalled_facts)} relevant facts for context")
+
             # Analyze user message for relevant tool suggestions
             suggestion_service = get_suggestion_service()
             suggestions = suggestion_service.analyze_message(request.message)
 
-            # Build system prompt (base + tool suggestions)
+            # Build system prompt (base + facts + tool suggestions)
             system_parts = [base_system_prompt]
+
+            if facts_context:
+                system_parts.append(facts_context)
 
             if suggestions:
                 suggestion_text = suggestion_service.get_system_prompt_injection(suggestions)
@@ -1424,8 +1474,18 @@ async def chat_stream(request: ChatMessage):
 
         # Save assistant response to memory if we got something
         if accumulated_response:
-            await memory.add_message(conversation_id, "assistant", accumulated_response)
+            message_id = await memory.add_message(conversation_id, "assistant", accumulated_response)
             logger.info(f"Stream completed, saved {len(accumulated_response)} chars to memory")
+
+            # Extract facts from this conversation turn (async, non-blocking)
+            asyncio.create_task(
+                _extract_facts_async(
+                    user_message=request.message,
+                    assistant_message=accumulated_response,
+                    conversation_id=conversation_id,
+                    message_id=message_id
+                )
+            )
         elif has_error:
             # Remove user message if streaming failed completely
             await memory.remove_last_message(conversation_id)
@@ -1512,12 +1572,24 @@ async def chat(request: ChatMessage):
             default_system_prompt=default_system_prompt
         )
 
+        # Recall relevant facts for long-term memory context
+        recalled_facts = await memory_extractor.recall_facts(
+            query=request.message,  # Use user message for relevance
+            limit=10  # Top 10 most relevant facts
+        )
+        facts_context = memory_extractor.format_facts_for_system_prompt(recalled_facts)
+        if facts_context:
+            logger.info(f"Recalled {len(recalled_facts)} relevant facts for context")
+
         # Analyze user message for relevant tool suggestions
         suggestion_service = get_suggestion_service()
         suggestions = suggestion_service.analyze_message(request.message)
 
-        # Build system prompt (base + tool suggestions)
+        # Build system prompt (base + facts + tool suggestions)
         system_parts = [base_system_prompt]
+
+        if facts_context:
+            system_parts.append(facts_context)
 
         if suggestions:
             suggestion_text = suggestion_service.get_system_prompt_injection(suggestions)
@@ -1628,9 +1700,19 @@ async def chat(request: ChatMessage):
             raise last_error or ValueError("No API available")
 
         # Save assistant response
-        await memory.add_message(conversation_id, "assistant", assistant_message)
+        message_id = await memory.add_message(conversation_id, "assistant", assistant_message)
 
         logger.info(f"Chat completed in conversation {conversation_id} using {model_used}")
+
+        # Extract facts from this conversation turn (async, non-blocking)
+        asyncio.create_task(
+            _extract_facts_async(
+                user_message=request.message,
+                assistant_message=assistant_message,
+                conversation_id=conversation_id,
+                message_id=message_id
+            )
+        )
 
         # Record successful request metrics
         latency_ms = (time.time() - start_time) * 1000

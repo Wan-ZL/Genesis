@@ -1,8 +1,37 @@
 # agent/state.md
 
 ## Current Focus
-**Issue #44 COMPLETE - Needs Verification.** PWA Support: installable app, push notifications, offline access. Complete PWA infrastructure with manifest, service worker, 11 app icons, offline fallback page, push notification backend (PushService + VAPID), ProactiveService integration, iOS support. 10 new tests passing in test_pwa.py.
+**Issue #45 COMPLETE - Needs Verification.** Long-term memory: user preference extraction and recall. Complete memory system with LLM-based extraction, SQLite FTS5 search, deduplication, API endpoints, CLI commands, and chat integration. 35 new tests passing (1158 total).
 
+## Done
+- **Issue #45 COMPLETE - Long-term memory system (needs verification)**:
+  - MemoryExtractor Service: LLM-based fact extraction with confidence scoring
+  - Fact types: preference, personal_info, work_context, behavioral_pattern, temporal
+  - SQLite storage with FTS5 full-text search index
+  - Automatic triggers to keep FTS5 in sync with facts table
+  - Deduplication: Updates existing facts (same type+key) if higher confidence
+  - MemoryRecall: Retrieves relevant facts before each response
+  - System prompt injection: "What I know about you:" section with formatted facts
+  - API: GET/DELETE /api/memory/facts, GET /api/memory/search
+  - CLI: python -m cli memory list/forget/forget-all
+  - Chat integration: Async extraction after responses, recall before responses
+  - Uses lightweight model (GPT-4o-mini) for extraction to minimize cost
+  - 35 new tests (22 service + 13 API), 1158 total tests
+  - Files: assistant/server/services/memory_extractor.py, assistant/server/routes/memory_facts.py
+- **Issue #44 COMPLETE - PWA Support (needs verification)**:
+  - Manifest: assistant/ui/manifest.json with all metadata, theme colors, icons, shortcuts
+  - Service Worker: assistant/ui/sw.js with cache-first (static) and network-first (API) strategies
+  - Offline fallback: assistant/ui/offline.html with cached conversations and auto-retry
+  - App Icons: 11 icons generated (72-512px + maskable + badge + apple-touch-icon)
+  - iOS Support: Meta tags for apple-mobile-web-app-capable, apple-touch-icon, theme-color
+  - Install Banner: Custom UI with dismiss and install actions, localStorage persistence
+  - Push Backend: PushService (server/services/push.py) with VAPID key generation
+  - Push API: /api/push/vapid-key, /api/push/subscribe, /api/push/unsubscribe, /api/push/send
+  - ProactiveService Integration: All notifications now trigger OS-level push notifications
+  - Frontend: pwa.js with service worker registration, push subscription, permission handling
+  - Main.py: Serve manifest and sw.js with proper MIME types, initialize push service
+  - Tests: 10 passing tests in test_pwa.py (manifest, service worker, push CRUD, integration)
+  - Dependencies: Installed Pillow (icon generation), pywebpush, py-vapid, cryptography
 ## Done
 - **Issue #44 COMPLETE - PWA Support (needs verification)**:
   - Manifest: assistant/ui/manifest.json with all metadata, theme colors, icons, shortcuts
@@ -531,7 +560,7 @@
   - All 969 tests passing (first time zero failures)
 
 ## Next Step (single step)
-Wait for Criticizer verification of Issue #44 (PWA support: installable app, push notifications, offline access).
+Wait for Criticizer verification of Issue #45 (Long-term memory: user preference extraction and recall).
 
 ## Risks / Notes
 - Issue #28 VERIFIED and CLOSED by Criticizer (2026-02-07)

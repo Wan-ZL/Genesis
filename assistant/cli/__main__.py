@@ -52,6 +52,7 @@ from server.services.scheduler import (
     SchedulerService, TaskType, TaskStatus, CronParser, init_scheduler_service
 )
 from server.services.settings import SettingsService
+from server.services.memory_extractor import get_memory_extractor
 import config
 
 
@@ -1002,6 +1003,119 @@ async def settings_status_command(args):
             print(f"    {key}: {status}")
 
 
+# Memory commands
+
+async def memory_list_command(args):
+    """List all stored memory facts."""
+    service = get_memory_extractor()
+
+    facts = await service.get_all_facts(
+        limit=args.limit,
+        offset=args.offset,
+        fact_type=args.type
+    )
+
+    if args.json:
+        output = [
+            {
+                "id": f.id,
+                "fact_type": f.fact_type,
+                "key": f.key,
+                "value": f.value,
+                "source_conversation_id": f.source_conversation_id,
+                "confidence": f.confidence,
+                "created_at": f.created_at,
+                "updated_at": f.updated_at
+            }
+            for f in facts
+        ]
+        print(json.dumps(output, indent=2))
+        return
+
+    if not facts:
+        print("No memories stored yet.")
+        return
+
+    print("Stored Memories")
+    print("=" * 70)
+    print()
+
+    # Group by type for readability
+    by_type = {}
+    for fact in facts:
+        if fact.fact_type not in by_type:
+            by_type[fact.fact_type] = []
+        by_type[fact.fact_type].append(fact)
+
+    type_labels = {
+        "preference": "Preferences",
+        "personal_info": "Personal Info",
+        "work_context": "Work Context",
+        "behavioral_pattern": "Communication Style",
+        "temporal": "Schedule"
+    }
+
+    for fact_type, type_facts in by_type.items():
+        label = type_labels.get(fact_type, fact_type.replace("_", " ").title())
+        print(f"{label}:")
+        for fact in type_facts:
+            confidence_str = f"({fact.confidence:.0%})"
+            updated = fact.updated_at[:10]
+            print(f"  [{fact.id[:8]}...] {fact.value} {confidence_str}")
+            print(f"              Key: {fact.key} | Updated: {updated}")
+        print()
+
+
+async def memory_forget_command(args):
+    """Delete a specific memory by ID."""
+    service = get_memory_extractor()
+
+    # First check if the fact exists
+    fact = await service.get_fact(args.fact_id)
+    if not fact:
+        print(f"Error: Memory not found: {args.fact_id}", file=sys.stderr)
+        sys.exit(1)
+
+    # Confirm deletion unless --confirm flag is set
+    if not args.confirm:
+        print(f"This will delete the following memory:")
+        print(f"  Type: {fact.fact_type}")
+        print(f"  Key: {fact.key}")
+        print(f"  Value: {fact.value}")
+        print(f"  Confidence: {fact.confidence:.0%}")
+        print()
+        print("Run with --confirm to proceed.")
+        sys.exit(0)
+
+    success = await service.delete_fact(args.fact_id)
+
+    if success:
+        print(f"Memory deleted: {args.fact_id}")
+    else:
+        print(f"Error: Failed to delete memory", file=sys.stderr)
+        sys.exit(1)
+
+
+async def memory_forget_all_command(args):
+    """Delete all stored memories."""
+    service = get_memory_extractor()
+
+    # Confirm deletion
+    if not args.confirm:
+        # Count facts first
+        facts = await service.get_all_facts(limit=1000)
+        print(f"This will DELETE ALL {len(facts)} stored memories.")
+        print("Genesis will forget everything it has learned about you.")
+        print()
+        print("Run with --confirm to proceed.")
+        sys.exit(0)
+
+    count = await service.delete_all_facts()
+
+    print(f"All memories cleared: {count} facts deleted.")
+    print("Genesis has forgotten everything it learned about you.")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="assistant.cli",
@@ -1388,6 +1502,53 @@ def main():
         help="Output in JSON format"
     )
 
+    # Memory command with subcommands
+    memory_parser = subparsers.add_parser("memory", help="Manage long-term memory facts")
+    memory_subparsers = memory_parser.add_subparsers(dest="memory_command", help="Memory commands")
+
+    # memory list
+    memory_list_parser = memory_subparsers.add_parser("list", help="List all stored memory facts")
+    memory_list_parser.add_argument(
+        "--limit", "-l",
+        type=int, default=100,
+        help="Maximum number of facts to show (default: 100)"
+    )
+    memory_list_parser.add_argument(
+        "--offset", "-o",
+        type=int, default=0,
+        help="Pagination offset (default: 0)"
+    )
+    memory_list_parser.add_argument(
+        "--type", "-t",
+        choices=["preference", "personal_info", "work_context", "behavioral_pattern", "temporal"],
+        help="Filter by fact type"
+    )
+    memory_list_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output in JSON format"
+    )
+
+    # memory forget
+    memory_forget_parser = memory_subparsers.add_parser("forget", help="Delete a specific memory by ID")
+    memory_forget_parser.add_argument(
+        "fact_id",
+        help="ID of the memory fact to delete"
+    )
+    memory_forget_parser.add_argument(
+        "--confirm", "-y",
+        action="store_true",
+        help="Confirm deletion"
+    )
+
+    # memory forget-all
+    memory_forget_all_parser = memory_subparsers.add_parser("forget-all", help="Delete all stored memories")
+    memory_forget_all_parser.add_argument(
+        "--confirm", "-y",
+        action="store_true",
+        help="Confirm deletion of all memories"
+    )
+
     # Settings command with subcommands
     settings_parser = subparsers.add_parser("settings", help="Manage settings and encryption")
     settings_subparsers = settings_parser.add_subparsers(dest="settings_command", help="Settings commands")
@@ -1514,6 +1675,16 @@ def main():
             asyncio.run(schedule_validate_command(args))
         else:
             schedule_parser.print_help()
+            sys.exit(1)
+    elif args.command == "memory":
+        if args.memory_command == "list":
+            asyncio.run(memory_list_command(args))
+        elif args.memory_command == "forget":
+            asyncio.run(memory_forget_command(args))
+        elif args.memory_command == "forget-all":
+            asyncio.run(memory_forget_all_command(args))
+        else:
+            memory_parser.print_help()
             sys.exit(1)
     elif args.command == "settings":
         if args.settings_command == "encryption-status":
